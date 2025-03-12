@@ -6,7 +6,7 @@ numpy==2.2.3
 psutil==7.0.0
 ray==2.43.0
 sentencepiece==0.2.0
-torch==2.6.0+cu124
+torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
 torchmetrics==1.6.2
 tqdm==4.67.1
 transformers==4.49.0
