@@ -1,6 +1,6 @@
 # deep_stylometry/utils/data/halvest_data.py
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import lightning as L
 from datasets import load_dataset
@@ -8,82 +8,67 @@ from deep_stylometry.utils.helpers import get_tokenizer
 from torch.utils.data import DataLoader
 
 
-class SEDataModule(L.LightningDataModule):
+class HALvestDataModule(L.LightningDataModule):
     def __init__(
         self,
         batch_size: int,
         num_proc: int,
         tokenizer_name: str,
         max_length: int,
-        ds_name: str = "AnnaWegmann/StyleEmbeddingData",
+        ds_name: str = "almanach/HALvest-Contrastive",
+        config_name: Optional[str] = None,
     ):
         super().__init__()
         self.ds_name = ds_name
+        self.config_name = config_name
         self.batch_size = batch_size
         self.num_proc = num_proc
         self.max_length = max_length
         self.tokenizer = get_tokenizer(tokenizer_name)
 
     def prepare_data(self):
-        load_dataset(self.ds_name)
+        load_dataset(self.ds_name, self.config_name)
 
-    def tokenize_function(self, examples: Dict[str, List[Any]]):
-        anchors = [
-            str(text) if text is not None else "" for text in examples["Anchor (A)"]
-        ]
-        u1s = [
-            str(text) if text is not None else ""
-            for text in examples["Utterance 1 (U1)"]
-        ]
-        u2s = [
-            str(text) if text is not None else ""
-            for text in examples["Utterance 2 (U2)"]
-        ]
+    def tokenize_function(self, batch: Dict[str, List[Any]]):
+        qs = [str(text) if text is not None else "" for text in batch["query_text"]]
+        ks = [str(text) if text is not None else "" for text in batch["key_text"]]
 
-        # Tokenize with empty string handling
-        tokenized_anchor = self.tokenizer(
-            anchors,
+        tokenized_q = self.tokenizer(
+            qs,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
             return_tensors="pt",
         )
-        tokenized_u1 = self.tokenizer(
-            u1s,
-            truncation=True,
-            padding="max_length",
-            max_length=self.max_length,
-            return_tensors="pt",
-        )
-        tokenized_u2 = self.tokenizer(
-            u2s,
+        tokenized_k = self.tokenizer(
+            ks,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
             return_tensors="pt",
         )
         return {
-            "anchor_input_ids": tokenized_anchor["input_ids"],
-            "anchor_attention_mask": tokenized_anchor["attention_mask"],
-            "u1_input_ids": tokenized_u1["input_ids"],
-            "u1_attention_mask": tokenized_u1["attention_mask"],
-            "u2_input_ids": tokenized_u2["input_ids"],
-            "u2_attention_mask": tokenized_u2["attention_mask"],
-            "label": examples["Same Author Label"],
+            "q_input_ids": tokenized_q["input_ids"],
+            "q_attention_mask": tokenized_q["attention_mask"],
+            "k_input_ids": tokenized_k["input_ids"],
+            "k_attention_mask": tokenized_k["attention_mask"],
+            "domain_label": batch["domain_label"],
+            "affiliation_label": batch["affiliation_label"],
+            "author_label": batch["author_label"],
         }
 
-    def setup(self, stage: str = None):
-        ds = load_dataset(self.ds_name)
-        columns_to_remove = ds["train"].column_names
+    def setup(self, stage: str):
+        ds = load_dataset(self.ds_name, self.config_name)
+        columns_to_remove = ds["train"].column_names  # type: ignore
 
         if stage == "fit" or stage is None:
-            train_dataset = ds["train"].map(
+            train_dataset = ds["train"].map(  # type: ignore
                 self.tokenize_function,
                 batched=True,
                 num_proc=self.num_proc,
                 remove_columns=columns_to_remove,
             )
-            val_dataset = ds["validation"].map(
+            val_dataset = ds["valid"].map(  # type: ignore
                 self.tokenize_function,
                 batched=True,
                 num_proc=self.num_proc,
@@ -93,7 +78,7 @@ class SEDataModule(L.LightningDataModule):
             self.val_dataset = val_dataset.with_format("torch")
 
         if stage == "test" or stage is None:
-            test_dataset = ds["test"].map(
+            test_dataset = ds["test"].map(  # type: ignore
                 self.tokenize_function,
                 batched=True,
                 num_proc=self.num_proc,
@@ -103,15 +88,15 @@ class SEDataModule(L.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_proc
+            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
         )
 
     def val_dataloader(self):
         return DataLoader(
-            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_proc
+            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
         )
 
     def test_dataloader(self):
         return DataLoader(
-            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_proc
+            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
         )

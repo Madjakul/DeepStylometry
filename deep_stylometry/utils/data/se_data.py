@@ -27,17 +27,15 @@ class SEDataModule(L.LightningDataModule):
     def prepare_data(self):
         load_dataset(self.ds_name)
 
-    def tokenize_function(self, examples: Dict[str, List[Any]]):
+    def tokenize_function(self, batch: Dict[str, List[Any]]):
         anchors = [
-            str(text) if text is not None else "" for text in examples["Anchor (A)"]
+            str(text) if text is not None else "" for text in batch["Anchor (A)"]
         ]
         u1s = [
-            str(text) if text is not None else ""
-            for text in examples["Utterance 1 (U1)"]
+            str(text) if text is not None else "" for text in batch["Utterance 1 (U1)"]
         ]
         u2s = [
-            str(text) if text is not None else ""
-            for text in examples["Utterance 2 (U2)"]
+            str(text) if text is not None else "" for text in batch["Utterance 2 (U2)"]
         ]
 
         # Tokenize with empty string handling
@@ -69,7 +67,7 @@ class SEDataModule(L.LightningDataModule):
             "u1_attention_mask": tokenized_u1["attention_mask"],
             "u2_input_ids": tokenized_u2["input_ids"],
             "u2_attention_mask": tokenized_u2["attention_mask"],
-            "label": examples["Same Author Label"],
+            "label": batch["Same Author Label"],
         }
 
     def setup(self, stage: str):
