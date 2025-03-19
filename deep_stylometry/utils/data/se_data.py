@@ -72,18 +72,18 @@ class SEDataModule(L.LightningDataModule):
             "label": examples["Same Author Label"],
         }
 
-    def setup(self, stage: str = None):
+    def setup(self, stage: str):
         ds = load_dataset(self.ds_name)
-        columns_to_remove = ds["train"].column_names
+        columns_to_remove = ds["train"].column_names  # type: ignore
 
         if stage == "fit" or stage is None:
-            train_dataset = ds["train"].map(
+            train_dataset = ds["train"].map(  # type: ignore
                 self.tokenize_function,
                 batched=True,
                 num_proc=self.num_proc,
                 remove_columns=columns_to_remove,
             )
-            val_dataset = ds["validation"].map(
+            val_dataset = ds["validation"].map(  # type: ignore
                 self.tokenize_function,
                 batched=True,
                 num_proc=self.num_proc,
@@ -93,7 +93,7 @@ class SEDataModule(L.LightningDataModule):
             self.val_dataset = val_dataset.with_format("torch")
 
         if stage == "test" or stage is None:
-            test_dataset = ds["test"].map(
+            test_dataset = ds["test"].map(  # type: ignore
                 self.tokenize_function,
                 batched=True,
                 num_proc=self.num_proc,
@@ -103,15 +103,15 @@ class SEDataModule(L.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_proc
+            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
         )
 
     def val_dataloader(self):
         return DataLoader(
-            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_proc
+            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
         )
 
     def test_dataloader(self):
         return DataLoader(
-            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_proc
+            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
         )
