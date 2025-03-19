@@ -8,8 +8,26 @@ import os.path as osp
 from typing import List
 
 import yaml
+from transformers import AutoTokenizer
 
 WIDTH = 88
+
+
+def get_tokenizer(model_name: str, **kwargs):
+    """Get a tokenizer from the model name.
+
+    Parameters
+    ----------
+    model_name: str
+        Name of the model.
+
+    Returns
+    -------
+    tokenizer: transformers.AutoTokenizer
+        Tokenizer for the model.
+    """
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    return tokenizer
 
 
 def load_config_from_file(path: str):
