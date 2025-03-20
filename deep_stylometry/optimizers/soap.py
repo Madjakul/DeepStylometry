@@ -1,5 +1,4 @@
-# deep_stylometry/modules/soap.py
-# Original code from https://github.com/nikhilvyas/SOAP
+# deep_stylometry/optimizers/soap.py
 
 from itertools import chain
 
