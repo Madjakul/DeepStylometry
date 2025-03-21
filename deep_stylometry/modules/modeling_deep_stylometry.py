@@ -30,6 +30,7 @@ class DeepStylometry(L.LightningModule):
         lr: float,
         weight_decay: float,
         dropout: float,
+        tau: float,
     ):
         super(DeepStylometry, self).__init__()
         self.optim_name = optim_name.lower()
@@ -39,6 +40,7 @@ class DeepStylometry(L.LightningModule):
         self.lm = LanguageModel(model_name)
         self.fc = nn.Linear(self.lm.hidden_size, self.lm.hidden_size)
         self.dropout = dropout
+        self.tau = tau
 
     def configure_optimizers(self):
         optim = self.optim_map[self.optim_name]
