@@ -4,8 +4,9 @@ from typing import Any, Dict, List, Optional
 
 import lightning as L
 from datasets import load_dataset
-from deep_stylometry.utils.helpers import get_tokenizer
 from torch.utils.data import DataLoader
+
+from deep_stylometry.utils.helpers import get_tokenizer
 
 
 class HALvestDataModule(L.LightningDataModule):
@@ -30,22 +31,26 @@ class HALvestDataModule(L.LightningDataModule):
         load_dataset(self.ds_name, self.config_name)
 
     def tokenize_function(self, batch: Dict[str, List[Any]]):
-        qs = [str(text) if text is not None else "" for text in batch["query_text"]]
-        ks = [str(text) if text is not None else "" for text in batch["key_text"]]
+        qs = [
+            text if isinstance(text, str) or text is None else str(text)
+            for text in batch["query_text"]
+        ]
+        ks = [
+            text if isinstance(text, str) or text is None else str(text)
+            for text in batch["key_text"]
+        ]
 
         tokenized_q = self.tokenizer(
             qs,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
-            return_tensors="pt",
         )
         tokenized_k = self.tokenizer(
             ks,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
-            return_tensors="pt",
         )
         return {
             "q_input_ids": tokenized_q["input_ids"],
@@ -59,6 +64,11 @@ class HALvestDataModule(L.LightningDataModule):
 
     def setup(self, stage: str):
         ds = load_dataset(self.ds_name, self.config_name)
+        available_splits = ds.keys()
+        if any(["train", "test", "valid"]) not in available_splits:
+            raise ValueError(
+                f"Expected splits 'train' and 'valid', got {available_splits}"
+            )
         columns_to_remove = ds["train"].column_names  # type: ignore
 
         if stage == "fit" or stage is None:
