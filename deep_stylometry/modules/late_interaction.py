@@ -24,7 +24,7 @@ class LateInteraction(nn.Module):
             self.register_buffer("distance", self.distance)
         self.exp_decay = exp_decay
         self.alpha = alpha
-        self.eps = 1e-10
+        self.eps = 1e-9
 
     def forward(
         self,
