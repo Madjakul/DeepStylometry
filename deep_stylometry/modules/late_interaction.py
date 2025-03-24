@@ -6,9 +6,18 @@ import torch.nn.functional as F
 
 
 class LateInteraction(nn.Module):
-    def __init__(self, gumbel_temp: float = 0.5):
+    def __init__(
+        self,
+        do_distance_based: bool,
+        exp_decay: bool,
+        alpha: float = 0.5,
+        gumbel_temp: float = 0.5,
+    ):
         super().__init__()
         self.gumbel_temp = gumbel_temp
+        self.do_distance_based = do_distance_based
+        self.exp_decay = exp_decay
+        self.alpha = alpha
         self.eps = 1e-10
 
     def forward(
@@ -33,6 +42,9 @@ class LateInteraction(nn.Module):
 
         # Compute token-level similarities
         sim_matrix = torch.einsum("bqh,bkh->bqk", query_embs, key_embs)
+
+        # TODO: compute custom distance-based similarity matrix
+        # add distances to sim_matrix and a small epsilon to avoid division by zero
 
         # Create combined mask for valid token pairs
         valid_mask = torch.einsum("bq,bk->bqk", q_mask, k_mask)
