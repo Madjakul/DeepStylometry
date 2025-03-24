@@ -64,11 +64,6 @@ class HALvestDataModule(L.LightningDataModule):
 
     def setup(self, stage: str):
         ds = load_dataset(self.ds_name, self.config_name)
-        available_splits = ds.keys()
-        if any(["train", "test", "valid"]) not in available_splits:
-            raise ValueError(
-                f"Expected splits 'train' and 'valid', got {available_splits}"
-            )
         columns_to_remove = ds["train"].column_names  # type: ignore
 
         if stage == "fit" or stage is None:

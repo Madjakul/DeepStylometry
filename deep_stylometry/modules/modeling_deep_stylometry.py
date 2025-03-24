@@ -28,12 +28,13 @@ class DeepStylometry(L.LightningModule):
         optim_name: str,
         model_name: str,
         batch_size: int,
+        seq_len: int,
         lr: float = 2e-5,
         dropout: float = 0.1,
         weight_decay: float = 1e-2,
         clm_weight: float = 1.0,
         do_late_interaction: bool = False,
-        do_distance_based: bool = False,
+        do_distance: bool = False,
         exp_decay: bool = False,
         alpha: float = 0.5,
         contrastive_weight: float = 1.0,
@@ -49,10 +50,11 @@ class DeepStylometry(L.LightningModule):
         self.clm_loss = CLMLoss()
         self.contrastive_loss = InfoNCELoss(
             do_late_interaction=do_late_interaction,
-            do_distance_based=do_distance_based,
+            do_distance=do_distance,
             exp_decay=exp_decay,
             alpha=alpha,
             temperature=contrastive_temp,
+            seq_len=seq_len,
         )
         self.clm_weight = clm_weight
         self.contrastive_weight = contrastive_weight
@@ -86,6 +88,7 @@ class DeepStylometry(L.LightningModule):
             batch["pair_labels"],
             batch["q_attention_mask"],
             batch["k_attention_mask"],
+            gumbel_temp=self.gumbel_temp,
         )
 
         total_loss = (

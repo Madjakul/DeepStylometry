@@ -8,14 +8,20 @@ import torch.nn.functional as F
 class LateInteraction(nn.Module):
     def __init__(
         self,
-        do_distance_based: bool,
+        do_distance: bool,
         exp_decay: bool,
+        seq_len: int,
         alpha: float = 0.5,
-        gumbel_temp: float = 0.5,
     ):
         super().__init__()
-        self.gumbel_temp = gumbel_temp
-        self.do_distance_based = do_distance_based
+        self.do_distance = do_distance
+        self.distance: torch.Tensor
+        if self.do_distance:
+            positions = torch.arange(seq_len)
+            i = positions.unsqueeze(1)
+            j = positions.unsqueeze(0)
+            self.distance = (i - j).abs()
+            self.register_buffer("distance", self.distance)
         self.exp_decay = exp_decay
         self.alpha = alpha
         self.eps = 1e-10
@@ -26,6 +32,7 @@ class LateInteraction(nn.Module):
         key_embs: torch.Tensor,
         q_mask: torch.Tensor,
         k_mask: torch.Tensor,
+        gumbel_temp: float,
     ):
         """
         Args:
@@ -36,6 +43,7 @@ class LateInteraction(nn.Module):
         Returns:
             scores: (batch_size,)
         """
+        batch_size, seq_len, hidden_size = query_embs.shape
         # Normalize embeddings
         query_embs = F.normalize(query_embs, p=2, dim=-1)
         key_embs = F.normalize(key_embs, p=2, dim=-1)
@@ -43,8 +51,13 @@ class LateInteraction(nn.Module):
         # Compute token-level similarities
         sim_matrix = torch.einsum("bqh,bkh->bqk", query_embs, key_embs)
 
-        # TODO: compute custom distance-based similarity matrix
-        # add distances to sim_matrix and a small epsilon to avoid division by zero
+        if self.do_distance:
+            if self.exp_decay:
+                w = torch.exp(-self.alpha * self.distance)
+            else:
+                w = 1.0 / (1.0 + self.distance)
+
+            sim_matrix = sim_matrix * w
 
         # Create combined mask for valid token pairs
         valid_mask = torch.einsum("bq,bk->bqk", q_mask, k_mask)
@@ -53,9 +66,9 @@ class LateInteraction(nn.Module):
             # Add Gumbel noise to valid positions only
             uniform = torch.rand_like(sim_matrix) * (1 - self.eps) + self.eps
             gumbel_noise = -torch.log(-torch.log(uniform))
-            noisy_sim = (sim_matrix + gumbel_noise * valid_mask) / self.gumbel_temp
+            noisy_sim = (sim_matrix + gumbel_noise * valid_mask) / gumbel_temp
         else:
-            noisy_sim = sim_matrix / self.gumbel_temp
+            noisy_sim = sim_matrix / gumbel_temp
 
         # Mask invalid positions with large negative value
         noisy_sim = noisy_sim * valid_mask - (1 - valid_mask) * 1e9
