@@ -21,11 +21,13 @@ class HALvestDataModule(L.LightningDataModule):
     ):
         super().__init__()
         self.ds_name = ds_name
-        self.config_name = config_name
+        self.config_name = config_name if config_name is not None else "base-2"
         self.batch_size = batch_size
         self.num_proc = num_proc
         self.max_length = max_length
         self.tokenizer = get_tokenizer(tokenizer_name)
+        if tokenizer_name == "openai-community/gpt2":
+            self.tokenizer.pad_token = self.tokenizer.eos_token
 
     def prepare_data(self):
         load_dataset(self.ds_name, self.config_name)
