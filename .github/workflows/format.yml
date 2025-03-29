@@ -28,7 +28,7 @@ jobs:
         run: isort .
 
       - name: Run docformatter
-        run: docformatter -i .
+        run: docformatter --in-place -r .
 
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v4
