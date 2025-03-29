@@ -20,8 +20,8 @@ class LateInteraction(nn.Module):
             positions = torch.arange(seq_len)
             i = positions.unsqueeze(1)
             j = positions.unsqueeze(0)
-            self.distance = (i - j).abs()
-            self.register_buffer("distance", self.distance)
+            distance = (i - j).abs()
+            self.register_buffer("distance", distance)
         self.exp_decay = exp_decay
         self.alpha = alpha
         self.eps = 1e-9
