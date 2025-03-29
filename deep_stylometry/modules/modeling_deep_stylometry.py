@@ -26,7 +26,7 @@ class DeepStylometry(L.LightningModule):
     def __init__(
         self,
         optim_name: str,
-        model_name: str,
+        base_model_name: str,
         batch_size: int,
         seq_len: int,
         lr: float = 2e-5,
@@ -46,7 +46,7 @@ class DeepStylometry(L.LightningModule):
     ):
         super().__init__()
         self.weight_decay = weight_decay
-        self.lm = LanguageModel(model_name)
+        self.lm = LanguageModel(base_model_name)
         self.clm_loss = CLMLoss()
         self.contrastive_loss = InfoNCELoss(
             do_late_interaction=do_late_interaction,
