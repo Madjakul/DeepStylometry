@@ -17,7 +17,8 @@ class CLMLoss(nn.Module):
         """Compute the cross-entropy loss for causal language modeling.
 
         Args:
-            logits: (batch_size, seq_len, vocab_size)
+            logits: torch.Tensor
+                (batch_size, seq_len, vocab_size)
             input_ids: (batch_size, seq_len)
             attention_mask: (batch_size, seq_len)
 

@@ -69,20 +69,24 @@ class HALvestDataModule(L.LightningDataModule):
         columns_to_remove = ds["train"].column_names  # type: ignore
 
         if stage == "fit" or stage is None:
-            train_dataset = ds["train"].map(  # type: ignore
-                self.tokenize_function,
-                batched=True,
-                num_proc=self.num_proc,
-                remove_columns=columns_to_remove,
+            train_dataset = (
+                ds["train"]
+                .select(range(8))
+                .map(  # type: ignore
+                    self.tokenize_function,
+                    batched=True,
+                    num_proc=self.num_proc,
+                    remove_columns=columns_to_remove,
+                )
             )
-            val_dataset = ds["valid"].map(  # type: ignore
-                self.tokenize_function,
-                batched=True,
-                num_proc=self.num_proc,
-                remove_columns=columns_to_remove,
-            )
+            # val_dataset = ds["valid"].map(  # type: ignore
+            #     self.tokenize_function,
+            #     batched=True,
+            #     num_proc=self.num_proc,
+            #     remove_columns=columns_to_remove,
+            # )
             self.train_dataset = train_dataset.with_format("torch")
-            self.val_dataset = val_dataset.with_format("torch")
+            # self.val_dataset = val_dataset.with_format("torch")
 
         if stage == "test" or stage is None:
             test_dataset = ds["test"].map(  # type: ignore
@@ -95,15 +99,16 @@ class HALvestDataModule(L.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
+            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_proc, drop_last=True  # type: ignore
         )
 
-    def val_dataloader(self):
-        return DataLoader(
-            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
-        )
-
-    def test_dataloader(self):
-        return DataLoader(
-            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
-        )
+    #
+    # def val_dataloader(self):
+    #     return DataLoader(
+    #         self.val_dataset, batch_size=self.batch_size, num_workers=self.num_proc, drop_last=True  # type: ignore
+    #     )
+    #
+    # def test_dataloader(self):
+    #     return DataLoader(
+    #         self.test_dataset, batch_size=self.batch_size, num_workers=self.num_proc, drop_last=True  # type: ignore
+    #     )

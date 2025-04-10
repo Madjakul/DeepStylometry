@@ -33,4 +33,4 @@ jobs:
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: "Apply code formatting with Black, isort, and docformatter"
+          commit_message: "refactor: apply code formatting with Black, isort, and docformatter"

@@ -1,6 +1,7 @@
 # deep_strylometry/utils/data/__init__.py
 
+from deep_stylometry.utils.data.analysis_data import DomainPerplexityDataModule
 from deep_stylometry.utils.data.halvest_data import HALvestDataModule
 from deep_stylometry.utils.data.se_data import SEDataModule
 
-__all__ = ["HALvestDataModule", "SEDataModule"]
+__all__ = ["HALvestDataModule", "SEDataModule", "DomainPerplexityDataModule"]
