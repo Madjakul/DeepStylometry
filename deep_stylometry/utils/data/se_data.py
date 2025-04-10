@@ -4,8 +4,9 @@ from typing import Any, Dict, List
 
 import lightning as L
 from datasets import load_dataset
-from deep_stylometry.utils.helpers import get_tokenizer
 from torch.utils.data import DataLoader
+
+from deep_stylometry.utils.helpers import get_tokenizer
 
 
 class SEDataModule(L.LightningDataModule):
