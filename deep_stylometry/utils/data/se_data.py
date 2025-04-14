@@ -16,76 +16,73 @@ class SEDataModule(L.LightningDataModule):
         num_proc: int,
         tokenizer_name: str,
         max_length: int,
-        ds_name: str = "AnnaWegmann/StyleEmbeddingData",
+        map_batch_size: int,
+        load_from_cache_file: bool,
+        cache_dir: str,
+        ds_name: str = "Madjakul/StyleEmbeddingPairwiseData",
     ):
         super().__init__()
         self.ds_name = ds_name
         self.batch_size = batch_size
         self.num_proc = num_proc
         self.max_length = max_length
+        self.load_from_cache_file = load_from_cache_file
+        self.cache_dir = cache_dir
+        self.map_batch_size = map_batch_size
         self.tokenizer = get_tokenizer(tokenizer_name)
 
     def prepare_data(self):
-        load_dataset(self.ds_name)
+        load_dataset(self.ds_name, cache_dir=self.cache_dir)
 
     def tokenize_function(self, batch: Dict[str, List[Any]]):
-        anchors = [
-            str(text) if text is not None else "" for text in batch["Anchor (A)"]
+        qs = [
+            text if isinstance(text, str) or text is None else str(text)
+            for text in batch["query_text"]
         ]
-        u1s = [
-            str(text) if text is not None else "" for text in batch["Utterance 1 (U1)"]
-        ]
-        u2s = [
-            str(text) if text is not None else "" for text in batch["Utterance 2 (U2)"]
+        ks = [
+            text if isinstance(text, str) or text is None else str(text)
+            for text in batch["key_text"]
         ]
 
-        # Tokenize with empty string handling
-        tokenized_anchor = self.tokenizer(
-            anchors,
+        tokenized_q = self.tokenizer(
+            qs,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
-            return_tensors="pt",
         )
-        tokenized_u1 = self.tokenizer(
-            u1s,
+        tokenized_k = self.tokenizer(
+            ks,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
-            return_tensors="pt",
-        )
-        tokenized_u2 = self.tokenizer(
-            u2s,
-            truncation=True,
-            padding="max_length",
-            max_length=self.max_length,
-            return_tensors="pt",
         )
         return {
-            "anchor_input_ids": tokenized_anchor["input_ids"],
-            "anchor_attention_mask": tokenized_anchor["attention_mask"],
-            "u1_input_ids": tokenized_u1["input_ids"],
-            "u1_attention_mask": tokenized_u1["attention_mask"],
-            "u2_input_ids": tokenized_u2["input_ids"],
-            "u2_attention_mask": tokenized_u2["attention_mask"],
-            "label": batch["Same Author Label"],
+            "q_input_ids": tokenized_q["input_ids"],
+            "q_attention_mask": tokenized_q["attention_mask"],
+            "k_input_ids": tokenized_k["input_ids"],
+            "k_attention_mask": tokenized_k["attention_mask"],
+            "author_label": batch["author_label"],
         }
 
     def setup(self, stage: str):
-        ds = load_dataset(self.ds_name)
+        ds = load_dataset(self.ds_name, cache_dir=self.cache_dir)
         columns_to_remove = ds["train"].column_names  # type: ignore
 
         if stage == "fit" or stage is None:
             train_dataset = ds["train"].map(  # type: ignore
                 self.tokenize_function,
                 batched=True,
+                batch_size=self.map_batch_size,
                 num_proc=self.num_proc,
+                load_from_cache_file=self.load_from_cache_file,
                 remove_columns=columns_to_remove,
             )
             val_dataset = ds["validation"].map(  # type: ignore
                 self.tokenize_function,
                 batched=True,
+                batch_size=self.map_batch_size,
                 num_proc=self.num_proc,
+                load_from_cache_file=self.load_from_cache_file,
                 remove_columns=columns_to_remove,
             )
             self.train_dataset = train_dataset.with_format("torch")
@@ -94,8 +91,10 @@ class SEDataModule(L.LightningDataModule):
         if stage == "test" or stage is None:
             test_dataset = ds["test"].map(  # type: ignore
                 self.tokenize_function,
+                batch_size=self.map_batch_size,
                 batched=True,
                 num_proc=self.num_proc,
+                load_from_cache_file=self.load_from_cache_file,
                 remove_columns=columns_to_remove,
             )
             self.test_dataset = test_dataset.with_format("torch")
