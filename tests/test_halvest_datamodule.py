@@ -13,6 +13,9 @@ def data_module():
         tokenizer_name="openai-community/gpt2",
         max_length=128,
         ds_name="almanach/HALvest-Contrastive",
+        map_batch_size=1000,
+        load_from_cache_file=False,
+        cache_dir=None,  # type: ignore
     )
 
 
