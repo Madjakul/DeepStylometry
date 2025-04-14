@@ -1,6 +1,7 @@
 # deep_strylometry/utils/argparsers/__init__.py
 
-from deep_stylometry.utils.argparsers.preprocess_argparse import PreprocessArgparse
+from deep_stylometry.utils.argparsers.preprocess_argparse import \
+    PreprocessArgparse
 from deep_stylometry.utils.argparsers.train_argparse import TrainArgparse
 from deep_stylometry.utils.argparsers.tune_argparse import TuneArgparse
 
