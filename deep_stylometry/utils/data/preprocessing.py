@@ -12,6 +12,21 @@ def _transform_triplet_to_pairwise(batch: Dict[str, List[Any]]):
     Each triplet (A, U1, U2, label) yields two pairs:
     - One positive pair (A, Positive Utterance) with label 1
     - One negative pair (A, Negative Utterance) with label 0
+
+    Parameters
+    ----------
+    batch: Dict[str, List[Any]]
+        A batch of triplet data from StyleEMBeddingData.
+
+    Returns
+    -------
+    Dict[str, List[Any]]
+        A dictionary containing:
+        - query_text: List of query texts (A)
+        - query_id: List of IDs for query texts
+        - key_text: List of key texts (U1 or U2)
+        - key_id: List of IDs for key texts
+        - author_label: List of labels (1 for positive, 0 for negative)
     """
     new_sentence1 = []
     s1_ids = []
@@ -74,28 +89,20 @@ def _transform_triplet_to_pairwise(batch: Dict[str, List[Any]]):
 
 
 def _push_to_hub(ds: DatasetDict, ds_name: str):
-    # --- Push to Hugging Face Hub ---
+    """Pushes the transformed dataset to Hugging Face Hub.
+
+    Parameters
+    ----------
+    ds: DatasetDict
+        The transformed dataset to be pushed.
+    ds_name: str
+        The name of the dataset on Hugging Face Hub.
+    """
     logging.info(f"\nAttempting to push transformed dataset to Hub: {ds_name}")
-    try:
-        ds.push_to_hub(ds_name)
-        logging.info(
-            f"Successfully pushed dataset to: https://huggingface.co/datasets/{ds_name}"
-        )
-    except Exception as e:
-        logging.error(f"\nError pushing dataset to Hub: {e}")
-        logging.error("Please ensure:")
-        logging.error(
-            "1. You have replaced 'YourUsername/StyleEmbeddingPairwiseData' with your desired dataset name."
-        )
-        logging.error(
-            "2. You are logged into Hugging Face Hub (use 'huggingface-cli login' or notebook_login())."
-        )
-        logging.error(
-            "3. You have the 'huggingface_hub' library installed (`pip install huggingface_hub`)."
-        )
-        logging.error(
-            "4. The chosen dataset name doesn't already exist under your account (or set private=True/repo_id=... appropriately)."
-        )
+    ds.push_to_hub(ds_name)
+    logging.info(
+        f"Successfully pushed dataset to: https://huggingface.co/datasets/{ds_name}"
+    )
 
 
 def run(
@@ -106,6 +113,24 @@ def run(
     cache_dir: str,
     original_ds_name: str = "AnnaWegmann/StyleEmbeddingData",
 ):
+    """Load and reprocesses the StyleEmbeddingData dataset to create a pairwise
+    dataset.
+
+    Parameters
+    ----------
+    target_ds_name: str
+        The name of the dataset to be created on Hugging Face Hub.
+    batch_size: int
+        The batch size for processing the dataset.
+    num_proc: int
+        The number of processes to use for parallel processing.
+    load_from_cache_file: bool
+        Whether to load from cache or not.
+    cache_dir: str
+        The directory where the dataset is cached.
+    original_ds_name: str
+        The name of the original dataset to load from Hugging Face Hub.
+    """
     logging.info(f"Loading original dataset: {original_ds_name}...")
     original_ds = load_dataset(original_ds_name, cache_dir=cache_dir)
     logging.info("Original dataset loaded.")
