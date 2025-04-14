@@ -32,8 +32,6 @@ class HALvestDataModule(L.LightningDataModule):
         self.cache_dir = cache_dir
         self.map_batch_size = map_batch_size
         self.tokenizer = get_tokenizer(tokenizer_name)
-        if tokenizer_name == "openai-community/gpt2":
-            self.tokenizer.pad_token = self.tokenizer.eos_token
 
     def prepare_data(self):
         load_dataset(self.ds_name, self.config_name, cache_dir=self.cache_dir)

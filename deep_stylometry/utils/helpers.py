@@ -28,7 +28,6 @@ def get_tokenizer(model_name: str, **kwargs):
     """
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
-        # Fallback to EOS token
         if tokenizer.eos_token is not None:
             tokenizer.pad_token = tokenizer.eos_token
             tokenizer.pad_token_id = tokenizer.eos_token_id
