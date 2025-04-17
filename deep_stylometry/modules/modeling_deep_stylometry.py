@@ -74,25 +74,17 @@ class DeepStylometry(L.LightningModule):
 
     def _calculate_losses(self, batch: Dict[str, torch.Tensor]):
         q_embs, q_logits = self(batch["q_input_ids"], batch["q_attention_mask"])
-        k_embs, k_logits = self(batch["k_input_ids"], batch["k_attention_mask"])
+        k_embs, _ = self(batch["k_input_ids"], batch["k_attention_mask"])
 
-        # CLM Loss with masks
-        # clm_loss = (
-        #     self.clm_loss(q_logits, batch["q_input_ids"], batch["q_attention_mask"])
-        #     + self.clm_loss(k_logits, batch["k_input_ids"], batch["k_attention_mask"])
-        # ) / 2
         clm_loss = self.clm_loss(
             q_logits, batch["q_input_ids"], batch["q_attention_mask"]
         )
 
-        # Contrastive Loss: Pass labels directly
         if self.contrastive_weight > 0:
-            # Contrastive Loss with masks
-            # Use the binary labels directly
             contrastive_loss = self.contrastive_loss(
                 q_embs,
                 k_embs,
-                batch["author_label"],  # Directly use the binary labels
+                batch["author_label"],
                 batch["q_attention_mask"],
                 batch["k_attention_mask"],
                 gumbel_temp=self.gumbel_temp,
