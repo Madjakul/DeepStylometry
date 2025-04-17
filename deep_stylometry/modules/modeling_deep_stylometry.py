@@ -105,31 +105,6 @@ class DeepStylometry(L.LightningModule):
         )
         return total_loss, clm_loss, contrastive_loss
 
-    # def _calculate_losses(self, batch: Dict[str, torch.Tensor]):
-    #     q_embs, q_logits = self(batch["q_input_ids"], batch["q_attention_mask"])
-    #     k_embs, k_logits = self(batch["k_input_ids"], batch["k_attention_mask"])
-    #
-    #     # CLM Loss with masks
-    #     clm_loss = (
-    #         self.clm_loss(q_logits, batch["q_input_ids"], batch["q_attention_mask"])
-    #         + self.clm_loss(k_logits, batch["k_input_ids"], batch["k_attention_mask"])
-    #     ) / 2
-    #
-    #     # Contrastive Loss with masks
-    #     contrastive_loss = self.contrastive_loss(
-    #         q_embs,
-    #         k_embs,
-    #         batch["author_label"],
-    #         batch["q_attention_mask"],
-    #         batch["k_attention_mask"],
-    #         gumbel_temp=self.gumbel_temp,
-    #     )
-    #
-    #     total_loss = (
-    #         self.clm_weight * clm_loss + self.contrastive_weight * contrastive_loss
-    #     )
-    #     return total_loss, clm_loss, contrastive_loss
-
     def _configure_ffn(self, project_up: bool):
         if project_up:
             self.fc1 = nn.Linear(self.lm.hidden_size, self.lm.hidden_size * 4)
@@ -171,16 +146,16 @@ class DeepStylometry(L.LightningModule):
             self.gumbel_temp *= self.temp_annealing_rate
         return total_loss
 
-    # def validation_step(self, batch, batch_idx: int):
-    #     total_loss, clm_loss, contrastive_loss = self._calculate_losses(batch)
-    #     self.log_dict(
-    #         {
-    #             "val/total_loss": total_loss,
-    #             "val/clm_loss": clm_loss,
-    #             "val/contrastive_loss": contrastive_loss,
-    #         },
-    #         prog_bar=True,
-    #     )
+    def validation_step(self, batch, batch_idx: int):
+        total_loss, clm_loss, contrastive_loss = self._calculate_losses(batch)
+        self.log_dict(
+            {
+                "val/total_loss": total_loss,
+                "val/clm_loss": clm_loss,
+                "val/contrastive_loss": contrastive_loss,
+            },
+            prog_bar=True,
+        )
 
     def test_step(self, batch, batch_idx: int):
         total_loss, clm_loss, contrastive_loss = self._calculate_losses(batch)
