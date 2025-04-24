@@ -8,11 +8,10 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForMaskedLM
 
 
 class LanguageModel(nn.Module):
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, is_decoder_model: bool):
         super(LanguageModel, self).__init__()
 
         config = AutoConfig.from_pretrained(model_name)
-        is_decoder_model = getattr(config, "is_decoder", False)
 
         if is_decoder_model:
             logging.info(f"Loading pretrained decoder from {model_name}.")

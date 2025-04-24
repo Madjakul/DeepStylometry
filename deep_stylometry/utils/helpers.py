@@ -23,7 +23,7 @@ def get_tokenizer(model_name: str, **kwargs):
 
     Returns
     -------
-    tokenizer: transformers.AutoTokenizer
+    tokenizer: transformers.PretrainedTokenizerBase
         Tokenizer for the model.
     """
     tokenizer = AutoTokenizer.from_pretrained(model_name)
