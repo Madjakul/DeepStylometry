@@ -8,9 +8,9 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 # Import necessary Hugging Face classes
-from transformers import DataCollatorForLanguageModeling, PreTrainedTokenizerBase
+from transformers import (DataCollatorForLanguageModeling,
+                          PreTrainedTokenizerBase)
 
 from deep_stylometry.modules.clm_loss import CLMLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
