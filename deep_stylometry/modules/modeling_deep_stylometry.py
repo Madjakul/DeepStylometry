@@ -316,38 +316,38 @@ class DeepStylometry(L.LightningModule):
     # Add validation_step and test_step if needed, mirroring _calculate_losses logic
     # Ensure to use appropriate logging keys (e.g., "val/total_loss")
 
-    def validation_step(self, batch, batch_idx: int):
-        total_loss, lm_loss, contrastive_loss = self._calculate_losses(batch)
-
-        self.log(
-            "val/total_loss",
-            total_loss,
-            prog_bar=True,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=self.batch_size,
-        )
-        self.log(
-            "val/lm_loss",
-            lm_loss,
-            prog_bar=False,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=self.batch_size,
-        )
-        if self.contrastive_weight > 0:
-            self.log(
-                "val/contrastive_loss",
-                contrastive_loss,
-                prog_bar=False,
-                on_step=False,
-                on_epoch=True,
-                sync_dist=True,
-                batch_size=self.batch_size,
-            )
-        return total_loss
+    # def validation_step(self, batch, batch_idx: int):
+    #     total_loss, lm_loss, contrastive_loss = self._calculate_losses(batch)
+    #
+    #     self.log(
+    #         "val/total_loss",
+    #         total_loss,
+    #         prog_bar=True,
+    #         on_step=False,
+    #         on_epoch=True,
+    #         sync_dist=True,
+    #         batch_size=self.batch_size,
+    #     )
+    #     self.log(
+    #         "val/lm_loss",
+    #         lm_loss,
+    #         prog_bar=False,
+    #         on_step=False,
+    #         on_epoch=True,
+    #         sync_dist=True,
+    #         batch_size=self.batch_size,
+    #     )
+    #     if self.contrastive_weight > 0:
+    #         self.log(
+    #             "val/contrastive_loss",
+    #             contrastive_loss,
+    #             prog_bar=False,
+    #             on_step=False,
+    #             on_epoch=True,
+    #             sync_dist=True,
+    #             batch_size=self.batch_size,
+    #         )
+    #     return total_loss
 
     def test_step(self, batch, batch_idx: int):
         total_loss, lm_loss, contrastive_loss = self._calculate_losses(batch)

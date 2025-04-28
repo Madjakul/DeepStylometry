@@ -69,24 +69,28 @@ class SEDataModule(L.LightningDataModule):
         columns_to_remove = ds["train"].column_names  # type: ignore
 
         if stage == "fit" or stage is None:
-            train_dataset = ds["train"].map(  # type: ignore
-                self.tokenize_function,
-                batched=True,
-                batch_size=self.map_batch_size,
-                num_proc=self.num_proc,
-                load_from_cache_file=self.load_from_cache_file,
-                remove_columns=columns_to_remove,
+            train_dataset = (
+                ds["train"]
+                .select(range(4))
+                .map(  # type: ignore
+                    self.tokenize_function,
+                    batched=True,
+                    batch_size=self.map_batch_size,
+                    num_proc=self.num_proc,
+                    load_from_cache_file=self.load_from_cache_file,
+                    remove_columns=columns_to_remove,
+                )
             )
-            val_dataset = ds["validation"].map(  # type: ignore
-                self.tokenize_function,
-                batched=True,
-                batch_size=self.map_batch_size,
-                num_proc=self.num_proc,
-                load_from_cache_file=self.load_from_cache_file,
-                remove_columns=columns_to_remove,
-            )
+            # val_dataset = ds["validation"].map(  # type: ignore
+            #     self.tokenize_function,
+            #     batched=True,
+            #     batch_size=self.map_batch_size,
+            #     num_proc=self.num_proc,
+            #     load_from_cache_file=self.load_from_cache_file,
+            #     remove_columns=columns_to_remove,
+            # )
             self.train_dataset = train_dataset.with_format("torch")
-            self.val_dataset = val_dataset.with_format("torch")
+            # self.val_dataset = val_dataset.with_format("torch")
 
         if stage == "test" or stage is None:
             test_dataset = ds["test"].map(  # type: ignore
@@ -104,10 +108,10 @@ class SEDataModule(L.LightningDataModule):
             self.train_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
         )
 
-    def val_dataloader(self):
-        return DataLoader(
-            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
-        )
+    # def val_dataloader(self):
+    #     return DataLoader(
+    #         self.val_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
+    #     )
 
     def test_dataloader(self):
         return DataLoader(
