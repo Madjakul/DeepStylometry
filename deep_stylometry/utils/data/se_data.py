@@ -5,11 +5,13 @@ from typing import Any, Dict, List
 import lightning as L
 from datasets import load_dataset
 from torch.utils.data import DataLoader
+from transformers import DataCollatorForLanguageModeling
 
 from deep_stylometry.utils.helpers import get_tokenizer
 
 
 class SEDataModule(L.LightningDataModule):
+
     def __init__(
         self,
         batch_size: int,
@@ -20,6 +22,7 @@ class SEDataModule(L.LightningDataModule):
         load_from_cache_file: bool,
         cache_dir: str,
         ds_name: str = "Madjakul/StyleEmbeddingPairwiseData",
+        mlm_collator: bool = False,
     ):
         super().__init__()
         self.ds_name = ds_name
@@ -30,35 +33,44 @@ class SEDataModule(L.LightningDataModule):
         self.cache_dir = cache_dir
         self.map_batch_size = map_batch_size
         self.tokenizer = get_tokenizer(tokenizer_name)
+        if mlm_collator:
+            self.mlm_collator = DataCollatorForLanguageModeling(
+                tokenizer=self.tokenizer,
+                mlm_probability=0.15,
+            )
+        else:
+            self.mlm_collator = None
 
     def prepare_data(self):
         load_dataset(self.ds_name, cache_dir=self.cache_dir)
 
     def tokenize_function(self, batch: Dict[str, List[Any]]):
-        qs = [
-            text if isinstance(text, str) or text is None else str(text)
-            for text in batch["query_text"]
-        ]
-        ks = [
-            text if isinstance(text, str) or text is None else str(text)
-            for text in batch["key_text"]
-        ]
+        # qs = [
+        #     text if isinstance(text, str) or text is None else str(text)
+        #     for text in batch["query_text"]
+        # ]
+        # ks = [
+        #     text if isinstance(text, str) or text is None else str(text)
+        #     for text in batch["key_text"]
+        # ]
 
         tokenized_q = self.tokenizer(
-            qs,
+            # qs,
+            batch["query_text"],
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
         )
         tokenized_k = self.tokenizer(
-            ks,
+            # ks,
+            batch["key_text"],
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
         )
         return {
-            "q_input_ids": tokenized_q["input_ids"],
-            "q_attention_mask": tokenized_q["attention_mask"],
+            "input_ids": tokenized_q["input_ids"],
+            "attention_mask": tokenized_q["attention_mask"],
             "k_input_ids": tokenized_k["input_ids"],
             "k_attention_mask": tokenized_k["attention_mask"],
             "author_label": batch["author_label"],
@@ -105,7 +117,10 @@ class SEDataModule(L.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
+            self.train_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_proc,
+            collate_fn=self.mlm_collator,
         )
 
     # def val_dataloader(self):

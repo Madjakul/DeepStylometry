@@ -1,6 +1,7 @@
 # deep_stylometry/modules/language_model.py
 
 import logging
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -25,8 +26,25 @@ class LanguageModel(nn.Module):
         self.hidden_size = self.model.config.hidden_size
         self.vocab_size = self.model.config.vocab_size
 
-    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor):
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        labels: Optional[torch.Tensor] = None,
+    ):
+        # out = self.model(
+        #     input_ids, attention_mask=attention_mask, output_hidden_states=True
+        # )
+        # return out.hidden_states[-1], out.logits
+        if self.is_decoder and labels is None:
+            labels = input_ids.clone()
         out = self.model(
-            input_ids, attention_mask=attention_mask, output_hidden_states=True
+            input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+            output_hidden_states=True,
+            return_dict=True,
         )
-        return out.hidden_states[-1], out.logits
+        loss = out.loss if labels is not None else 0.0
+        last_hidden_states = out.hidden_states[-1]
+        return loss, last_hidden_states
