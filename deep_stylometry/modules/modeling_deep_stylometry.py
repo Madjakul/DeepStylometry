@@ -8,8 +8,13 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import PreTrainedTokenizerBase
-from transformers.models.blip.modeling_blip import contrastive_loss
+from torchmetrics.classification import (
+    BinaryAUROC,
+    BinaryF1Score,
+    BinaryPrecision,
+    BinaryRecall,
+)
+from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
@@ -29,7 +34,6 @@ class DeepStylometry(L.LightningModule):
         self,
         optim_name: str,
         base_model_name: str,
-        tokenizer: PreTrainedTokenizerBase,
         batch_size: int,
         seq_len: int,
         is_decoder_model: bool,
@@ -44,27 +48,37 @@ class DeepStylometry(L.LightningModule):
         contrastive_weight: float = 1.0,
         contrastive_temp: float = 0.07,
         initial_gumbel_temp: float = 1.0,
-        temp_annealing_rate: float = 0.999,
-        min_gumbel_temp: float = 0.1,
+        temp_annealing_rate: Optional[float] = 1e-3,
+        min_gumbel_temp: float = 1e-5,
         project_up: Optional[bool] = None,
+        auto_anneal_gumbel: Optional[bool] = None,
     ):
         super().__init__()
         self.save_hyperparameters()  # Save hyperparameters
         self.weight_decay = weight_decay
         self.lm = LanguageModel(base_model_name, is_decoder_model)
-        self.tokenizer = tokenizer
         self.is_decoder_model = is_decoder_model
         self.lm_weight = lm_weight
         self.contrastive_weight = contrastive_weight
+        self.initial_gumbel_temp = initial_gumbel_temp
         self.gumbel_temp = initial_gumbel_temp
         self.temp_annealing_rate = temp_annealing_rate
         self.optim_name = optim_name
         self.batch_size = batch_size
         self.min_gumbel_temp = min_gumbel_temp
+        self.auto_anneal_gumbel = auto_anneal_gumbel
         self.dropout = dropout
         self.lr = lr
-
-        # Projection layers setup
+        # Validation metrics
+        self.val_auroc = BinaryAUROC(thresholds=None)
+        self.val_f1 = BinaryF1Score()
+        self.val_precision = BinaryPrecision()
+        self.val_recall = BinaryRecall()
+        # Test metrics
+        self.test_auroc = BinaryAUROC(thresholds=None)
+        self.test_f1 = BinaryF1Score()
+        self.test_precision = BinaryPrecision()
+        self.test_recall = BinaryRecall()
         if contrastive_weight > 0:
             self.contrastive_loss = InfoNCELoss(
                 do_late_interaction=do_late_interaction,
@@ -97,27 +111,35 @@ class DeepStylometry(L.LightningModule):
         )
 
         contrastive_loss = 0.0
+        pos_query_scores = None
+        pos_query_targets = None
         if self.contrastive_weight > 0:
-            contrastive_loss = self.contrastive_loss(
-                q_embs,
-                k_embs,
-                batch["author_label"],
-                batch["attention_mask"],  # Use original attention masks
-                batch["k_attention_mask"],
-                gumbel_temp=self.gumbel_temp,
+            pos_query_scores, pos_query_targets, contrastive_loss = (
+                self.contrastive_loss(
+                    q_embs,
+                    k_embs,
+                    batch["author_label"],
+                    batch["attention_mask"],  # Use original attention masks
+                    batch["k_attention_mask"],
+                    gumbel_temp=self.gumbel_temp,
+                )
             )
 
         total_loss = (self.lm_weight * lm_loss) + (
             self.contrastive_weight * contrastive_loss
         )
 
-        return (
-            lm_loss * self.lm_weight,
-            contrastive_loss * self.contrastive_weight,
-            total_loss,
-        )
+        metrics = {
+            "pos_query_scores": pos_query_scores,
+            "pos_query_targets": pos_query_targets,
+            "lm_loss": lm_loss * self.lm_weight,
+            "contrastive_loss": contrastive_loss * self.contrastive_weight,
+            "total_loss": total_loss,
+        }
 
-    def configure_optimizers(self):
+        return metrics
+
+    def configure_optimizers(self):  # type: ignore[override]
         logging.info(
             f"Configuring optimizer: {self.optim_name} with lr={self.lr}, weight_decay={self.weight_decay}"
         )
@@ -125,10 +147,32 @@ class DeepStylometry(L.LightningModule):
         optimizer = self.optim_map[self.optim_name](
             self.parameters(), lr=self.lr, weight_decay=self.weight_decay
         )
-        # Add scheduler here if needed
-        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
-        # return [optimizer], [scheduler]
-        return optimizer
+        # Calculate steps dynamically
+        total_steps = int(self.trainer.estimated_stepping_batches)
+        warmup_steps = max(1, int(0.05 * total_steps))
+
+        if self.auto_anneal_gumbel:
+            # Automatically anneal Gumbel temperature based on training steps
+            self.temp_annealing_rate = (
+                self.min_gumbel_temp / self.initial_gumbel_temp
+            ) ** (1 / total_steps)
+
+        scheduler = get_cosine_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=total_steps,
+            num_cycles=0.5,  # 0.5 cosine cycle → single smooth decay
+            last_epoch=-1,
+        )
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
+                "frequency": 1,
+            },
+        }
 
     def forward(
         self,
@@ -151,7 +195,7 @@ class DeepStylometry(L.LightningModule):
         return lm_loss, last_hidden_states, projected_embs
 
     def training_step(self, batch, batch_idx: int):
-        lm_loss, contrastive_loss, total_loss = self._compute_losses(batch)
+        metrics = self._compute_losses(batch)
 
         # Log metrics
         self.log(
@@ -162,104 +206,96 @@ class DeepStylometry(L.LightningModule):
             on_epoch=False,
             batch_size=self.batch_size,
         )
-        self.log(
-            "train/total_loss",
-            total_loss,
+        self.log_dict(
+            {
+                "train_total_loss": metrics["total_loss"],
+                "train_lm_loss": metrics["lm_loss"],
+                "train_contrastive_loss": metrics["contrastive_loss"],
+            },
             prog_bar=True,
             on_step=True,
             on_epoch=True,
             batch_size=self.batch_size,
         )
-        self.log(
-            "train/lm_loss",
-            lm_loss,
-            prog_bar=True,
-            on_step=True,
-            on_epoch=True,
-            batch_size=self.batch_size,
-        )
-        if self.contrastive_weight > 0:
-            self.log(
-                "train/contrastive_loss",
-                contrastive_loss,
-                prog_bar=True,
-                on_step=True,
-                on_epoch=True,
-                batch_size=self.batch_size,
+        # Anneal Gumbel temperature (if used by contrastive loss)
+        if hasattr(self, "contrastive_loss") and hasattr(
+            self.contrastive_loss, "do_late_interaction"
+        ):
+            # Anneal Gumbel temperature
+            self.gumbel_temp = max(
+                self.gumbel_temp * self.temp_annealing_rate, self.min_gumbel_temp
             )
 
-        # Anneal Gumbel temperature (if used by contrastive loss)
-        # Check if self.contrastive_loss exists and has gumbel temp logic before annealing
-        if hasattr(self, "contrastive_loss") and hasattr(
-            self.contrastive_loss, "temperature"
-        ):  # Simple check
-            if self.gumbel_temp > self.min_gumbel_temp:
-                self.gumbel_temp *= self.temp_annealing_rate
+        return metrics["total_loss"]
 
-        return total_loss
+    def validation_step(self, batch, batch_idx: int):
+        metrics = self._compute_losses(batch)
+        if self.contrastive_weight > 0:
+            self.val_auroc(metrics["pos_query_scores"], metrics["pos_query_targets"])
+            self.val_f1(metrics["pos_query_scores"], metrics["pos_query_targets"])
+            self.val_precision(
+                metrics["pos_query_scores"], metrics["pos_query_targets"]
+            )
+            self.val_recall(metrics["pos_query_scores"], metrics["pos_query_targets"])
+        self.log_dict(
+            {
+                "val_total_loss": metrics["total_loss"],
+                "val_lm_loss": metrics["lm_loss"],
+                "val_contrastive_loss": metrics["contrastive_loss"],
+            },
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=self.batch_size,
+        )
 
-    # Add validation_step and test_step if needed, mirroring _calculate_losses logic
-    # Ensure to use appropriate logging keys (e.g., "val/total_loss")
-
-    # def validation_step(self, batch, batch_idx: int):
-    #     total_loss, lm_loss, contrastive_loss = self._calculate_losses(batch)
-    #
-    #     self.log(
-    #         "val/total_loss",
-    #         total_loss,
-    #         prog_bar=True,
-    #         on_step=False,
-    #         on_epoch=True,
-    #         batch_size=self.batch_size,
-    #     )
-    #     self.log(
-    #         "val/lm_loss",
-    #         lm_loss,
-    #         prog_bar=False,
-    #         on_step=False,
-    #         on_epoch=True,
-    #         batch_size=self.batch_size,
-    #     )
-    #     if self.contrastive_weight > 0:
-    #         self.log(
-    #             "val/contrastive_loss",
-    #             contrastive_loss,
-    #             prog_bar=False,
-    #             on_step=False,
-    #             on_epoch=True,
-    #             batch_size=self.batch_size,
-    #         )
-    #     return total_loss
+    def on_validation_epoch_end(self):
+        self.log_dict(
+            {
+                "val_auroc": self.val_auroc.compute(),
+                "val_f1": self.val_f1.compute(),
+                "val_precision": self.val_precision.compute(),
+                "val_recall": self.val_recall.compute(),
+            },
+            prog_bar=True,
+        )
+        self.val_auroc.reset()
+        self.val_f1.reset()
+        self.val_precision.reset()
+        self.val_recall.reset()
 
     def test_step(self, batch, batch_idx: int):
-        total_loss, lm_loss, contrastive_loss = self._calculate_losses(batch)
-
-        self.log(
-            "test/total_loss",
-            total_loss,
+        metrics = self._compute_losses(batch)
+        if self.contrastive_weight > 0:
+            self.test_auroc(metrics["pos_query_scores"], metrics["pos_query_targets"])
+            self.test_f1(metrics["pos_query_scores"], metrics["pos_query_targets"])
+            self.test_precision(
+                metrics["pos_query_scores"], metrics["pos_query_targets"]
+            )
+            self.test_recall(metrics["pos_query_scores"], metrics["pos_query_targets"])
+        self.log_dict(
+            {
+                "test_total_loss": metrics["total_loss"],
+                "test_lm_loss": metrics["lm_loss"],
+                "test_contrastive_loss": metrics["contrastive_loss"],
+            },
             prog_bar=True,
             on_step=False,
             on_epoch=True,
-            sync_dist=True,
             batch_size=self.batch_size,
         )
-        self.log(
-            "test/lm_loss",
-            lm_loss,
-            prog_bar=False,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=self.batch_size,
+
+    def on_test_epoch_end(self):
+        self.log_dict(
+            {
+                "test_auroc": self.test_auroc.compute(),
+                "test_f1": self.test_f1.compute(),
+                "test_precision": self.test_precision.compute(),
+                "test_recall": self.test_recall.compute(),
+            },
+            prog_bar=True,
         )
-        if self.contrastive_weight > 0:
-            self.log(
-                "test/contrastive_loss",
-                contrastive_loss,
-                prog_bar=False,
-                on_step=False,
-                on_epoch=True,
-                sync_dist=True,
-                batch_size=self.batch_size,
-            )
-        return total_loss
+        self.test_auroc.reset()
+        self.test_f1.reset()
+        self.test_precision.reset()
+        self.test_recall.reset()

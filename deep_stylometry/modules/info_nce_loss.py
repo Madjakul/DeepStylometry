@@ -35,7 +35,7 @@ class InfoNCELoss(nn.Module):
         self,
         query_embs: torch.Tensor,
         key_embs: torch.Tensor,
-        labels: torch.Tensor,  # (batch_size,) 0/1 indicating same author
+        labels: torch.Tensor,
         q_mask: torch.Tensor,
         k_mask: torch.Tensor,
         gumbel_temp: Optional[float] = None,
@@ -88,6 +88,8 @@ class InfoNCELoss(nn.Module):
         ]  # Shape (num_pos,)
 
         # --- 4. Compute InfoNCE loss ---
-        loss = F.cross_entropy(pos_query_scores, pos_query_targets, reduction="mean")
+        contrastive_loss = F.cross_entropy(
+            pos_query_scores, pos_query_targets, reduction="mean"
+        )
 
-        return loss
+        return pos_query_scores, pos_query_targets, contrastive_loss

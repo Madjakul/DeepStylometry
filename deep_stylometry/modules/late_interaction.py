@@ -23,7 +23,10 @@ class LateInteraction(nn.Module):
             i = positions.unsqueeze(1)
             j = positions.unsqueeze(0)
             distance = (i - j).abs()
-            self.register_buffer("distance", distance)
+            # self.register_buffer("distance", distance)
+            w = torch.exp(-alpha * distance) if exp_decay else 1.0 / (1.0 + distance)
+            self.register_buffer("w", w)
+
         self.exp_decay = exp_decay
         self.alpha = alpha
         self.eps = 1e-9
@@ -48,12 +51,7 @@ class LateInteraction(nn.Module):
         sim_matrix = torch.einsum("i n s h, m j t h -> i j s t", query_embs, key_embs)
 
         if self.do_distance:
-            w = (
-                torch.exp(-self.alpha * self.distance)
-                if self.exp_decay
-                else 1.0 / (1.0 + self.distance)
-            )
-            sim_matrix = sim_matrix * w
+            sim_matrix = sim_matrix * self.w
 
         # Create combined mask for valid token pairs
         valid_mask = torch.einsum("i x s, x j t -> i j s t", q_mask, k_mask)

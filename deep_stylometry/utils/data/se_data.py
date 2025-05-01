@@ -45,15 +45,6 @@ class SEDataModule(L.LightningDataModule):
         load_dataset(self.ds_name, cache_dir=self.cache_dir)
 
     def tokenize_function(self, batch: Dict[str, List[Any]]):
-        # qs = [
-        #     text if isinstance(text, str) or text is None else str(text)
-        #     for text in batch["query_text"]
-        # ]
-        # ks = [
-        #     text if isinstance(text, str) or text is None else str(text)
-        #     for text in batch["key_text"]
-        # ]
-
         tokenized_q = self.tokenizer(
             # qs,
             batch["query_text"],
