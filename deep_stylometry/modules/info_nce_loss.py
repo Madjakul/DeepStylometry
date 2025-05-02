@@ -16,6 +16,7 @@ class InfoNCELoss(nn.Module):
         do_distance: bool,
         exp_decay: bool,
         seq_len: int,
+        use_max: bool = True,
         alpha: float = 0.5,
         temperature: float = 0.07,
     ):
@@ -29,6 +30,7 @@ class InfoNCELoss(nn.Module):
                 exp_decay=exp_decay,
                 alpha=alpha,
                 seq_len=seq_len,
+                use_max=use_max,
             )
 
     def forward(
@@ -47,11 +49,11 @@ class InfoNCELoss(nn.Module):
             # Ensure late_interaction returns scores of shape (B, B)
             all_scores = (
                 self.late_interaction(
-                    query_embs,
-                    key_embs,  # (1, B, S, H)
-                    q_mask,  # (B, 1, S)
-                    k_mask,  # (1, B, S)
-                    gumbel_temp,
+                    query_embs=query_embs,
+                    key_embs=key_embs,  # (1, B, S, H)
+                    q_mask=q_mask,  # (B, 1, S)
+                    k_mask=k_mask,  # (1, B, S)
+                    gumbel_temp=gumbel_temp,
                 )
                 / self.temperature
             )  # Apply temperature scaling AFTER late interaction

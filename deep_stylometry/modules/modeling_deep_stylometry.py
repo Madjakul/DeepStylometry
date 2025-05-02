@@ -42,6 +42,7 @@ class DeepStylometry(L.LightningModule):
         weight_decay: float = 1e-2,
         lm_weight: float = 1.0,
         do_late_interaction: bool = False,
+        use_max: bool = True,
         do_distance: bool = False,
         exp_decay: bool = False,
         alpha: float = 0.5,
@@ -87,6 +88,7 @@ class DeepStylometry(L.LightningModule):
                 alpha=alpha,
                 temperature=contrastive_temp,
                 seq_len=seq_len,
+                use_max=use_max,
             )
             hidden_size = self.lm.hidden_size
             if project_up is True:
