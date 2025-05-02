@@ -60,7 +60,6 @@ class LateInteraction(nn.Module):
 
         if self.do_distance:
             if self.exp_decay:
-                print(self.alpha)
                 w = torch.exp(-self.alpha * self.distance)  # Differentiable!
             else:
                 w = 1.0 / (1.0 + self.alpha * self.distance)
