@@ -230,13 +230,28 @@ class DeepStylometry(L.LightningModule):
 
     def validation_step(self, batch, batch_idx: int):
         metrics = self._compute_losses(batch)
-        if self.contrastive_weight > 0:
-            self.val_auroc(metrics["pos_query_scores"], metrics["pos_query_targets"])
-            self.val_f1(metrics["pos_query_scores"], metrics["pos_query_targets"])
-            self.val_precision(
-                metrics["pos_query_scores"], metrics["pos_query_targets"]
+
+        if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
+            pos_query_scores = metrics["pos_query_scores"]
+            pos_query_targets = metrics["pos_query_targets"]
+
+            # Generate binary labels (1 for correct key, 0 otherwise)
+            binary_labels = torch.zeros_like(pos_query_scores, dtype=torch.long)
+            rows = torch.arange(
+                pos_query_scores.size(0), device=pos_query_scores.device
             )
-            self.val_recall(metrics["pos_query_scores"], metrics["pos_query_targets"])
+            binary_labels[rows, pos_query_targets] = 1
+
+            # Flatten scores and labels
+            flat_scores = pos_query_scores.flatten()
+            flat_labels = binary_labels.flatten()
+
+            # Update metrics
+            self.val_auroc(flat_scores, flat_labels)
+            self.val_f1(flat_scores, flat_labels)
+            self.val_precision(flat_scores, flat_labels)
+            self.val_recall(flat_scores, flat_labels)
+
         self.log_dict(
             {
                 "val_total_loss": metrics["total_loss"],
@@ -266,13 +281,27 @@ class DeepStylometry(L.LightningModule):
 
     def test_step(self, batch, batch_idx: int):
         metrics = self._compute_losses(batch)
-        if self.contrastive_weight > 0:
-            self.test_auroc(metrics["pos_query_scores"], metrics["pos_query_targets"])
-            self.test_f1(metrics["pos_query_scores"], metrics["pos_query_targets"])
-            self.test_precision(
-                metrics["pos_query_scores"], metrics["pos_query_targets"]
+        if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
+            pos_query_scores = metrics["pos_query_scores"]
+            pos_query_targets = metrics["pos_query_targets"]
+
+            # Generate binary labels (1 for correct key, 0 otherwise)
+            binary_labels = torch.zeros_like(pos_query_scores, dtype=torch.long)
+            rows = torch.arange(
+                pos_query_scores.size(0), device=pos_query_scores.device
             )
-            self.test_recall(metrics["pos_query_scores"], metrics["pos_query_targets"])
+            binary_labels[rows, pos_query_targets] = 1
+
+            # Flatten scores and labels
+            flat_scores = pos_query_scores.flatten()
+            flat_labels = binary_labels.flatten()
+
+            # Update metrics
+            self.test_auroc(flat_scores, flat_labels)
+            self.test_f1(flat_scores, flat_labels)
+            self.test_precision(flat_scores, flat_labels)
+            self.test_recall(flat_scores, flat_labels)
+
         self.log_dict(
             {
                 "test_total_loss": metrics["total_loss"],
