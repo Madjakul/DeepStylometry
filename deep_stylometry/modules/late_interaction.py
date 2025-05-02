@@ -20,17 +20,24 @@ class LateInteraction(nn.Module):
         self.do_distance = do_distance
         self.distance: torch.Tensor
         self.use_max = use_max  # Track max mode
+
         if self.do_distance:
+            self.alpha_raw = nn.Parameter(torch.tensor(alpha))
+            # Pre-compute the distance matrix (doesn't depend on alpha)
+            # and register it as a buffer
             positions = torch.arange(seq_len)
             i = positions.unsqueeze(1)
             j = positions.unsqueeze(0)
-            distance = (i - j).abs()
-            w = torch.exp(-alpha * distance) if exp_decay else 1.0 / (1.0 + distance)
-            self.register_buffer("w", w)
+            distance = (i - j).abs().float()  # Ensure float type
+            self.register_buffer("distance", distance)  # Store distance
 
         self.exp_decay = exp_decay
-        self.alpha = alpha
         self.eps = 1e-9
+
+    @property
+    def alpha(self):
+        """Softplus ensures alpha > 0."""
+        return F.softplus(self.alpha_raw)  # log(1 + exp(x))
 
     def forward(
         self,
@@ -52,9 +59,13 @@ class LateInteraction(nn.Module):
         sim_matrix = torch.einsum("i n s h, m j t h -> i j s t", query_embs, key_embs)
 
         if self.do_distance:
-            sim_matrix = sim_matrix * self.w
+            if self.exp_decay:
+                print(self.alpha)
+                w = torch.exp(-self.alpha * self.distance)  # Differentiable!
+            else:
+                w = 1.0 / (1.0 + self.alpha * self.distance)
+            sim_matrix = sim_matrix * w  # Create combined mask for valid token pairs
 
-        # Create combined mask for valid token pairs
         valid_mask = torch.einsum("i x s, x j t -> i j s t", q_mask, k_mask)
 
         if self.use_max:  # MAX-BASED INTERACTION ############################
