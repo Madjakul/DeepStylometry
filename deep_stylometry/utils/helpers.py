@@ -1,11 +1,9 @@
 # deep_strylometry/utils/helpers.py
 
-import hashlib
 import json
 import logging
 import os
 import os.path as osp
-from typing import List
 
 import yaml
 from transformers import AutoTokenizer
@@ -124,85 +122,3 @@ def check_dir(path: str):
     logging.warning(f"No folder at {path}: creating folders at path.")
     os.makedirs(path)
     return path
-
-
-def generate_checksum(dir_path: str, gz_file_path: str):
-    """Generates a checksum for the compressed file.
-
-    Parameters
-    ----------
-    dir_path : str
-        Path to the base directory.
-    gz_file_path : str
-        Path to the GZIP file.
-    """
-    checksum_file_path = os.path.join(dir_path, "checksum.sha256")
-
-    hasher = hashlib.sha256()
-    with open(gz_file_path, "rb") as f:
-        while True:
-            chunk = f.read(4096)
-            if not chunk:
-                break
-            hasher.update(chunk)
-
-    checksum = hasher.hexdigest()
-    with open(checksum_file_path, "a") as f:
-        f.write(f"{checksum}\t{os.path.basename(gz_file_path)}\n")
-
-
-def read_json(path: str):
-    """Reads a JSON file at path.
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    js: List[Dict[str, Union[str, List[str]]]]
-    """
-    with open(path, "r", encoding="utf-8") as jsf:
-        js = json.load(jsf)
-    return js
-
-
-def read_jsons(paths: List[str]):
-    """Reads a JSON files in the directory at path.
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    js: List[Dict[str, Union[str, List[str]]]]
-    """
-    js = []
-    for path in paths:
-        with open(path, "r", encoding="utf-8") as jsf:
-            js.extend(json.load(jsf))
-    return js
-
-
-def json_to_dict(path: str, on: str):
-    """Convert a JSON file to a dictionary.
-
-    Parameters
-    ----------
-    path : str
-        Path to the JSON file.
-    on : str
-        Key to use as the main key in the dictionary.
-
-    Returns
-    -------
-    data : dict
-        Dictionary with the JSON data.
-    """
-    data = {}
-    with open(path, "r", encoding="utf-8") as jsf:
-        json_headers = json.load(jsf)
-    for json_header in json_headers:
-        tmp_data = {}
-        tmp_data[json_header[on]] = {k: v for k, v in json_header.items() if k != on}
-        data.update(tmp_data)
-    return data

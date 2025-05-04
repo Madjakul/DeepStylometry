@@ -41,18 +41,18 @@ class DeepStylometry(L.LightningModule):
         dropout: float = 0.1,
         weight_decay: float = 1e-2,
         lm_weight: float = 1.0,
-        do_late_interaction: bool = False,
-        use_max: bool = True,
-        do_distance: bool = False,
-        exp_decay: bool = False,
-        alpha: float = 0.5,
         contrastive_weight: float = 1.0,
-        contrastive_temp: float = 0.07,
+        contrastive_temp: float = 7e-2,
+        do_late_interaction: bool = True,
+        use_max: bool = False,
         initial_gumbel_temp: float = 1.0,
-        temp_annealing_rate: Optional[float] = 1e-3,
-        min_gumbel_temp: float = 1e-5,
+        auto_anneal_gumbel: bool = True,
+        gumbel_temp_annealing_rate: Optional[float] = 1e-3,
+        min_gumbel_temp: float = 1e-9,
+        do_distance: bool = True,
+        exp_decay: bool = True,
+        alpha: float = 0.5,
         project_up: Optional[bool] = None,
-        auto_anneal_gumbel: Optional[bool] = None,
     ):
         super().__init__()
         self.save_hyperparameters()  # Save hyperparameters
@@ -63,7 +63,7 @@ class DeepStylometry(L.LightningModule):
         self.contrastive_weight = contrastive_weight
         self.initial_gumbel_temp = initial_gumbel_temp
         self.gumbel_temp = initial_gumbel_temp
-        self.temp_annealing_rate = temp_annealing_rate
+        self.gumbel_temp_annealing_rate = gumbel_temp_annealing_rate
         self.optim_name = optim_name
         self.batch_size = batch_size
         self.min_gumbel_temp = min_gumbel_temp
@@ -155,7 +155,7 @@ class DeepStylometry(L.LightningModule):
 
         if self.auto_anneal_gumbel:
             # Automatically anneal Gumbel temperature based on training steps
-            self.temp_annealing_rate = (
+            self.gumbel_temp_annealing_rate = (
                 self.min_gumbel_temp / self.initial_gumbel_temp
             ) ** (1 / total_steps)
 
@@ -225,7 +225,7 @@ class DeepStylometry(L.LightningModule):
         ):
             # Anneal Gumbel temperature
             self.gumbel_temp = max(
-                self.gumbel_temp * self.temp_annealing_rate, self.min_gumbel_temp
+                self.gumbel_temp * self.gumbel_temp_annealing_rate, self.min_gumbel_temp
             )
 
         return metrics["total_loss"]
