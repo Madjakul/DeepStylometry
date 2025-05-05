@@ -1,6 +1,5 @@
 # deep_stylometry/utils/train_utils.py
 
-import os
 from typing import Any, Dict, Optional
 
 import lightning as L
@@ -20,29 +19,28 @@ NUM_PROC = psutil.cpu_count(logical=False)
 
 
 def setup_datamodule(
-    dm_config: Dict[str, Any],
+    config: Dict[str, Any],
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
 ):
     num_proc = num_proc if num_proc is not None else NUM_PROC
     dm_map = {"se": SEDataModule, "halvest": HALvestDataModule}
 
-    dm = dm_map[dm_config["ds_name"]](
-        batch_size=dm_config["batch_size"],
+    dm = dm_map[config["ds_name"]](
+        batch_size=config["batch_size"],
         num_proc=num_proc,
-        tokenizer_name=dm_config["tokenizer_name"],
-        max_length=dm_config["max_length"],
-        map_batch_size=dm_config["map_batch_size"],
-        load_from_cache_file=dm_config["load_from_cache_file"],
+        tokenizer_name=config["tokenizer_name"],
+        max_length=config["max_length"],
+        map_batch_size=config["map_batch_size"],
+        load_from_cache_file=config["load_from_cache_file"],
         cache_dir=cache_dir,
-        ds_name=dm_config["ds_name"],
-        config_name=dm_config.get("config_name", None),
+        ds_name=config["ds_name"],
+        config_name=config.get("config_name", None),
     )
     return dm
 
 
 def setup_model(config: Dict[str, Any]):
-
     model = DeepStylometry(
         optim_name=config["optim_name"],
         base_model_name=config["base_model_name"],
@@ -55,31 +53,28 @@ def setup_model(config: Dict[str, Any]):
         lm_weight=config.get("lm_weight", 1.0),
         contrastive_weight=config.get("contrastive_weight", 1.0),
         contrastive_temp=config.get("contrastive_temp", 7e-2),
-        do_late_interaction=config["late_interaction"].get("do_late_interaction", True),
-        use_max=config["late_interaction"].get("use_max", False),
-        initial_gumbel_temp=config["late_interaction"].get("initial_gumbel_temp", 1.0),
-        auto_anneal_gumbel=config["late_interaction"].get("auto_anneal_gumbel", True),
-        gumbel_temp_annealing_rate=config["late_interaction"].get(
-            "gumbel_temp_annealing_rate", 1e-3
-        ),
-        min_gumbel_temp=config["late_interaction"].get("min_gumbel_temp", 1e-9),
-        do_distance=config["late_interaction"].get("do_distance", True),
-        exp_decay=config["late_interaction"]["exp_decay"],
-        alpha=config["late_interaction"].get("alpha", 0.5),
+        do_late_interaction=config.get("do_late_interaction", False),
+        use_max=config.get("initial_gumbel_temp", None) is not None,
+        initial_gumbel_temp=config.get("initial_gumbel_temp", None),
+        auto_anneal_gumbel=config.get("auto_anneal_gumbel", True),
+        gumbel_temp_annealing_rate=config.get("gumbel_temp_annealing_rate", 1e-3),
+        min_gumbel_temp=config.get("min_gumbel_temp", 1e-9),
+        do_distance=config.get("do_distance", True),
+        exp_decay=config.get("exp_decay", False),
+        alpha=config.get("alpha", 0.5),
         project_up=config.get("project_up", None),
     )
 
     return model
 
 
-def train(
+def setup_trainer(
     config: Dict[str, Any],
-    device: str,
-    local_dir: str,
+    logs_dir: str,
     use_wandb: bool = False,
     checkpoint_dir: Optional[str] = None,
-    cache_dir: Optional[str] = None,
-    num_proc: Optional[int] = None,
+    # cache_dir: Optional[str] = None,
+    # num_proc: Optional[int] = None,
 ):
     # Set up callbacks
     callbacks = []
@@ -93,7 +88,7 @@ def train(
         early_stop_callback = EarlyStopping(
             monitor=config.get("early_stopping_metric", "val_total_loss"),
             mode=config.get("early_stopping_mode", "min"),
-            patience=config.get("early_stopping_patience", 3),
+            patience=config.get("early_stopping_patience", 5),
         )
         callbacks.append(early_stop_callback)
 
@@ -121,15 +116,15 @@ def train(
 
     # Add CSV logger by default
     csv_logger = CSVLogger(
-        save_dir=local_dir,
+        save_dir=logs_dir,
         name=config.get("experiment_name", "training_run"),
     )
     loggers.append(csv_logger)
 
     # Set up trainer
     trainer = L.Trainer(
-        accelerator=device,
-        devices=config.get("devices", -1),
+        accelerator=config.get("device", "cpu"),
+        devices=config.get("num_devices", -1),
         max_epochs=config.get("max_epochs", 3),
         enable_checkpointing=checkpoint_dir is not None,
         callbacks=callbacks,
@@ -140,44 +135,39 @@ def train(
         precision=config.get("precision", "16-mixed"),
     )
 
-    dm = setup_datamodule(dm_config=config, cache_dir=cache_dir, num_proc=num_proc)
-    model = setup_model(config=config["model"])
-    trainer.fit(model, datamodule=dm)
-    if config.get("run_test", False):
-        trainer.test(model, datamodule=dm)
+    # dm = setup_datamodule(config=config, cache_dir=cache_dir, num_proc=num_proc)
+    # model = setup_model(config=config["model"])
+    # trainer.fit(model, datamodule=dm)
+    # if config.get("run_test", False):
+    #     trainer.test(model, datamodule=dm)
+    return trainer
 
 
 def train_tune(
     config: Dict[str, Any],
     base_config: Dict[str, Any],
-    device: str,
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
 ):
     merged_config = base_config.copy()
-    for key, value in config.items():
-        if key in merged_config["model"]:
-            merged_config["model"][key] = value
-        elif key in merged_config["model"]["late_interaction"]:
-            merged_config["model"]["late_interaction"][key] = value
-        elif key in merged_config["data"]:
-            merged_config["data"][key] = value
+    merged_config.update(config)
+
     dm = setup_datamodule(
-        config["datamodule"],
+        merged_config,
         cache_dir=cache_dir,
         num_proc=num_proc,
     )
-    model = setup_model(config["model"])
+    model = setup_model(config)
     lr_monitor = LearningRateMonitor(logging_interval="step")
     trainer = L.Trainer(
-        accelerator=device,
-        devices=-1,
+        accelerator=merged_config.get("device", "cpu"),
+        devices=merged_config.get("num_devices", -1),
         max_epochs=merged_config.get("max_epochs", 3),
         callbacks=[lr_monitor],
         enable_checkpointing=False,
         log_every_n_steps=merged_config.get("log_every_n_steps", 1),
-        accumulate_grad_batches=config["accumulate_grad_batches"],
-        gradient_clip_val=config["gradient_clip_val"],
+        accumulate_grad_batches=merged_config["accumulate_grad_batches"],
+        gradient_clip_val=merged_config["gradient_clip_val"],
         precision=merged_config.get("precision", "16-mixed"),
     )
     trainer.fit(model=model, datamodule=dm)

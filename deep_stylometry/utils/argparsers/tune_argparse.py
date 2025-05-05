@@ -25,6 +25,12 @@ class TuneArgparse:
             help="Path to the config file.",
         )
         parser.add_argument(
+            "--ray_storage_path",
+            type=str,
+            required=True,
+            help="Directory where Ray will save the logs and experiments results.",
+        )
+        parser.add_argument(
             "--num_proc",
             type=int,
             default=None,

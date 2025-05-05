@@ -23,10 +23,22 @@ class TrainArgparse:
             help="Path to the config file.",
         )
         parser.add_argument(
+            "--logs_dir",
+            type=str,
+            required=True,
+            help="Directory where the logs are stored.",
+        )
+        parser.add_argument(
             "--num_proc",
             type=int,
             default=None,
             help="Number of processes to use. Default is the number of CPUs.",
+        )
+        parser.add_argument(
+            "--checkpoint_dir",
+            type=str,
+            default=None,
+            help="Directory where the checkpoints are stored.",
         )
         parser.add_argument(
             "--cache_dir",

@@ -1,0 +1,74 @@
+# tune.yml
+
+project_name: "deep-stylometry"
+experiment_name: "gpt2-256-se-li-gumbel-dist-autoexp"
+do_test: false
+
+# --- tuner ---
+num_samples: 100
+max_concurrent_trial: 1
+time_budget_s: 3600
+max_failures: 5
+
+# --- datamodule ---
+ds_name: "se" # or halvest
+batch_size:
+  type: choice
+  values: [2, 4, 8]
+tokenizer_name: "se"
+max_length: 256
+map_batch_size: 1000
+load_from_cache_file: true
+config_name: null
+
+# --- model ---
+optim_name: "adamw"
+base_model_name: "openai-community/gpt2"
+is_decoder_model: true
+lr:
+  type: loguniform
+  min: 1e-6
+  max: 1e-3
+dropout: 0.1
+weight_decay:
+  type: loguniform
+  min: 1e-6
+  max: 1e-2
+lm_weight: 1.0
+contrastive_weight: 1.0
+contrastive_temp:
+  type: uniform
+  min: 1e-7
+  max: 0.1
+# --- late interaction
+do_late_interaction: true
+initial_gumbel_temp: 1.0 # null
+auto_anneal_gumbel: true
+# gumbel_temp_annealing_rate: 1e-3
+min_gumbel_temp:
+  type: uniform
+  min: 1e-9
+  max: 1e-3
+do_distance: true
+exp_decay: true
+# alpha: 0.5
+# project_up: true
+
+# --- wandb logger ---
+use_wandb: true
+log_model: false
+
+# --- trainer ---
+device: "gpu"
+num_device: 1
+max_epochs: 3
+log_every_n_steps: 1
+accumulated_grad_batches:
+  type: choice
+  values: [8, 16, 32]
+gradient_clip_val:
+  type: uniform
+  min: 1e-3
+  max: 0.1
+precision: "16-mixed" # 32-true or bf16-mixed
+

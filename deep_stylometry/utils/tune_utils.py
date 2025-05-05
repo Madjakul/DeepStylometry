@@ -1,11 +1,8 @@
 # deep_stylometry/utils/tune_utils.py
 
-import os
 from functools import partial
 from typing import Any, Dict, Optional
 
-import lightning as L
-import ray
 from ray import tune
 from ray.air import FailureConfig
 from ray.air.integrations.wandb import WandbLoggerCallback
@@ -24,7 +21,7 @@ def build_search_space(config: Dict[str, Any]):
         "choice": tune.choice,
         "quniform": tune.quniform,
     }
-    for param, spec in config["tunable"].items():
+    for param, spec in config.items():
         if spec["type"] not in ("choice", "quniform"):
             search_space[param] = type_map[spec["type"]](
                 spec["min"],
@@ -43,7 +40,6 @@ def build_search_space(config: Dict[str, Any]):
 
 def setup_tuner(
     config: Dict[str, Any],
-    device: str,
     ray_storage_path: str,
     use_wandb: bool = False,
     cache_dir: Optional[str] = None,
@@ -79,7 +75,6 @@ def setup_tuner(
         partial(
             train_tune,
             base_config=config,
-            device=device,
             cache_dir=cache_dir,
             num_proc=num_proc,
         ),
