@@ -5,18 +5,18 @@ experiment_name: "gpt2-256-se-li-gumbel-dist-autoexp"
 do_test: false
 
 # --- tuner ---
-num_samples: 100
+num_samples: 2
 max_concurrent_trial: 1
 time_budget_s: 3600
-max_failures: 5
+max_failures: 2
 
 # --- datamodule ---
 ds_name: "se" # or halvest
 batch_size:
   type: choice
-  values: [2, 4, 8]
+  values: [2, 4]
 tokenizer_name: "se"
-max_length: 256
+max_length: 128
 map_batch_size: 1000
 load_from_cache_file: true
 config_name: null
