@@ -74,7 +74,7 @@ class SEDataModule(L.LightningDataModule):
         if stage == "fit" or stage is None:
             train_dataset = (
                 ds["train"]
-                .select(range(4))
+                .select(range(256))
                 .map(  # type: ignore
                     self.tokenize_function,
                     batched=True,
@@ -86,7 +86,7 @@ class SEDataModule(L.LightningDataModule):
             )
             val_dataset = (
                 ds["validation"]
-                .select(range(4))
+                .select(range(256))
                 .map(  # type: ignore
                     self.tokenize_function,
                     batched=True,

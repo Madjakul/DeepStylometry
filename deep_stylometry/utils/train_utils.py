@@ -5,7 +5,11 @@ from typing import Any, Dict, Optional
 
 import lightning as L
 import psutil
-from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
 from deep_stylometry.modules import DeepStylometry
@@ -71,8 +75,9 @@ def setup_model(config: Dict[str, Any]):
 def train(
     config: Dict[str, Any],
     device: str,
+    local_dir: str,
     use_wandb: bool = False,
-    checkpoint_dir: bool = False,
+    checkpoint_dir: Optional[str] = None,
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
 ):
@@ -80,12 +85,12 @@ def train(
     callbacks = []
 
     # Learning rate monitor
-    lr_monitor = L.pytorch.callbacks.LearningRateMonitor(logging_interval="step")
+    lr_monitor = LearningRateMonitor(logging_interval="step")
     callbacks.append(lr_monitor)
 
     # Early stopping if configured
     if config.get("early_stopping", False):
-        early_stop_callback = L.pytorch.callbacks.EarlyStopping(
+        early_stop_callback = EarlyStopping(
             monitor=config.get("early_stopping_metric", "val_total_loss"),
             mode=config.get("early_stopping_mode", "min"),
             patience=config.get("early_stopping_patience", 3),
@@ -93,9 +98,8 @@ def train(
         callbacks.append(early_stop_callback)
 
     # Model checkpoint callback if checkpoint_dir is provided
-    if checkpoint_dir:
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
+    if checkpoint_dir is not None:
+        checkpoint_callback = ModelCheckpoint(
             dirpath=checkpoint_dir,
             filename="{epoch}-{val_auroc:.4f}",
             monitor=config.get("checkpoint_metric", "val_auroc"),
@@ -108,25 +112,25 @@ def train(
     # Configure loggers
     loggers = []
     if use_wandb:
-        wandb_logger = L.pytorch.loggers.WandbLogger(
-            project=project_name or config.get("project_name", "deep_stylometry"),
-            name=experiment_name or config.get("experiment_name", "training_run"),
+        wandb_logger = WandbLogger(
+            project=config.get("project_name", "deep_stylometry"),
+            name=config.get("experiment_name", "training_run"),
             log_model=config.get("log_model", False),
         )
         loggers.append(wandb_logger)
 
     # Add CSV logger by default
-    csv_logger = L.pytorch.loggers.CSVLogger(
-        save_dir=checkpoint_dir or "logs",
-        name=experiment_name or config.get("experiment_name", "training_run"),
+    csv_logger = CSVLogger(
+        save_dir=local_dir,
+        name=config.get("experiment_name", "training_run"),
     )
     loggers.append(csv_logger)
 
     # Set up trainer
     trainer = L.Trainer(
-        accelerator=config.get("accelerator", "gpu"),
+        accelerator=device,
         devices=config.get("devices", -1),
-        max_epochs=config.get("max_epochs", 200),
+        max_epochs=config.get("max_epochs", 3),
         enable_checkpointing=checkpoint_dir is not None,
         callbacks=callbacks,
         logger=loggers,
@@ -136,26 +140,11 @@ def train(
         precision=config.get("precision", "16-mixed"),
     )
 
-    # Set up data module
-    dm = setup_datamodule(
-        dm_config=config["data"],
-        cache_dir=cache_dir,
-        num_proc=num_proc,
-    )
-
-    # Set up model
-    model = setup_model(
-        model_config=config["model"],
-        dm_config=config["data"],
-    )
-
-    # Train model
+    dm = setup_datamodule(dm_config=config, cache_dir=cache_dir, num_proc=num_proc)
+    model = setup_model(config=config["model"])
     trainer.fit(model, datamodule=dm)
-
-    # Test model if configured
-    test_results = None
     if config.get("run_test", False):
-        test_results = trainer.test(model, datamodule=dm)
+        trainer.test(model, datamodule=dm)
 
 
 def train_tune(

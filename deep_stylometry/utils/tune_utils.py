@@ -10,6 +10,8 @@ from ray import tune
 from ray.air import FailureConfig
 from ray.air.integrations.wandb import WandbLoggerCallback
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
+from ray.tune.schedulers import AsyncHyperBandScheduler
+from ray.tune.search.hyperopt import HyperOptSearch
 
 from deep_stylometry.utils.train_utils import train_tune
 
@@ -84,6 +86,8 @@ def setup_tuner(
         tune_config=tune.TuneConfig(
             metric="auroc",
             mode="max",
+            search_alg=HyperOptSearch(),
+            scheduler=AsyncHyperBandScheduler(),
             num_samples=config["num_samples"],
             max_concurrent_trials=config["max_concurrent_trials"],
             time_budget_s=config["time_budget_s"],
