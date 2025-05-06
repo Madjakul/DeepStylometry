@@ -21,6 +21,7 @@ class HALvestDataModule(L.LightningDataModule):
         cache_dir: str,
         ds_name: str = "almanach/HALvest-Contrastive",
         config_name: Optional[str] = None,
+        **kwargs: Any,
     ):
         super().__init__()
         self.ds_name = ds_name

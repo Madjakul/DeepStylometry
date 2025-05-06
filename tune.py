@@ -1,6 +1,7 @@
 # tune.py
 
 import logging
+import os
 
 import psutil
 
@@ -9,6 +10,7 @@ from deep_stylometry.utils.argparsers import TuneArgparse
 from deep_stylometry.utils.helpers import load_config_from_file
 from deep_stylometry.utils.logger import logging_config
 
+os.environ["RAY_memory_monitor_refresh_ms"] = "0"
 logging_config()
 NUM_PROC = psutil.cpu_count(logical=False) - 1
 
@@ -16,6 +18,8 @@ NUM_PROC = psutil.cpu_count(logical=False) - 1
 if __name__ == "__main__":
     args = TuneArgparse.parse_known_args()
     config = load_config_from_file(args.config_path)
+    logging.info(f"--- Tuning hyperparameters ---")
+    logging.info(f"Config file: {args.config_path}")
 
     tuner = tune_utils.setup_tuner(
         config=config,

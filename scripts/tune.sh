@@ -5,7 +5,7 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 # ************************** Customizable Arguments ************************************
 
-CONFIG_PATH=$PROJECT_ROOT/configs/preprocess.yml
+CONFIG_PATH=$PROJECT_ROOT/configs/tune.yml
 RAY_STORAGE_PATH=$PROJECT_ROOT/ray_logs
 
 # --------------------------------------------------------------------------------------

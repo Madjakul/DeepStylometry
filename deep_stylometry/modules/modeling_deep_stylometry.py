@@ -3,13 +3,16 @@
 import logging
 from typing import Dict, Optional
 
-import bitsandbytes as bnb
 import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import (BinaryAUROC, BinaryF1Score,
-                                         BinaryPrecision, BinaryRecall)
+from torchmetrics.classification import (
+    BinaryAUROC,
+    BinaryF1Score,
+    BinaryPrecision,
+    BinaryRecall,
+)
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -21,7 +24,6 @@ class DeepStylometry(L.LightningModule):
 
     optim_map = {
         "adamw": torch.optim.AdamW,
-        "adam8bit": bnb.optim.Adam8bit,
         "soap": SOAP,
         "sophia": SophiaG,
     }

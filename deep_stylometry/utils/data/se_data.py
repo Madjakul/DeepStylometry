@@ -23,6 +23,7 @@ class SEDataModule(L.LightningDataModule):
         cache_dir: str,
         ds_name: str = "Madjakul/StyleEmbeddingPairwiseData",
         mlm_collator: bool = False,
+        **kwargs: Any,
     ):
         super().__init__()
         self.ds_name = ds_name

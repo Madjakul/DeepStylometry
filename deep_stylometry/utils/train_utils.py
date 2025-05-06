@@ -4,9 +4,13 @@ from typing import Any, Dict, Optional
 
 import lightning as L
 import psutil
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
+from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils.data.halvest_data import HALvestDataModule
@@ -31,8 +35,9 @@ def setup_datamodule(
         map_batch_size=config["map_batch_size"],
         load_from_cache_file=config["load_from_cache_file"],
         cache_dir=cache_dir,
-        ds_name=config["ds_name"],
+        # ds_name=config["ds_name"],
         config_name=config.get("config_name", None),
+        mlm_collator=config.get("mlm_collator", False),
     )
     return dm
 
@@ -154,13 +159,27 @@ def train_tune(
         cache_dir=cache_dir,
         num_proc=num_proc,
     )
-    model = setup_model(config)
-    lr_monitor = LearningRateMonitor(logging_interval="step")
+    model = setup_model(merged_config)
+    callbacks = []
+    callbacks.append(LearningRateMonitor(logging_interval="step"))
+    callbacks.append(
+        TuneReportCheckpointCallback(
+            {
+                "loss": "val_total_loss",
+                "auroc": "val_auroc",
+                "f1": "val_f1",
+                "precision": "val_precision",
+                "recall": "val_recall",
+            },
+            on="validation_end",
+        )
+    )
+
     trainer = L.Trainer(
         accelerator=merged_config.get("device", "cpu"),
         devices=merged_config.get("num_devices", -1),
         max_epochs=merged_config.get("max_epochs", 3),
-        callbacks=[lr_monitor],
+        callbacks=callbacks,
         enable_checkpointing=False,
         log_every_n_steps=merged_config.get("log_every_n_steps", 1),
         accumulate_grad_batches=merged_config["accumulate_grad_batches"],

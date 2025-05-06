@@ -4,9 +4,8 @@ from functools import partial
 from typing import Any, Dict, Optional
 
 from ray import tune
-from ray.air import FailureConfig
 from ray.air.integrations.wandb import WandbLoggerCallback
-from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
+from ray.tune import FailureConfig
 from ray.tune.schedulers import AsyncHyperBandScheduler
 from ray.tune.search.hyperopt import HyperOptSearch
 
@@ -22,6 +21,8 @@ def build_search_space(config: Dict[str, Any]):
         "quniform": tune.quniform,
     }
     for param, spec in config.items():
+        if not isinstance(spec, dict):
+            continue
         if spec["type"] not in ("choice", "quniform"):
             search_space[param] = type_map[spec["type"]](
                 spec["min"],
@@ -46,18 +47,6 @@ def setup_tuner(
     num_proc: Optional[int] = None,
 ):
     callbacks = []
-    callbacks.append(
-        TuneReportCheckpointCallback(
-            {
-                "loss": "val_total_loss",
-                "auroc": "val_auroc",
-                "f1": "val_f1",
-                "precision": "val_precision",
-                "recall": "val_recall",
-            },
-            on="validation_end",
-        )
-    )
     if use_wandb:
         callbacks.append(
             WandbLoggerCallback(
@@ -71,13 +60,21 @@ def setup_tuner(
 
     search_space = build_search_space(config)
 
+    trainable_fn = partial(
+        train_tune,
+        base_config=config,
+        cache_dir=cache_dir,
+        num_proc=num_proc,
+    )
+
+    trainable_with_resources = tune.with_resources(
+        trainable_fn,
+        {config.get("device", "cpu"): config.get("num_devices", 1), "cpu": num_proc},
+        # For more complex scenarios, resources=PlacementGroupFactory([{"cpu": 1, "gpu": 1}])
+    )
+
     tuner = tune.Tuner(
-        partial(
-            train_tune,
-            base_config=config,
-            cache_dir=cache_dir,
-            num_proc=num_proc,
-        ),
+        trainable_with_resources,
         tune_config=tune.TuneConfig(
             metric="auroc",
             mode="max",
