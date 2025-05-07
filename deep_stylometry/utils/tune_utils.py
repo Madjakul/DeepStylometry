@@ -1,9 +1,10 @@
 # deep_stylometry/utils/tune_utils.py
 
+import logging
 from functools import partial
 from typing import Any, Dict, Optional
 
-from ray import tune
+from ray import air, tune
 from ray.air.integrations.wandb import WandbLoggerCallback
 from ray.tune import FailureConfig
 from ray.tune.schedulers import AsyncHyperBandScheduler
@@ -48,6 +49,7 @@ def setup_tuner(
 ):
     callbacks = []
     if use_wandb:
+        logging.info("Using Weights & Biases for logging")
         callbacks.append(
             WandbLoggerCallback(
                 project=config["project_name"],
@@ -86,6 +88,11 @@ def setup_tuner(
         ),
         run_config=tune.RunConfig(
             name=config["experiment_name"],
+            checkpoint_config=tune.CheckpointConfig(
+                num_to_keep=1,
+                checkpoint_at_end=False,
+                checkpoint_frequency=0,
+            ),
             storage_path=ray_storage_path,
             failure_config=FailureConfig(max_failures=config["max_failures"]),
             stop={"training_iteration": config["max_epochs"]},

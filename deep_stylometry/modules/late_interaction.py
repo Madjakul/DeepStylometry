@@ -77,23 +77,33 @@ class LateInteraction(nn.Module):
             ~valid_mask, -float("inf")
         )  # Mask invalid positions
 
-        # Apply Gumbel-Softmax with straight-through estimator
-        if gumbel_temp is not None:
-            soft_p_ij = F.gumbel_softmax(logits, tau=gumbel_temp, hard=False, dim=-1)
-            if self.training:
-                # Straight-through estimator: hard in forward, soft in backward
-                hard_p_ij = F.one_hot(
-                    logits.argmax(dim=-1), num_classes=logits.size(-1)
-                ).float()
-                p_ij = hard_p_ij + (
-                    soft_p_ij - soft_p_ij.detach()
-                )  # Gradient flows through soft
-            else:
-                p_ij = soft_p_ij  # Use soft probabilities during inference
-        else:
-            p_ij = F.softmax(logits, dim=-1)  # Fallback to softmax if no temp
+        all_inf_slices = torch.all(logits == -float("inf"), dim=-1, keepdim=True)
 
-        # Aggregate key embeddings using attention weights
+        # For softmax calculation, replace these all-inf slices with zeros. Softmax of zeros is uniform.
+        # This prevents NaN from softmax itself.
+        safe_logits_for_softmax = torch.where(
+            all_inf_slices.expand_as(logits), torch.zeros_like(logits), logits
+        )
+
+        if gumbel_temp is not None:
+            soft_p_ij = F.gumbel_softmax(
+                safe_logits_for_softmax, tau=gumbel_temp, hard=False, dim=-1
+            )
+            if self.training:
+                hard_p_ij_temp = F.one_hot(
+                    safe_logits_for_softmax.argmax(dim=-1), num_classes=logits.size(-1)
+                ).float()
+                p_ij_candidate = hard_p_ij_temp + (soft_p_ij - soft_p_ij.detach())
+            else:
+                p_ij_candidate = soft_p_ij
+        else:
+            p_ij_candidate = F.softmax(safe_logits_for_softmax, dim=-1)
+
+        p_ij = torch.where(
+            all_inf_slices.expand_as(p_ij_candidate),
+            torch.zeros_like(p_ij_candidate),
+            p_ij_candidate,
+        )  # Aggregate key embeddings using attention weights
         key_embs_squeezed = key_embs.squeeze(0)  # (B, S, H)
         aggregated = torch.einsum("ijst,jth->ijsh", p_ij, key_embs_squeezed)
 

@@ -1,7 +1,7 @@
 # tune.yml
 
 project_name: "deep-stylometry"
-experiment_name: "gpt2-256-se-li-gumbel-dist-autoexp"
+experiment_name: "tune-gpt2-256-se-li-gumbel-dist-autoexp"
 do_test: false
 
 # --- tuner ---

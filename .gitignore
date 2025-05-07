@@ -175,6 +175,7 @@ logs/
 tmp/
 lightning_logs/
 ray_logs/
+wandb/
 
 # Slurm
 .Trash*/

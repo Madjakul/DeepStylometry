@@ -10,7 +10,7 @@ from lightning.pytorch.callbacks import (
     ModelCheckpoint,
 )
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
-from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
+from ray.tune.integration.pytorch_lightning import TuneReportCallback
 
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils.data.halvest_data import HALvestDataModule
@@ -163,7 +163,7 @@ def train_tune(
     callbacks = []
     callbacks.append(LearningRateMonitor(logging_interval="step"))
     callbacks.append(
-        TuneReportCheckpointCallback(
+        TuneReportCallback(
             {
                 "loss": "val_total_loss",
                 "auroc": "val_auroc",
@@ -174,11 +174,21 @@ def train_tune(
             on="validation_end",
         )
     )
+    # Configure loggers
+    loggers = []
+    if merged_config["use_wandb"]:
+        wandb_logger = WandbLogger(
+            project=merged_config.get("project_name", "deep_stylometry"),
+            name=merged_config.get("experiment_name", "training_run"),
+            log_model=merged_config.get("log_model", False),
+        )
+        loggers.append(wandb_logger)
 
     trainer = L.Trainer(
         accelerator=merged_config.get("device", "cpu"),
         devices=merged_config.get("num_devices", -1),
         max_epochs=merged_config.get("max_epochs", 3),
+        logger=loggers,
         callbacks=callbacks,
         enable_checkpointing=False,
         log_every_n_steps=merged_config.get("log_every_n_steps", 1),
