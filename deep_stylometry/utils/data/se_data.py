@@ -5,10 +5,10 @@ from typing import Any, Dict, List
 import lightning as L
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-from transformers import DataCollatorForLanguageModeling
 
-from deep_stylometry.utils.data.custom_data_collator import \
-    CustomDataCollatorForLanguageModeling
+from deep_stylometry.utils.data.custom_data_collator import (
+    CustomDataCollatorForLanguageModeling,
+)
 from deep_stylometry.utils.helpers import get_tokenizer
 
 
@@ -75,29 +75,21 @@ class SEDataModule(L.LightningDataModule):
         columns_to_remove = ds["train"].column_names  # type: ignore
 
         if stage == "fit" or stage is None:
-            train_dataset = (
-                ds["train"]
-                .select(range(64))
-                .map(  # type: ignore
-                    self.tokenize_function,
-                    batched=True,
-                    batch_size=self.map_batch_size,
-                    num_proc=self.num_proc,
-                    load_from_cache_file=self.load_from_cache_file,
-                    remove_columns=columns_to_remove,
-                )
+            train_dataset = ds["train"].map(  # type: ignore
+                self.tokenize_function,
+                batched=True,
+                batch_size=self.map_batch_size,
+                num_proc=self.num_proc,
+                load_from_cache_file=self.load_from_cache_file,
+                remove_columns=columns_to_remove,
             )
-            val_dataset = (
-                ds["validation"]
-                .select(range(64))
-                .map(  # type: ignore
-                    self.tokenize_function,
-                    batched=True,
-                    batch_size=self.map_batch_size,
-                    num_proc=self.num_proc,
-                    load_from_cache_file=self.load_from_cache_file,
-                    remove_columns=columns_to_remove,
-                )
+            val_dataset = ds["validation"].map(  # type: ignore
+                self.tokenize_function,
+                batched=True,
+                batch_size=self.map_batch_size,
+                num_proc=self.num_proc,
+                load_from_cache_file=self.load_from_cache_file,
+                remove_columns=columns_to_remove,
             )
             self.train_dataset = train_dataset.with_format("torch")
             self.val_dataset = val_dataset.with_format("torch")
@@ -115,7 +107,7 @@ class SEDataModule(L.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_dataset,
+            self.train_dataset,  # type: ignore
             batch_size=self.batch_size,
             num_workers=self.num_proc,
             collate_fn=self.mlm_collator,
@@ -123,7 +115,7 @@ class SEDataModule(L.LightningDataModule):
 
     def val_dataloader(self):
         return DataLoader(
-            self.val_dataset,
+            self.val_dataset,  # type: ignore
             batch_size=self.batch_size,
             num_workers=self.num_proc,
             collate_fn=self.mlm_collator,
