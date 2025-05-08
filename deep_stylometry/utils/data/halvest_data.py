@@ -6,6 +6,9 @@ import lightning as L
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 
+from deep_stylometry.utils.data.custom_data_collator import (
+    CustomDataCollatorForLanguageModeling,
+)
 from deep_stylometry.utils.helpers import get_tokenizer
 
 
@@ -21,6 +24,7 @@ class HALvestDataModule(L.LightningDataModule):
         cache_dir: str,
         ds_name: str = "almanach/HALvest-Contrastive",
         config_name: Optional[str] = None,
+        mlm_collator: bool = False,
         **kwargs: Any,
     ):
         super().__init__()
@@ -33,28 +37,26 @@ class HALvestDataModule(L.LightningDataModule):
         self.cache_dir = cache_dir
         self.map_batch_size = map_batch_size
         self.tokenizer = get_tokenizer(tokenizer_name)
+        if mlm_collator:
+            self.mlm_collator = CustomDataCollatorForLanguageModeling(
+                tokenizer=self.tokenizer,
+                mlm_probability=0.15,
+            )
+        else:
+            self.mlm_collator = None
 
     def prepare_data(self):
         load_dataset(self.ds_name, self.config_name, cache_dir=self.cache_dir)
 
     def tokenize_function(self, batch: Dict[str, List[Any]]):
-        qs = [
-            text if isinstance(text, str) or text is None else str(text)
-            for text in batch["query_text"]
-        ]
-        ks = [
-            text if isinstance(text, str) or text is None else str(text)
-            for text in batch["key_text"]
-        ]
-
         tokenized_q = self.tokenizer(
-            qs,
+            batch["query_text"],
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
         )
         tokenized_k = self.tokenizer(
-            ks,
+            batch["key_text"],
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
@@ -106,12 +108,18 @@ class HALvestDataModule(L.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
+            self.train_dataset,  # type: ignore
+            batch_size=self.batch_size,
+            num_workers=self.num_proc,
+            collate_fn=self.mlm_collator,
         )
 
     def val_dataloader(self):
         return DataLoader(
-            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
+            self.val_dataset,  # type: ignore
+            batch_size=self.batch_size,
+            num_workers=self.num_proc,
+            collate_fn=self.mlm_collator,
         )
 
     def test_dataloader(self):
