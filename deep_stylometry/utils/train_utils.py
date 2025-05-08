@@ -4,8 +4,11 @@ from typing import Any, Dict, Optional
 
 import lightning as L
 import psutil
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 
@@ -41,7 +44,7 @@ def setup_datamodule(
 
 def setup_model(config: Dict[str, Any]):
     model = DeepStylometry(
-        optim_name=config["optim_name"],
+        optim_name=config.get("optim_name", "adamw"),
         base_model_name=config["base_model_name"],
         batch_size=config["batch_size"],
         seq_len=config["max_length"],
@@ -53,10 +56,10 @@ def setup_model(config: Dict[str, Any]):
         contrastive_weight=config.get("contrastive_weight", 1.0),
         contrastive_temp=config.get("contrastive_temp", 7e-2),
         do_late_interaction=config.get("do_late_interaction", False),
-        use_max=config.get("initial_gumbel_temp", None) is not None,
+        use_max=config.get("initial_gumbel_temp", None) is None,
         initial_gumbel_temp=config.get("initial_gumbel_temp", None),
         auto_anneal_gumbel=config.get("auto_anneal_gumbel", True),
-        gumbel_temp_annealing_rate=config.get("gumbel_temp_annealing_rate", 1e-3),
+        gumbel_linear_delta=config.get("gumbel_linear_delta", 1e-3),
         min_gumbel_temp=config.get("min_gumbel_temp", 1e-9),
         do_distance=config.get("do_distance", True),
         exp_decay=config.get("exp_decay", False),

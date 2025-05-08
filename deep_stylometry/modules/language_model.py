@@ -45,6 +45,6 @@ class LanguageModel(nn.Module):
             output_hidden_states=True,
             return_dict=True,
         )
-        loss = out.loss if labels is not None else 0.0
+        loss = out.loss
         last_hidden_states = out.hidden_states[-1]
         return loss, last_hidden_states

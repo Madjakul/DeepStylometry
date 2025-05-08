@@ -13,7 +13,7 @@ class LateInteraction(nn.Module):
         do_distance: bool,
         exp_decay: bool,
         seq_len: int,
-        alpha: float = 0.5,
+        alpha: float = 1.0,
         use_max: bool = False,
     ):
         super().__init__()

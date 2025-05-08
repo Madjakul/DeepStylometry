@@ -27,7 +27,7 @@ contrastive_temp: 7e-2
 do_late_interaction: true
 initial_gumbel_temp: 1.0 # null
 auto_anneal_gumbel: true
-# gumbel_temp_annealing_rate: 1e-3
+# gumbel_linear_delta: 1e-3
 min_gumbel_temp: 1e-9
 do_distance: true
 exp_decay: true

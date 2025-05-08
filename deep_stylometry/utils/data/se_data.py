@@ -7,6 +7,9 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from transformers import DataCollatorForLanguageModeling
 
+from deep_stylometry.utils.data.custom_data_collator import (
+    CustomDataCollatorForLanguageModeling,
+)
 from deep_stylometry.utils.helpers import get_tokenizer
 
 
@@ -35,7 +38,7 @@ class SEDataModule(L.LightningDataModule):
         self.map_batch_size = map_batch_size
         self.tokenizer = get_tokenizer(tokenizer_name)
         if mlm_collator:
-            self.mlm_collator = DataCollatorForLanguageModeling(
+            self.mlm_collator = CustomDataCollatorForLanguageModeling(
                 tokenizer=self.tokenizer,
                 mlm_probability=0.15,
             )
@@ -121,7 +124,10 @@ class SEDataModule(L.LightningDataModule):
 
     def val_dataloader(self):
         return DataLoader(
-            self.val_dataset, batch_size=self.batch_size, num_workers=self.num_proc  # type: ignore
+            self.val_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_proc,
+            collate_fn=self.mlm_collator,
         )
 
     def test_dataloader(self):

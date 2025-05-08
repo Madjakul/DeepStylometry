@@ -5,7 +5,7 @@ experiment_name: "tune-gpt2-256-se-li-gumbel-dist-autoexp"
 do_test: false
 
 # --- tuner ---
-num_samples: 2
+num_samples: 1
 max_concurrent_trials: 1
 time_budget_s: 3600
 max_failures: 1
@@ -17,7 +17,7 @@ batch_size:
   values: [2, 4]
 tokenizer_name: "openai-community/gpt2"
 max_length: 128
-map_batch_size: 1000
+map_batch_size: 100
 load_from_cache_file: true
 # config_name: null
 mlm_collator: false # only if you use an encoder
@@ -29,7 +29,7 @@ is_decoder_model: true
 lr:
   type: loguniform
   min: 1.0e-6 # 0.000001
-  max: 1.0e-3 # 0.001
+  max: 2.0e-4 # 0.001
 dropout: 0.1
 weight_decay:
   type: loguniform
@@ -39,16 +39,16 @@ lm_weight: 1.0
 contrastive_weight: 1.0
 contrastive_temp:
   type: uniform
-  min: 1.0e-7 # 0.0000001
-  max: 0.1
+  min: 0.01
+  max: 1.0
 # --- late interaction
 do_late_interaction: true
 initial_gumbel_temp: 1.0 # null
 auto_anneal_gumbel: true
-# gumbel_temp_annealing_rate: 1e-3
+# gumbel_linear_delta: 1e-3
 min_gumbel_temp:
   type: uniform
-  min: 1.0e-9 # 0.000000001
+  min: 1.0e-6 # 0.000000001
   max: 1.0e-3 # 0.001
 do_distance: true
 exp_decay: true
@@ -62,7 +62,7 @@ log_model: false
 # --- trainer ---
 device: "gpu"
 num_devices: 1
-max_epochs: 3
+max_epochs: 5
 log_every_n_steps: 1
 accumulate_grad_batches:
   type: choice
@@ -70,6 +70,6 @@ accumulate_grad_batches:
 gradient_clip_val:
   type: uniform
   min: 1.0e-3 # 0.001
-  max: 0.1
-precision: "16-mixed" # 32-true or bf16-mixed
+  max: 0.2
+precision: "32" # 32-true or bf16-mixed
 

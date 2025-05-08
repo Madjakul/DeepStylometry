@@ -7,8 +7,12 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import (BinaryAUROC, BinaryF1Score,
-                                         BinaryPrecision, BinaryRecall)
+from torchmetrics.classification import (
+    BinaryAUROC,
+    BinaryF1Score,
+    BinaryPrecision,
+    BinaryRecall,
+)
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -41,11 +45,11 @@ class DeepStylometry(L.LightningModule):
         use_max: bool = False,
         initial_gumbel_temp: float = 1.0,
         auto_anneal_gumbel: bool = True,
-        gumbel_temp_annealing_rate: Optional[float] = 1e-3,
-        min_gumbel_temp: float = 1e-9,
+        gumbel_linear_delta: Optional[float] = 1e-3,
+        min_gumbel_temp: float = 1e-6,
         do_distance: bool = True,
         exp_decay: bool = True,
-        alpha: float = 0.5,
+        alpha: float = 1.0,
         project_up: Optional[bool] = None,
     ):
         super().__init__()
@@ -57,7 +61,7 @@ class DeepStylometry(L.LightningModule):
         self.contrastive_weight = contrastive_weight
         self.initial_gumbel_temp = initial_gumbel_temp
         self.gumbel_temp = initial_gumbel_temp
-        self.gumbel_temp_annealing_rate = gumbel_temp_annealing_rate
+        self.gumbel_linear_delta = gumbel_linear_delta
         self.optim_name = optim_name
         self.batch_size = batch_size
         self.min_gumbel_temp = min_gumbel_temp
@@ -148,10 +152,8 @@ class DeepStylometry(L.LightningModule):
         warmup_steps = max(1, int(0.05 * total_steps))
 
         if self.auto_anneal_gumbel:
-            # Automatically anneal Gumbel temperature based on training steps
-            self.gumbel_temp_annealing_rate = (
-                self.min_gumbel_temp / self.initial_gumbel_temp
-            ) ** (1 / total_steps)
+            total_temp_range = self.initial_gumbel_temp - self.min_gumbel_temp
+            self.gumbel_linear_delta = total_temp_range / total_steps
 
         scheduler = get_cosine_schedule_with_warmup(
             optimizer,
@@ -169,6 +171,15 @@ class DeepStylometry(L.LightningModule):
                 "frequency": 1,
             },
         }
+
+    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure):
+        super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
+
+        # Update Gumbel temperature after each optimizer step
+        if self.auto_anneal_gumbel and hasattr(self, "gumbel_linear_delta"):
+            new_temp = self.gumbel_temp - self.gumbel_linear_delta
+            self.gumbel_temp = max(new_temp, self.min_gumbel_temp)
+            self.log("gumbel_temp", self.gumbel_temp, prog_bar=True)
 
     def forward(
         self,
@@ -213,15 +224,6 @@ class DeepStylometry(L.LightningModule):
             on_epoch=True,
             batch_size=self.batch_size,
         )
-        # Anneal Gumbel temperature (if used by contrastive loss)
-        if hasattr(self, "contrastive_loss") and hasattr(
-            self.contrastive_loss, "do_late_interaction"
-        ):
-            # Anneal Gumbel temperature
-            self.gumbel_temp = max(
-                self.gumbel_temp * self.gumbel_temp_annealing_rate, self.min_gumbel_temp
-            )
-
         return metrics["total_loss"]
 
     def validation_step(self, batch, batch_idx: int):
