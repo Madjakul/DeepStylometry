@@ -5,27 +5,25 @@ experiment_name: "tune-gpt2-256-se-li-gumbel-dist-autoexp"
 do_test: false
 
 # --- tuner ---
-num_samples: 1
+num_samples: 30
 max_concurrent_trials: 1
-time_budget_s: 3600
-max_failures: 1
+time_budget_s: 43200 # 12h (in seconds)
+max_failures: 2
 
 # --- datamodule ---
 ds_name: "se" # or halvest
-batch_size:
-  type: choice
-  values: [2, 4]
-tokenizer_name: "openai-community/gpt2"
-max_length: 128
-map_batch_size: 100
+batch_size: 8
+tokenizer_name: "FacebookAI/roberta-base"
+max_length: 512
+map_batch_size: 1000
 load_from_cache_file: true
 # config_name: null
-mlm_collator: false # only if you use an encoder
+mlm_collator: true # only if you use an encoder
 
 # --- model ---
 optim_name: "adamw"
-base_model_name: "openai-community/gpt2"
-is_decoder_model: true
+base_model_name: "FacebookAI/roberta-base"
+is_decoder_model: false
 lr:
   type: loguniform
   min: 1.0e-6 # 0.000001
@@ -34,7 +32,7 @@ dropout: 0.1
 weight_decay:
   type: loguniform
   min: 1.0e-6 # 0.000001
-  max: 0.01
+  max: 0.1
 lm_weight: 1.0
 contrastive_weight: 1.0
 contrastive_temp:
@@ -70,6 +68,6 @@ accumulate_grad_batches:
 gradient_clip_val:
   type: uniform
   min: 1.0e-3 # 0.001
-  max: 0.2
+  max: 1.0
 precision: "32" # 32-true or bf16-mixed
 
