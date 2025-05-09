@@ -4,7 +4,7 @@ import logging
 from functools import partial
 from typing import Any, Dict, Optional
 
-from ray import air, tune
+from ray import tune
 from ray.air.integrations.wandb import WandbLoggerCallback
 from ray.tune import FailureConfig
 from ray.tune.schedulers import AsyncHyperBandScheduler
@@ -14,6 +14,18 @@ from deep_stylometry.utils.train_utils import train_tune
 
 
 def build_search_space(config: Dict[str, Any]):
+    """Builds the search space for hyperparameter tuning.
+
+    Parameters
+    ----------
+    config: Dict[str, Any]
+        Configuration dictionary containing the hyperparameters and their specifications.
+
+    Returns
+    -------
+    search_space: Dict[str, Any]
+        A dictionary representing the search space for hyperparameter tuning.
+    """
     search_space = {}
     type_map = {
         "loguniform": tune.loguniform,
@@ -47,6 +59,29 @@ def setup_tuner(
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
 ):
+    """Sets up the Ray Tune tuner for hyperparameter tuning. Uses
+    HyperOptSearch and AsyncHyperBandScheduler. No checkpointing is done during
+    tuning. The goal is to maximize the validation AUROC score before the time
+    budget is reached.
+
+    Parameters
+    ----------
+    config: Dict[str, Any]
+        Configuration dictionary containing the hyperparameters and their specifications.
+    ray_storage_path: str
+        Directory where Ray will save the logs and experiments results.
+    use_wandb: bool
+        Whether to use Weights & Biases for logging.
+    cache_dir: Optional[str]
+        Path to the cache directory.
+    num_proc: Optional[int]
+        Number of processes to use. Default is the number of CPUs minus one.
+
+    Returns
+    -------
+    tuner: tune.Tuner
+        The Ray Tune Tuner object configured for hyperparameter tuning.
+    """
     callbacks = []
     if use_wandb:
         logging.info("Using Weights & Biases for logging")
@@ -71,8 +106,7 @@ def setup_tuner(
 
     trainable_with_resources = tune.with_resources(
         trainable_fn,
-        {config.get("device", "cpu"): config.get("num_devices", 1), "cpu": num_proc},
-        # For more complex scenarios, resources=PlacementGroupFactory([{"cpu": 1, "gpu": 1}])
+        {config.get("device", "cpu"): config.get("num_devices", 1), "cpu": num_proc},  # type: ignore
     )
 
     tuner = tune.Tuner(
