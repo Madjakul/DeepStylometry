@@ -18,6 +18,6 @@ def test_info_nce_loss():
     labels = torch.tensor([1, 0])
     mask = torch.ones(batch_size, 128)
 
-    loss = loss_fn(q_embs, k_embs, labels, mask, mask)
+    _, _, loss = loss_fn(q_embs, k_embs, labels, mask, mask)
     assert not torch.isnan(loss), "InfoNCE loss is NaN"
     assert loss >= 0
