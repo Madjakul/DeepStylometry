@@ -4,8 +4,11 @@ from typing import Any, Dict, Optional
 
 import lightning as L
 import psutil
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 
@@ -20,6 +23,7 @@ def setup_datamodule(
     config: Dict[str, Any],
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
+    tuning_mode: bool = False,
 ):
     """Use the config to set up the correct datamodule.
 
@@ -50,6 +54,7 @@ def setup_datamodule(
         cache_dir=cache_dir,
         config_name=config.get("config_name", None),
         mlm_collator=config.get("mlm_collator", False),
+        tuning_mode=tuning_mode,
     )
     return dm
 
@@ -206,6 +211,7 @@ def train_tune(
         merged_config,
         cache_dir=cache_dir,
         num_proc=num_proc,
+        tuning_mode=True,
     )
     model = setup_model(merged_config)
     callbacks = []

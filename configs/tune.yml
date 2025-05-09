@@ -1,7 +1,7 @@
 # tune.yml
 
 project_name: "deep-stylometry"
-experiment_name: "tune-gpt2-256-se-li-gumbel-dist-autoexp"
+experiment_name: "tune-roberta-512-se-li-gumbel-dist-autoexp"
 do_test: false
 
 # --- tuner ---
@@ -12,7 +12,7 @@ max_failures: 2
 
 # --- datamodule ---
 ds_name: "se" # or halvest
-batch_size: 8
+batch_size: 2
 tokenizer_name: "FacebookAI/roberta-base"
 max_length: 512
 map_batch_size: 1000

@@ -119,6 +119,7 @@ def setup_tuner(
             num_samples=config["num_samples"],
             max_concurrent_trials=config["max_concurrent_trials"],
             time_budget_s=config["time_budget_s"],
+            reuse_actors=True,
         ),
         run_config=tune.RunConfig(
             name=config["experiment_name"],
@@ -128,7 +129,9 @@ def setup_tuner(
                 checkpoint_frequency=0,
             ),
             storage_path=ray_storage_path,
-            failure_config=FailureConfig(max_failures=config["max_failures"]),
+            failure_config=FailureConfig(
+                max_failures=config["max_failures"], fail_fast=True
+            ),
             stop={"training_iteration": config["max_epochs"]},
             callbacks=callbacks,
         ),
