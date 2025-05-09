@@ -4,8 +4,8 @@ import logging
 import os
 
 import psutil
-
 import wandb
+
 from deep_stylometry.utils import tune_utils
 from deep_stylometry.utils.argparsers import TuneArgparse
 from deep_stylometry.utils.helpers import load_config_from_file
