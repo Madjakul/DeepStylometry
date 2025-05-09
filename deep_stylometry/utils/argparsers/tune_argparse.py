@@ -34,7 +34,7 @@ class TuneArgparse:
             "--num_proc",
             type=int,
             default=None,
-            help="Number of processes to use. Default is the number of CPUs.",
+            help="Number of processes to use. Default is the number of CPUs minus one.",
         )
         parser.add_argument(
             "--cache_dir",

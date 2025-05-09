@@ -16,7 +16,7 @@ class PreprocessArgparse:
             Parsed arguments.
         """
         parser = argparse.ArgumentParser(
-            description="Argument parser to flatten data from StyleEmbedding dataset."
+            description="Argument parser to flatten data from [StyleEmbedding dataset](https://huggingface.co/datasets/AnnaWegmann/StyleEmbeddingData)."
         )
         parser.add_argument(
             "--config_path",
