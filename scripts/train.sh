@@ -17,8 +17,6 @@ LOGS_DIR=$PROJECT_ROOT/logs
 
 # **************************************************************************************
 
-mkdir logs || true
-
 cmd=(python3 "$PROJECT_ROOT/train.py"
     --config_path "$CONFIG_PATH"
     --logs_dir "$LOGS_DIR")

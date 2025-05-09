@@ -16,7 +16,6 @@ RAY_STORAGE_PATH=$PROJECT_ROOT/ray_logs
 
 # **************************************************************************************
 
-mkdir logs || true
 mkdir -p "$RAY_STORAGE_PATH" || true
 
 cmd=(python3 "$PROJECT_ROOT/tune.py"
