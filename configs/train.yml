@@ -1,0 +1,61 @@
+# train.yml
+
+project_name: "deep-stylometry"
+experiment_name: "gpt2-256-se-li-gumbel-dist-autoexp"
+do_test: false
+
+# --- datamodule ---
+ds_name: "se" # or halvest
+batch_size: 4
+tokenizer_name: "openai-community/gpt2"
+max_length: 256
+map_batch_size: 1000
+load_from_cache_file: true
+config_name: null
+
+# --- model ---
+optim_name: "adamw"
+base_model_name: "openai-community/gpt2"
+is_decoder_model: true
+lr: 2e-5
+dropout: 0.1
+weight_decay: 1e-2
+lm_weight: 1.0
+contrastive_weight: 1.0
+contrastive_temp: 7e-2
+# --- late interaction
+do_late_interaction: true
+initial_gumbel_temp: 1.0 # null
+auto_anneal_gumbel: true
+# gumbel_linear_delta: 1e-3
+min_gumbel_temp: 1e-9
+do_distance: true
+exp_decay: true
+# alpha: 0.5
+# project_up: true
+
+# --- early stopping callback ---
+early_stopping: true
+early_stopping_metrics: "val_auroc"
+early_stopping_mode: "min"
+early_stopping_patience: 10
+
+# --- checkpoint callback ---
+# Make sure to set the `checkpoint_dir` flag to use these options
+checkpoint_metric: "val_auroc"
+checkpoint_mode: "max"
+save_top_k: 2
+
+# --- wandb logger ---
+use_wandb: true
+log_model: False
+
+# --- trainer ---
+device: "gpu"
+num_device: 1
+max_epochs: 10
+log_every_n_steps: 1
+accumulated_grad_batches: 16
+gradient_clip_val: 0.001
+precision: "16-mixed" # 32-true or bf16-mixed
+

@@ -5,30 +5,26 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 # ************************** Customizable Arguments ************************************
 
-CONFIG_PATH=$PROJECT_ROOT/configs/preprocess.yml
-LOGS_DIR=$PROJECT_ROOT/logs
+CONFIG_PATH=$PROJECT_ROOT/configs/tune.yml
+RAY_STORAGE_PATH=$PROJECT_ROOT/ray_logs
 
 # --------------------------------------------------------------------------------------
 
 # CACHE_DIR=$DATA_ROOT/responses/
-# CHECKPOINT_DIR=$DATA_ROOT/tmp/checkpoints/
 # NUM_PROC=4
 #
 
 # **************************************************************************************
 
-cmd=(python3 "$PROJECT_ROOT/train.py"
+mkdir -p "$RAY_STORAGE_PATH" || true
+
+cmd=(python3 "$PROJECT_ROOT/tune.py"
     --config_path "$CONFIG_PATH"
-    --logs_dir "$LOGS_DIR")
+    --ray_storage_path "$RAY_STORAGE_PATH")
 
 if [[ -v CACHE_DIR ]]; then
     mkdir -p "$CACHE_DIR" || true
     cmd+=(--cache_dir "$CACHE_DIR")
-fi
-
-if [[ -v CHECKPOINT_DIR ]]; then
-    mkdir -p "$CHECKPOINT_DIR" || true
-    cmd+=(--checkpoint_dir "$CHECKPOINT_DIR")
 fi
 
 if [[ -v NUM_PROC ]]; then

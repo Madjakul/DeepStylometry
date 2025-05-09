@@ -1,0 +1,3 @@
+target_ds_name: "Madjakul/StyleEmbeddingPairwiseData"
+batch_size: 1000
+load_from_cache_file: False
