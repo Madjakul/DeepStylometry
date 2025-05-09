@@ -38,7 +38,7 @@ jobs:
             git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
             git checkout main
             git rm requirements.dev.txt
-            git commit -m "chore: Remove requirements.dev.txt from main branch [skip ci]"
+            git commit -m "chore: Remove requirements.dev.txt from main branch"
             git push origin main
             echo "Removed requirements.dev.txt"
           else
