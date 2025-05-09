@@ -13,36 +13,37 @@ class SOAP(optim.Optimizer):
     """
     Implements SOAP algorithm (https://arxiv.org/abs/2409.11321).
 
-    Parameters:
-        params (`Iterable[nn.parameter.Parameter]`):
-            Iterable of parameters to optimize or dictionaries defining parameter groups.
-        lr (`float`, *optional*, defaults to 0.003):
-            The learning rate to use.
-        betas (`Tuple[float,float]`, *optional*, defaults to `(0.95, 0.95)`):
-            Adam's betas parameters (b1, b2).
-        shampoo_beta (`float`, *optional*, defaults to -1):
-            If >= 0, use this beta for the preconditioner (L and R in paper, state['GG'] below) moving average instead of betas[1].
-        eps (`float`, *optional*, defaults to 1e-08):
-            Adam's epsilon for numerical stability.
-        weight_decay (`float`, *optional*, defaults to 0.01): weight decay coefficient.
-        precondition_frequency (`int`, *optional*, defaults to 10):
-            How often to update the preconditioner.
-        max_precond_dim (`int`, *optional*, defaults to 10000):
-            Maximum dimension of the preconditioner.
-            Set to 10000, so that we exclude most common vocab sizes while including layers.
-        merge_dims (`bool`, *optional*, defaults to `False`):
-            Whether or not to merge dimensions of the preconditioner.
-        precondition_1d (`bool`, *optional*, defaults to `False`):
-            Whether or not to precondition 1D gradients.
-        normalize_grads (`bool`, *optional*, defaults to `False`):
-            Whether or not to normalize gradients per layer.
-            Helps at large precondition_frequency (~100 in our experiments),
-            but hurts performance at small precondition_frequency (~10 in our experiments).
-        data_format (`str`, *optional*, defaults to `channels_first`):
-            Data format of the input for convolutional layers.
-            Should be "channels_last" for data_format of NHWC and "channels_first" for NCHW.
-        correct_bias (`bool`, *optional*, defaults to `True`):
-            Whether or not to use bias correction in Adam.
+    Parameters
+    ----------
+    params: `Iterable[nn.parameter.Parameter]`
+        Iterable of parameters to optimize or dictionaries defining parameter groups.
+    lr: `float`, *optional*, defaults to 0.003
+        The learning rate to use.
+    betas: `Tuple[float,float]`, *optional*, defaults to `(0.95, 0.95)`
+        Adam's betas parameters (b1, b2).
+    shampoo_beta: `float`, *optional*, defaults to -1
+        If >= 0, use this beta for the preconditioner (L and R in paper, state['GG'] below) moving average instead of betas[1].
+    eps: `float`, *optional*, defaults to 1e-08
+        Adam's epsilon for numerical stability.
+    weight_decay (`float`, *optional*, defaults to 0.01): weight decay coefficient.
+    precondition_frequency (`int`, *optional*, defaults to 10
+        How often to update the preconditioner.
+    max_precond_dim: `int`, *optional*, defaults to 10000)
+        Maximum dimension of the preconditioner.
+        Set to 10000, so that we exclude most common vocab sizes while including layers.
+    merge_dims: `bool`, *optional*, defaults to `False`
+        Whether or not to merge dimensions of the preconditioner.
+    precondition_1d: `bool`, *optional*, defaults to `False`
+        Whether or not to precondition 1D gradients.
+    normalize_grads: `bool`, *optional*, defaults to `False`
+        Whether or not to normalize gradients per layer.
+        Helps at large precondition_frequency (~100 in our experiments),
+        but hurts performance at small precondition_frequency (~10 in our experiments).
+    data_format: `str`, *optional*, defaults to `channels_first`
+        Data format of the input for convolutional layers.
+        Should be "channels_last" for data_format of NHWC and "channels_first" for NCHW.
+    correct_bias: `bool`, *optional*, defaults to `True`
+        Whether or not to use bias correction in Adam.
     """
 
     def __init__(
@@ -109,8 +110,10 @@ class SOAP(optim.Optimizer):
     def step(self, closure=None):
         """Performs a single optimization step.
 
-        Arguments:
-            closure (`Callable`, *optional*): A closure that reevaluates the model and returns the loss.
+        Parameters
+        ----------
+        closure: `Callable`, *optional*
+            A closure that reevaluates the model and returns the loss.
         """
         if closure is None:
             loss = None
