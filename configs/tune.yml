@@ -8,7 +8,6 @@ do_test: false
 num_samples: 30
 max_concurrent_trials: 1
 time_budget_s: 43200 # 12h (in seconds)
-max_failures: 2
 
 # --- datamodule ---
 ds_name: "se" # or halvest

@@ -129,9 +129,7 @@ def setup_tuner(
                 checkpoint_frequency=0,
             ),
             storage_path=ray_storage_path,
-            failure_config=FailureConfig(
-                max_failures=config["max_failures"], fail_fast=True
-            ),
+            failure_config=FailureConfig(max_failures=0, fail_fast=True),
             stop={"training_iteration": config["max_epochs"]},
             callbacks=callbacks,
         ),
