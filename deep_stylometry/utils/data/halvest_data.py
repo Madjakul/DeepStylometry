@@ -43,6 +43,8 @@ class HALvestDataModule(L.LightningDataModule):
             )
         else:
             self.mlm_collator = None
+        # Get tuning_mode from kwargs, default to False
+        self.tuning_mode = kwargs.get("tuning_mode", False)
 
     def prepare_data(self):
         load_dataset(self.ds_name, self.config_name, cache_dir=self.cache_dir)
@@ -75,24 +77,45 @@ class HALvestDataModule(L.LightningDataModule):
         columns_to_remove = ds["train"].column_names  # type: ignore
 
         if stage == "fit" or stage is None:
-            train_dataset = ds["train"].map(  # type: ignore
-                self.tokenize_function,
-                batched=True,
-                batch_size=self.map_batch_size,
-                num_proc=self.num_proc,
-                load_from_cache_file=self.load_from_cache_file,
-                remove_columns=columns_to_remove,
-            )
-            val_dataset = ds["valid"].map(  # type: ignore
-                self.tokenize_function,
-                batched=True,
-                batch_size=self.map_batch_size,
-                num_proc=self.num_proc,
-                load_from_cache_file=self.load_from_cache_file,
-                remove_columns=columns_to_remove,
-            )
-            self.train_dataset = train_dataset.with_format("torch")
-            self.val_dataset = val_dataset.with_format("torch")
+            if self.tuning_mode:
+                # train -> valid, valid -> test
+                train_dataset = ds["valid"].map(  # type: ignore
+                    self.tokenize_function,
+                    batched=True,
+                    batch_size=self.map_batch_size,
+                    num_proc=self.num_proc,
+                    load_from_cache_file=self.load_from_cache_file,
+                    remove_columns=columns_to_remove,
+                )
+                val_dataset = ds["test"].map(  # type: ignore
+                    self.tokenize_function,
+                    batched=True,
+                    batch_size=self.map_batch_size,
+                    num_proc=self.num_proc,
+                    load_from_cache_file=self.load_from_cache_file,
+                    remove_columns=columns_to_remove,
+                )
+                self.train_dataset = train_dataset.with_format("torch")
+                self.val_dataset = val_dataset.with_format("torch")
+            else:
+                train_dataset = ds["train"].map(  # type: ignore
+                    self.tokenize_function,
+                    batched=True,
+                    batch_size=self.map_batch_size,
+                    num_proc=self.num_proc,
+                    load_from_cache_file=self.load_from_cache_file,
+                    remove_columns=columns_to_remove,
+                )
+                val_dataset = ds["valid"].map(  # type: ignore
+                    self.tokenize_function,
+                    batched=True,
+                    batch_size=self.map_batch_size,
+                    num_proc=self.num_proc,
+                    load_from_cache_file=self.load_from_cache_file,
+                    remove_columns=columns_to_remove,
+                )
+                self.train_dataset = train_dataset.with_format("torch")
+                self.val_dataset = val_dataset.with_format("torch")
 
         if stage == "test" or stage is None:
             test_dataset = ds["test"].map(  # type: ignore

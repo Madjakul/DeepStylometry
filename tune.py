@@ -11,7 +11,7 @@ from deep_stylometry.utils.argparsers import TuneArgparse
 from deep_stylometry.utils.helpers import load_config_from_file
 from deep_stylometry.utils.logger import logging_config
 
-# os.environ["RAY_memory_monitor_refresh_ms"] = "0"
+os.environ["RAY_memory_monitor_refresh_ms"] = "0"
 logging_config()
 NUM_PROC = psutil.cpu_count(logical=False) - 1
 
