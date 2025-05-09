@@ -4,8 +4,11 @@ from typing import Any, Dict, Optional
 
 import lightning as L
 import psutil
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 
@@ -21,6 +24,22 @@ def setup_datamodule(
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
 ):
+    """Use the config to set up the correct datamodule.
+
+    Parameters
+    ----------
+    config: Dict[str, Any]
+        Configuration dictionary containing the dataset name and other parameters.
+    cache_dir: Optional[str]
+        Directory to cache the dataset.
+    num_proc: Optional[int]
+        Number of processes to use for data loading. If None, defaults to the number of CPUs.
+
+    Returns
+    -------
+    dm: L.LightningDataModule
+        The data module for the specified dataset.
+    """
     num_proc = num_proc if num_proc is not None else NUM_PROC
     dm_map = {"se": SEDataModule, "halvest": HALvestDataModule}
 
@@ -32,7 +51,6 @@ def setup_datamodule(
         map_batch_size=config["map_batch_size"],
         load_from_cache_file=config["load_from_cache_file"],
         cache_dir=cache_dir,
-        # ds_name=config["ds_name"],
         config_name=config.get("config_name", None),
         mlm_collator=config.get("mlm_collator", False),
     )
@@ -40,6 +58,18 @@ def setup_datamodule(
 
 
 def setup_model(config: Dict[str, Any]):
+    """Use the config to set up the model.
+
+    Parameters
+    ----------
+    config: Dict[str, Any]
+        Configuration dictionary containing the model parameters.
+
+    Returns
+    -------
+    model: DeepStylometry
+        The model instance with the specified parameters.
+    """
     model = DeepStylometry(
         optim_name=config.get("optim_name", "adamw"),
         base_model_name=config["base_model_name"],
@@ -54,7 +84,7 @@ def setup_model(config: Dict[str, Any]):
         contrastive_temp=config.get("contrastive_temp", 7e-2),
         do_late_interaction=config.get("do_late_interaction", False),
         use_max=config.get("initial_gumbel_temp", None) is None,
-        initial_gumbel_temp=config.get("initial_gumbel_temp", None),
+        initial_gumbel_temp=config.get("initial_gumbel_temp", 1.0),
         auto_anneal_gumbel=config.get("auto_anneal_gumbel", True),
         gumbel_linear_delta=config.get("gumbel_linear_delta", 1e-3),
         min_gumbel_temp=config.get("min_gumbel_temp", 1e-9),
@@ -72,9 +102,25 @@ def setup_trainer(
     logs_dir: str,
     use_wandb: bool = False,
     checkpoint_dir: Optional[str] = None,
-    # cache_dir: Optional[str] = None,
-    # num_proc: Optional[int] = None,
 ):
+    """Setup the Lightning trainer with the specified configuration.
+
+    Parameters
+    ----------
+    config: Dict[str, Any]
+        Configuration dictionary containing the training parameters.
+    logs_dir: str
+        Directory to save logs.
+    use_wandb: bool
+        Whether to use Weights and Biases for logging.
+    checkpoint_dir: Optional[str]
+        Directory to save model checkpoints. If None, no checkpoints will be saved.
+
+    Returns
+    -------
+    trainer: L.Trainer
+        The Lightning trainer instance with the specified configuration.
+    """
     # Set up callbacks
     callbacks = []
 
@@ -134,11 +180,6 @@ def setup_trainer(
         precision=config.get("precision", "16-mixed"),
     )
 
-    # dm = setup_datamodule(config=config, cache_dir=cache_dir, num_proc=num_proc)
-    # model = setup_model(config=config["model"])
-    # trainer.fit(model, datamodule=dm)
-    # if config.get("run_test", False):
-    #     trainer.test(model, datamodule=dm)
     return trainer
 
 
@@ -148,6 +189,19 @@ def train_tune(
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
 ):
+    """Launch hyper-parameter tuning using Ray Tune and PyTorch Lightning.
+
+    Parameters
+    ----------
+    config: Dict[str, Any]
+        Configuration dictionary containing the tuning parameters.
+    base_config: Dict[str, Any]
+        Base configuration dictionary containing the model and training parameters.
+    cache_dir: Optional[str]
+        Directory to cache the dataset.
+    num_proc: Optional[int]
+        Number of processes to use for data loading. If None, defaults to the number of CPUs.
+    """
     merged_config = base_config.copy()
     merged_config.update(config)
 
