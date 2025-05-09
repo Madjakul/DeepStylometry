@@ -1,6 +1,6 @@
 # DeepStylometry
 
-Encoding subtle stylometric faetures.
+Encoding subtle stylometric features.
 
 ---
 
