@@ -23,5 +23,5 @@ def test_late_interaction_forward():
     mask = torch.ones(batch_size, seq_len)
 
     scores = module(q, k, mask, mask, gumbel_temp=0.5)
-    assert scores.shape == (batch_size,)
+    assert scores.shape == (batch_size, batch_size)
     assert not torch.any(torch.isnan(scores))

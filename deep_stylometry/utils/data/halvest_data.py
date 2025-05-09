@@ -6,8 +6,9 @@ import lightning as L
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 
-from deep_stylometry.utils.data.custom_data_collator import \
-    CustomDataCollatorForLanguageModeling
+from deep_stylometry.utils.data.custom_data_collator import (
+    CustomDataCollatorForLanguageModeling,
+)
 from deep_stylometry.utils.helpers import get_tokenizer
 
 
@@ -61,8 +62,8 @@ class HALvestDataModule(L.LightningDataModule):
             max_length=self.max_length,
         )
         return {
-            "q_input_ids": tokenized_q["input_ids"],
-            "q_attention_mask": tokenized_q["attention_mask"],
+            "input_ids": tokenized_q["input_ids"],
+            "attention_mask": tokenized_q["attention_mask"],
             "k_input_ids": tokenized_k["input_ids"],
             "k_attention_mask": tokenized_k["attention_mask"],
             "domain_label": batch["domain_label"],
