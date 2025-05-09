@@ -4,14 +4,14 @@ import logging
 import os
 
 import psutil
-import wandb
 
+import wandb
 from deep_stylometry.utils import tune_utils
 from deep_stylometry.utils.argparsers import TuneArgparse
 from deep_stylometry.utils.helpers import load_config_from_file
 from deep_stylometry.utils.logger import logging_config
 
-os.environ["RAY_memory_monitor_refresh_ms"] = "0"
+# os.environ["RAY_memory_monitor_refresh_ms"] = "0"
 logging_config()
 NUM_PROC = psutil.cpu_count(logical=False) - 1
 
