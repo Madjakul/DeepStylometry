@@ -8,6 +8,42 @@ import torch.nn.functional as F
 
 
 class LateInteraction(nn.Module):
+    r"""Late interaction module for computing similarity scores between query
+    and key embeddings. This module can use either distance-based weighting or
+    cosine similarity for computing the similarity scores. The module also
+    supports Gumbel softmax for sampling from the similarity scores.
+
+    Parameters
+    ----------
+    do_distance: bool
+        If True, use distance-based weighting for late interaction.
+    exp_decay: bool
+        If True, use exponential decay for the distance weights:
+        $w = exp(-\alpha \cdot d)$, where $d$ is the distance between token positions.
+        If False, use the formula $w = 1 / (1 + \alpha \cdot d)$.
+    seq_len: int
+        The maximum sequence length of the input sentences.
+    alpha: float
+        The alpha parameter for the distance weighting function.
+    use_max: bool
+        If True, use maximum cosine similarity for late interaction. If False, use Gumbel softmax.
+
+    Attributes
+    ----------
+    alpha: float
+        The alpha parameter for the distance weighting function, constrained to be positive.
+    distance: torch.Tensor
+        The distance matrix for computing distance-based weights.
+    logit_scale: torch.nn.Parameter
+        The learnable parameter for scaling the logits.
+    exp_decay: bool
+        If True, use exponential decay for the distance weights.
+    do_distance: bool
+        If True, use distance-based weighting for late interaction.
+    use_max: bool
+        If True, use maximum cosine similarity for late interaction. If False, use Gumbel softmax.
+    """
+
     def __init__(
         self,
         do_distance: bool,
@@ -20,14 +56,13 @@ class LateInteraction(nn.Module):
         self.do_distance = do_distance
         self.use_max = use_max
         if self.do_distance:
+            self.distance: torch.Tensor
             self.alpha_raw = nn.Parameter(torch.tensor(alpha))
             positions = torch.arange(seq_len)
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
             self.register_buffer("distance", distance)
         self.exp_decay = exp_decay
-        self.logit_scale = nn.Parameter(
-            torch.log(torch.tensor(1.0))
-        )  # Learnable logit scale
+        self.logit_scale = nn.Parameter(torch.log(torch.tensor(1.0)))
 
     @property
     def alpha(self):
@@ -42,6 +77,28 @@ class LateInteraction(nn.Module):
         k_mask: torch.Tensor,
         gumbel_temp: Optional[float] = None,
     ):
+        """Compute similarity scores between query and key embeddings using
+        late interaction.
+
+        Parameters
+        ----------
+        query_embs: torch.Tensor
+            The query embeddings of shape (B, S, H), where B is the batch size,
+            S is the sequence length, and H is the hidden size.
+        key_embs: torch.Tensor
+            The key embeddings of shape (B, S, H).
+        q_mask: torch.Tensor
+            The attention mask for the query embeddings of shape (B, S).
+        k_mask: torch.Tensor
+            The attention mask for the key embeddings of shape (B, S).
+        gumbel_temp: Optional[float]
+            The temperature for Gumbel softmax. If None, use softmax.
+
+        Returns
+        -------
+        scores: torch.Tensor
+            The computed similarity scores of shape (B, B) for each query-key pair.
+        """
         # Normalize embeddings to preserve cosine similarity
         query_embs = query_embs.unsqueeze(1)  # (B, 1, S, H)
         query_embs = F.normalize(query_embs, p=2, dim=-1)
@@ -79,7 +136,7 @@ class LateInteraction(nn.Module):
 
         all_inf_slices = torch.all(logits == -float("inf"), dim=-1, keepdim=True)
 
-        # For softmax calculation, replace these all-inf slices with zeros. Softmax of zeros is uniform.
+        # For softmax calculation, replace all-inf slices with zeros. Softmax of zeros is uniform.
         # This prevents NaN from softmax itself.
         safe_logits_for_softmax = torch.where(
             all_inf_slices.expand_as(logits), torch.zeros_like(logits), logits
@@ -90,11 +147,14 @@ class LateInteraction(nn.Module):
                 safe_logits_for_softmax, tau=gumbel_temp, hard=False, dim=-1
             )
             if self.training:
+                # use straight-through estimator during training
+                # early training logits are more uniform
                 hard_p_ij_temp = F.one_hot(
                     safe_logits_for_softmax.argmax(dim=-1), num_classes=logits.size(-1)
                 ).float()
                 p_ij_candidate = hard_p_ij_temp + (soft_p_ij - soft_p_ij.detach())
             else:
+                # use softmax during evaluation
                 p_ij_candidate = soft_p_ij
         else:
             p_ij_candidate = F.softmax(safe_logits_for_softmax, dim=-1)
