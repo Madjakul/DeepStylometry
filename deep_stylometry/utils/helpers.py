@@ -102,23 +102,3 @@ def load_config_from_yaml(path: str):
     """
     config = yaml.load(open(path), Loader=yaml.FullLoader)
     return config
-
-
-def check_dir(path: str):
-    """Check if there is a directory at ``path`` and creates it if necessary.
-
-    Parameters
-    ----------
-    path: str
-        Path to the directory.
-
-    Returns
-    -------
-    path: str
-        Path to the existing directory.
-    """
-    if os.path.isdir(path):
-        return path
-    logging.warning(f"No folder at {path}: creating folders at path.")
-    os.makedirs(path)
-    return path
