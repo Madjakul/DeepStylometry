@@ -189,6 +189,7 @@ def train_tune(
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
 ):
+    # TODO: add logs_dir
     """Launch hyper-parameter tuning using Ray Tune and PyTorch Lightning.
 
     Parameters

@@ -15,6 +15,7 @@ class TuneArgparse:
         args: Any
             Parsed arguments.
         """
+        # TODO: add logs_dir
         parser = argparse.ArgumentParser(
             description="Argument parser for hyper-parameter tuning."
         )

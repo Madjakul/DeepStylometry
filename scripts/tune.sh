@@ -7,6 +7,7 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 CONFIG_PATH=$PROJECT_ROOT/configs/tune.yml
 RAY_STORAGE_PATH=$PROJECT_ROOT/ray_logs
+# TODO: add LOGS_DIR
 
 # --------------------------------------------------------------------------------------
 

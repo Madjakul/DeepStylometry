@@ -59,6 +59,7 @@ def setup_tuner(
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
 ):
+    # TODO: add logs_dir
     """Sets up the Ray Tune tuner for hyperparameter tuning. Uses
     HyperOptSearch and AsyncHyperBandScheduler. No checkpointing is done during
     tuning. The goal is to maximize the validation AUROC score before the time

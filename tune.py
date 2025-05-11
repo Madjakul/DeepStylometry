@@ -23,6 +23,7 @@ if __name__ == "__main__":
     logging.info(f"Config file: {args.config_path}")
 
     tuner = tune_utils.setup_tuner(
+        # TODO: add logs_dir
         config=config,
         ray_storage_path=args.ray_storage_path,
         use_wandb=config.get("use_wandb", False),
