@@ -106,7 +106,10 @@ def setup_tuner(
 
     trainable_with_resources = tune.with_resources(
         trainable_fn,
-        {config.get("device", "cpu"): config.get("num_devices", 1), "cpu": num_proc},  # type: ignore
+        {
+            config.get("device", "cpu"): config.get("num_devices_per_trial", 1),
+            "cpu": num_proc,
+        },  # type: ignore
     )
 
     tuner = tune.Tuner(

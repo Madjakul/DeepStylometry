@@ -2,13 +2,16 @@
 
 from typing import Any, Dict, Optional
 
-import lightning as L
 import psutil
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
-from ray.tune.integration.pytorch_lightning import TuneReportCallback
+from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
+import lightning as L
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils.data.halvest_data import HALvestDataModule
 from deep_stylometry.utils.data.se_data import SEDataModule
@@ -165,20 +168,18 @@ def setup_trainer(
     )
     loggers.append(csv_logger)
 
-    # Set up trainer
     trainer = L.Trainer(
         accelerator=config.get("device", "cpu"),
         devices=config.get("num_devices", -1),
         max_epochs=config.get("max_epochs", 3),
         enable_checkpointing=checkpoint_dir is not None,
-        callbacks=callbacks,
         logger=loggers,
-        log_every_n_steps=config.get("log_every_n_steps", 1),
-        accumulate_grad_batches=config.get("accumulate_grad_batches", 2),
-        gradient_clip_val=config.get("gradient_clip_val", 1e-3),
+        callbacks=callbacks,
+        log_every_n_steps=config.get("log_every_n_steps", 100),
+        accumulate_grad_batches=config["accumulate_grad_batches"],
+        gradient_clip_val=config["gradient_clip_val"],
         precision=config.get("precision", "16-mixed"),
     )
-
     return trainer
 
 
@@ -214,7 +215,7 @@ def train_tune(
     callbacks = []
     callbacks.append(LearningRateMonitor(logging_interval="step"))
     callbacks.append(
-        TuneReportCallback(
+        TuneReportCheckpointCallback(
             {
                 "loss": "val_total_loss",
                 "auroc": "val_auroc",
@@ -223,28 +224,36 @@ def train_tune(
                 "recall": "val_recall",
             },
             on="validation_end",
+            save_checkpoints=False,
         )
     )
     # Configure loggers
     loggers = []
+    loggers.append(
+        CSVLogger(
+            save_dir="./lightning/",
+            name=merged_config.get("experiment_name", "training-run"),
+        )
+    )
     if merged_config["use_wandb"]:
         wandb_logger = WandbLogger(
-            project=merged_config.get("project_name", "deep_stylometry"),
-            name=merged_config.get("experiment_name", "training_run"),
-            log_model=merged_config.get("log_model", False),
+            project=merged_config.get("project_name", "deep-stylometry"),
+            group="tune",
+            prefix="trial",
+            log_model=False,
         )
         loggers.append(wandb_logger)
 
     trainer = L.Trainer(
         accelerator=merged_config.get("device", "cpu"),
-        devices=merged_config.get("num_devices", -1),
-        max_epochs=merged_config.get("max_epochs", 3),
-        logger=loggers,
+        devices=merged_config.get("num_devices_per_trial", -1),
+        max_epochs=merged_config.get("max_epochs", 1),
         callbacks=callbacks,
         enable_checkpointing=False,
+        logger=loggers,
         log_every_n_steps=merged_config.get("log_every_n_steps", 1),
-        accumulate_grad_batches=merged_config["accumulate_grad_batches"],
-        gradient_clip_val=merged_config["gradient_clip_val"],
+        accumulate_grad_batches=merged_config.get("accumulate_grad_batches", 2),
+        gradient_clip_val=merged_config.get("gradient_clip_val", 1e-3),
         precision=merged_config.get("precision", "16-mixed"),
     )
     trainer.fit(model=model, datamodule=dm)

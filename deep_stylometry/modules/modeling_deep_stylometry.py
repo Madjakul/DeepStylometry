@@ -7,8 +7,12 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import (BinaryAUROC, BinaryF1Score,
-                                         BinaryPrecision, BinaryRecall)
+from torchmetrics.classification import (
+    BinaryAUROC,
+    BinaryF1Score,
+    BinaryPrecision,
+    BinaryRecall,
+)
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -414,6 +418,7 @@ class DeepStylometry(L.LightningModule):
             prog_bar=True,
             on_step=True,
             on_epoch=True,
+            sync_dist=True,
             batch_size=self.batch_size,
         )
         return metrics["total_loss"]
@@ -462,6 +467,7 @@ class DeepStylometry(L.LightningModule):
             prog_bar=True,
             on_step=False,
             on_epoch=True,
+            sync_dist=True,
             batch_size=self.batch_size,
         )
 
@@ -476,6 +482,7 @@ class DeepStylometry(L.LightningModule):
                 "val_recall": self.val_recall.compute(),
             },
             prog_bar=True,
+            sync_dist=True,
         )
         self.val_auroc.reset()
         self.val_f1.reset()
@@ -525,6 +532,7 @@ class DeepStylometry(L.LightningModule):
             prog_bar=True,
             on_step=False,
             on_epoch=True,
+            sync_dist=True,
             batch_size=self.batch_size,
         )
 

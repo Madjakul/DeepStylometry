@@ -6,12 +6,12 @@ do_test: false
 
 # --- tuner ---
 num_samples: 30
-max_concurrent_trials: 1
-time_budget_s: 43200 # 12h (in seconds)
+max_concurrent_trials: 3
+time_budget_s: 79200 # 22h (in seconds)
 
 # --- datamodule ---
 ds_name: "se" # or halvest
-batch_size: 2
+batch_size: 32
 tokenizer_name: "FacebookAI/roberta-base"
 max_length: 512
 map_batch_size: 1000
@@ -20,23 +20,25 @@ load_from_cache_file: true
 mlm_collator: true # only if you use an encoder
 
 # --- model ---
-optim_name: "adamw"
+optim_name:
+  type: choice
+  values: ["adamw", "soap", "sophia"]
 base_model_name: "FacebookAI/roberta-base"
 is_decoder_model: false
 lr:
   type: loguniform
-  min: 1.0e-6 # 0.000001
-  max: 2.0e-4 # 0.001
+  min: 7.0e-6
+  max: 7.0e-5
 dropout: 0.1
 weight_decay:
   type: loguniform
-  min: 1.0e-6 # 0.000001
-  max: 0.1
+  min: 7.0e-3
+  max: 0.05
 lm_weight: 1.0
 contrastive_weight: 1.0
 contrastive_temp:
   type: uniform
-  min: 0.01
+  min: 0.1
   max: 1.0
 # --- late interaction
 do_late_interaction: true
@@ -45,8 +47,8 @@ auto_anneal_gumbel: true
 # gumbel_linear_delta: 1e-3
 min_gumbel_temp:
   type: uniform
-  min: 1.0e-6 # 0.000000001
-  max: 1.0e-3 # 0.001
+  min: 1.0e-4
+  max: 1.0e-3
 do_distance: true
 exp_decay: true
 # alpha: 0.5
@@ -54,19 +56,19 @@ exp_decay: true
 
 # --- wandb logger ---
 use_wandb: true
-log_model: false
 
 # --- trainer ---
 device: "gpu"
-num_devices: 1
-max_epochs: 5
-log_every_n_steps: 1
+num_devices_per_trial: 1
+num_cpus_per_trial: 10
+max_epochs: 1
+log_every_n_steps: 50
 accumulate_grad_batches:
   type: choice
-  values: [8, 16, 32]
+  values: [1, 8, 32]
 gradient_clip_val:
   type: uniform
-  min: 1.0e-3 # 0.001
+  min: 1.0e-3
   max: 1.0
 precision: "32" # 32-true or bf16-mixed
 
