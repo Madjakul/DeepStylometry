@@ -247,7 +247,9 @@ def train_tune(
     trainer = L.Trainer(
         accelerator=merged_config.get("device", "cpu"),
         devices=merged_config.get("num_devices_per_trial", -1),
-        max_epochs=merged_config.get("max_epochs", 1),
+        max_steps=2500,
+        max_epochs=-1,
+        val_check_interval=1250,
         callbacks=callbacks,
         enable_checkpointing=False,
         logger=loggers,
