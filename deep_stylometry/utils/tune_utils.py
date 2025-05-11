@@ -89,7 +89,7 @@ def setup_tuner(
             WandbLoggerCallback(
                 project=config["project_name"],
                 name=config["experiment_name"],
-                group="tuning",
+                group="tune",
                 log_config=True,
                 log_checkpoints=False,
             )
