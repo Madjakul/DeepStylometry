@@ -2,16 +2,13 @@
 
 from typing import Any, Dict, Optional
 
+import lightning as L
 import psutil
-from lightning.pytorch.callbacks import (
-    EarlyStopping,
-    LearningRateMonitor,
-    ModelCheckpoint,
-)
+from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
+                                         ModelCheckpoint)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
-import lightning as L
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils.data.halvest_data import HALvestDataModule
 from deep_stylometry.utils.data.se_data import SEDataModule
@@ -248,7 +245,9 @@ def train_tune(
     trainer = L.Trainer(
         accelerator=merged_config.get("device", "cpu"),
         devices=merged_config.get("num_devices_per_trial", -1),
-        max_epochs=merged_config.get("max_epochs", 1),
+        max_steps=2500,
+        max_epochs=-1,
+        val_check_interval=1250,
         callbacks=callbacks,
         enable_checkpointing=False,
         logger=loggers,

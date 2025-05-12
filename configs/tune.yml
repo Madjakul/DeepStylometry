@@ -62,10 +62,10 @@ device: "gpu"
 num_devices_per_trial: 1
 num_cpus_per_trial: 10
 max_epochs: 1
-log_every_n_steps: 50
+log_every_n_steps: 10
 accumulate_grad_batches:
   type: choice
-  values: [1, 8, 32]
+  values: [1, 2, 8, 32]
 gradient_clip_val:
   type: uniform
   min: 1.0e-3
