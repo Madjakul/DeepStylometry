@@ -19,7 +19,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.dev.txt
+          python -m pip install --upgrade pip
+          if [ -f requirements.dev.txt ]; then pip install -r requirements.dev.txt; fi
+          pip install black docformatter isort pytest
 
       - name: Run Black
         run: black .

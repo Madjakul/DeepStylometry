@@ -142,7 +142,7 @@ def setup_tuner(
             ),
             storage_path=ray_storage_path,
             failure_config=FailureConfig(max_failures=0, fail_fast=True),
-            stop={"training_iteration": config["max_epochs"]},
+            stop={"timesteps_total": 2500},
             callbacks=callbacks,
         ),
         param_space=search_space,
