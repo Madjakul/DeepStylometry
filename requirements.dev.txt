@@ -1,4 +1,4 @@
 black
-docformetter
+docformatter
 isort
 pytest
