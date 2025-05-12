@@ -12,8 +12,10 @@ from deep_stylometry.utils.logger import logging_config
 
 os.environ["RAY_memory_monitor_refresh_ms"] = "0"
 os.environ["PYTHONUNBUFFERED"] = "1"
-logging_config()
+
 NUM_PROC = psutil.cpu_count(logical=False)
+
+logging_config()
 
 
 if __name__ == "__main__":
@@ -23,12 +25,12 @@ if __name__ == "__main__":
     logging.info(f"Config file: {args.config_path}")
 
     tuner = tune_utils.setup_tuner(
-        # TODO: add logs_dir
         config=config,
         ray_storage_path=args.ray_storage_path,
         use_wandb=config.get("use_wandb", False),
         cache_dir=args.cache_dir,
         num_proc=config.get("num_cpus_per_trial", NUM_PROC),
+        logs_dir=args.logs_dir,
     )
     results = tuner.fit()
     logging.info("--- Tuning finished ---")

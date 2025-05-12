@@ -55,11 +55,11 @@ def build_search_space(config: Dict[str, Any]):
 def setup_tuner(
     config: Dict[str, Any],
     ray_storage_path: str,
+    logs_dir: str,
     use_wandb: bool = False,
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
 ):
-    # TODO: add logs_dir
     """Sets up the Ray Tune tuner for hyperparameter tuning. Uses
     HyperOptSearch and AsyncHyperBandScheduler. No checkpointing is done during
     tuning. The goal is to maximize the validation AUROC score before the time
@@ -103,6 +103,7 @@ def setup_tuner(
         base_config=config,
         cache_dir=cache_dir,
         num_proc=num_proc,
+        logs_dir=logs_dir,
     )
 
     trainable_with_resources = tune.with_resources(

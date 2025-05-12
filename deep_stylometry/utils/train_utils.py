@@ -4,8 +4,11 @@ from typing import Any, Dict, Optional
 
 import lightning as L
 import psutil
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
@@ -143,7 +146,7 @@ def setup_trainer(
             filename="{epoch}-{val_auroc:.4f}",
             monitor=config.get("checkpoint_metric", "val_auroc"),
             mode=config.get("checkpoint_mode", "max"),
-            save_top_k=config.get("save_top_k", 3),
+            save_top_k=config.get("save_top_k", 2),
             save_last=True,
         )
         callbacks.append(checkpoint_callback)
@@ -172,7 +175,7 @@ def setup_trainer(
         enable_checkpointing=checkpoint_dir is not None,
         logger=loggers,
         callbacks=callbacks,
-        log_every_n_steps=config.get("log_every_n_steps", 100),
+        log_every_n_steps=config.get("log_every_n_steps", 10),
         accumulate_grad_batches=config["accumulate_grad_batches"],
         gradient_clip_val=config["gradient_clip_val"],
         precision=config.get("precision", "16-mixed"),
@@ -183,10 +186,10 @@ def setup_trainer(
 def train_tune(
     config: Dict[str, Any],
     base_config: Dict[str, Any],
+    logs_dir: str,
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
 ):
-    # TODO: add logs_dir
     """Launch hyper-parameter tuning using Ray Tune and PyTorch Lightning.
 
     Parameters
@@ -229,7 +232,7 @@ def train_tune(
     loggers = []
     loggers.append(
         CSVLogger(
-            save_dir="./lightning/",
+            save_dir=logs_dir,
             name=merged_config.get("experiment_name", "training-run"),
         )
     )

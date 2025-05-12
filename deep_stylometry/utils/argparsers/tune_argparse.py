@@ -15,7 +15,6 @@ class TuneArgparse:
         args: Any
             Parsed arguments.
         """
-        # TODO: add logs_dir
         parser = argparse.ArgumentParser(
             description="Argument parser for hyper-parameter tuning."
         )
@@ -30,6 +29,12 @@ class TuneArgparse:
             type=str,
             required=True,
             help="Directory where Ray will save the logs and experiments results.",
+        )
+        parser.add_argument(
+            "--logs_dir",
+            type=str,
+            required=True,
+            help="Directory where the logs will be saved.",
         )
         parser.add_argument(
             "--num_proc",
