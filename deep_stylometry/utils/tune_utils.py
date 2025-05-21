@@ -118,8 +118,8 @@ def setup_tuner(
         time_attr="timesteps_total",  # This corresponds to PTL epochs reported by TuneReportCallback
         # metric="auroc",
         # mode="max",
-        max_t=2500,  # Max PTL epochs a trial can run before ASHA might stop it (or it hits max_steps)
-        grace_period=1250,  # Min PTL epochs before ASHA can stop a trial
+        max_t=1250,  # Max PTL epochs a trial can run before ASHA might stop it (or it hits max_steps)
+        grace_period=625,  # Min PTL epochs before ASHA can stop a trial
         reduction_factor=2,
     )
 
@@ -144,7 +144,7 @@ def setup_tuner(
             ),
             storage_path=ray_storage_path,
             failure_config=FailureConfig(max_failures=0, fail_fast=True),
-            stop={"timesteps_total": 2500},
+            stop={"timesteps_total": 1250},
             callbacks=callbacks,
         ),
         param_space=search_space,

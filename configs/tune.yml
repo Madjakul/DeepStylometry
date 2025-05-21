@@ -7,7 +7,7 @@ do_test: false
 # --- tuner ---
 num_samples: 30
 max_concurrent_trials: 3
-time_budget_s: 79200 # 22h (in seconds)
+time_budget_s: 86400 # 24h (in seconds)
 
 # --- datamodule ---
 ds_name: "se" # or halvest
@@ -17,24 +17,24 @@ max_length: 512
 map_batch_size: 1000
 load_from_cache_file: true
 # config_name: null
-mlm_collator: true # only if you use an encoder
+mlm_collator: false # only if you use an encoder
 
 # --- model ---
 optim_name:
   type: choice
-  values: ["adamw", "soap", "sophia"]
+  values: ["adamw", "soap"]
 base_model_name: "FacebookAI/roberta-base"
 is_decoder_model: false
 lr:
   type: loguniform
-  min: 7.0e-6
-  max: 7.0e-5
+  min: 1.0e-5
+  max: 1.0e-4
 dropout: 0.1
 weight_decay:
   type: loguniform
-  min: 7.0e-3
-  max: 0.05
-lm_weight: 1.0
+  min: 0.01
+  max: 0.07
+lm_weight: 0.0
 contrastive_weight: 1.0
 contrastive_temp:
   type: uniform
@@ -42,13 +42,13 @@ contrastive_temp:
   max: 1.0
 # --- late interaction
 do_late_interaction: true
-initial_gumbel_temp: 1.0 # null
+initial_gumbel_temp: 2.0 # null
 auto_anneal_gumbel: true
 # gumbel_linear_delta: 1e-3
 min_gumbel_temp:
   type: uniform
-  min: 1.0e-4
-  max: 1.0e-3
+  min: 0.1
+  max: 0.5
 do_distance: true
 exp_decay: true
 # alpha: 0.5
@@ -63,9 +63,7 @@ num_devices_per_trial: 1
 num_cpus_per_trial: 10
 max_epochs: 1
 log_every_n_steps: 10
-accumulate_grad_batches:
-  type: choice
-  values: [1, 2, 8, 32]
+accumulate_grad_batches: 4
 gradient_clip_val:
   type: uniform
   min: 1.0e-3
