@@ -5,14 +5,14 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 # ************************** Customizable Arguments ************************************
 
-CONFIG_PATH=$PROJECT_ROOT/configs/preprocess.yml
+CONFIG_PATH=$PROJECT_ROOT/configs/train.yml
 LOGS_DIR=$PROJECT_ROOT/logs
 
 # --------------------------------------------------------------------------------------
 
 # CACHE_DIR=$DATA_ROOT/responses/
-# CHECKPOINT_DIR=$DATA_ROOT/tmp/checkpoints/
-# NUM_PROC=4
+CHECKPOINT_DIR=$PROJECT_ROOT/tmp/checkpoints/
+NUM_PROC=16
 #
 
 # **************************************************************************************

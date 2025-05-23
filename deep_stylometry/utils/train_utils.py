@@ -45,12 +45,12 @@ def setup_datamodule(
     dm_map = {"se": SEDataModule, "halvest": HALvestDataModule}
 
     dm = dm_map[config["ds_name"]](
-        batch_size=config["batch_size"],
-        num_proc=num_proc,
+        batch_size=config.get("batch_size", 32),
+        num_proc=num_proc if num_proc is not None else NUM_PROC,
         tokenizer_name=config["tokenizer_name"],
-        max_length=config["max_length"],
-        map_batch_size=config["map_batch_size"],
-        load_from_cache_file=config["load_from_cache_file"],
+        max_length=config.get("max_length", 512),
+        map_batch_size=config.get("map_batch_size", 1000),
+        load_from_cache_file=config.get("load_from_cache_file", True),
         cache_dir=cache_dir,
         config_name=config.get("config_name", None),
         mlm_collator=config.get("mlm_collator", False),
@@ -74,24 +74,24 @@ def setup_model(config: Dict[str, Any]):
     """
     model = DeepStylometry(
         optim_name=config.get("optim_name", "adamw"),
-        base_model_name=config["base_model_name"],
-        batch_size=config["batch_size"],
-        seq_len=config["max_length"],
-        is_decoder_model=config["is_decoder_model"],
-        lr=config.get("lr", 2e-5),
-        dropout=config.get("dropout", 0.1),
-        weight_decay=config.get("weight_decay", 1e-2),
-        lm_weight=config.get("lm_weight", 1.0),
+        base_model_name=config.get("base_model_name", "FacebookAI/roberta-base"),
+        batch_size=config.get("batch_size", 32),
+        seq_len=config.get("max_length", 512),
+        is_decoder_model=config.get("is_decoder_model", False),
+        lr=config.get("lr", 1e-5),
+        dropout=config.get("dropout", 0.01),
+        weight_decay=config.get("weight_decay", 0.015),
+        lm_weight=config.get("lm_weight", 0.0),
         contrastive_weight=config.get("contrastive_weight", 1.0),
-        contrastive_temp=config.get("contrastive_temp", 7e-2),
-        do_late_interaction=config.get("do_late_interaction", False),
-        use_max=config.get("initial_gumbel_temp", None) is None,
-        initial_gumbel_temp=config.get("initial_gumbel_temp", 1.0),
+        contrastive_temp=config.get("contrastive_temp", 0.13),
+        do_late_interaction=config.get("do_late_interaction", True),
+        use_max=config.get("use_max", False),
+        initial_gumbel_temp=config.get("initial_gumbel_temp", 2.0),
         auto_anneal_gumbel=config.get("auto_anneal_gumbel", True),
         gumbel_linear_delta=config.get("gumbel_linear_delta", 1e-3),
-        min_gumbel_temp=config.get("min_gumbel_temp", 1e-9),
+        min_gumbel_temp=config.get("min_gumbel_temp", 0.4),
         do_distance=config.get("do_distance", True),
-        exp_decay=config.get("exp_decay", False),
+        exp_decay=config.get("exp_decay", True),
         alpha=config.get("alpha", 0.5),
         project_up=config.get("project_up", None),
     )
@@ -135,7 +135,7 @@ def setup_trainer(
         early_stop_callback = EarlyStopping(
             monitor=config.get("early_stopping_metric", "val_total_loss"),
             mode=config.get("early_stopping_mode", "min"),
-            patience=config.get("early_stopping_patience", 5),
+            patience=config.get("early_stopping_patience", 10),
         )
         callbacks.append(early_stop_callback)
 
@@ -155,29 +155,34 @@ def setup_trainer(
     loggers = []
     if use_wandb:
         wandb_logger = WandbLogger(
-            project=config.get("project_name", "deep_stylometry"),
-            name=config.get("experiment_name", "training_run"),
+            project=config.get("project_name", "deep-stylometry"),
+            name=config.get("experiment_name", "training-run"),
             log_model=config.get("log_model", False),
+            group=f"""train-{config['ds_name']}-{config['base_model_name']}
+                -li/{config['do_late_interaction']}-max/{config['use_max']}
+                -dist/{config['do_distance']}-expd/{config['exp_decay']}""",
         )
         loggers.append(wandb_logger)
 
     # Add CSV logger by default
     csv_logger = CSVLogger(
         save_dir=logs_dir,
-        name=config.get("experiment_name", "training_run"),
+        name=config.get("experiment_name", "training-run"),
     )
     loggers.append(csv_logger)
 
     trainer = L.Trainer(
         accelerator=config.get("device", "cpu"),
         devices=config.get("num_devices", -1),
-        max_epochs=config.get("max_epochs", 3),
+        max_steps=config.get("max_steps", 20000),
+        max_epochs=config.get("max_epochs", -1),
+        val_check_interval=config.get("val_check_interval", 1000),
         enable_checkpointing=checkpoint_dir is not None,
         logger=loggers,
         callbacks=callbacks,
-        log_every_n_steps=config.get("log_every_n_steps", 10),
-        accumulate_grad_batches=config["accumulate_grad_batches"],
-        gradient_clip_val=config["gradient_clip_val"],
+        log_every_n_steps=config.get("log_every_n_steps", 100),
+        accumulate_grad_batches=config.get("accumulate_grad_batches", 1),
+        gradient_clip_val=config.get("gradient_clip_val", 1e-3),
         precision=config.get("precision", "16-mixed"),
     )
     return trainer
@@ -220,9 +225,10 @@ def train_tune(
             {
                 "loss": "val_total_loss",
                 "auroc": "val_auroc",
-                "f1": "val_f1",
-                "precision": "val_precision",
-                "recall": "val_recall",
+                "global_step": "global_step",
+                # "f1": "val_f1",
+                # "precision": "val_precision",
+                # "recall": "val_recall",
             },
             on="validation_end",
             save_checkpoints=False,
@@ -239,7 +245,7 @@ def train_tune(
     if merged_config["use_wandb"]:
         wandb_logger = WandbLogger(
             project=merged_config.get("project_name", "deep-stylometry"),
-            group="tune",
+            group=merged_config.get("group", "tune"),
             prefix="trial",
             log_model=False,
         )
@@ -248,13 +254,13 @@ def train_tune(
     trainer = L.Trainer(
         accelerator=merged_config.get("device", "cpu"),
         devices=merged_config.get("num_devices_per_trial", -1),
-        max_steps=1250,
-        max_epochs=-1,
-        val_check_interval=625,
+        max_steps=config.get("max_steps", -1),
+        max_epochs=config.get("max_epochs", 1),
+        val_check_interval=0.25,
         callbacks=callbacks,
         enable_checkpointing=False,
         logger=loggers,
-        log_every_n_steps=merged_config.get("log_every_n_steps", 1),
+        log_every_n_steps=merged_config.get("log_every_n_steps", 10),
         accumulate_grad_batches=merged_config.get("accumulate_grad_batches", 2),
         gradient_clip_val=merged_config.get("gradient_clip_val", 1e-3),
         precision=merged_config.get("precision", "16-mixed"),

@@ -115,12 +115,11 @@ def setup_tuner(
     )
 
     asha_scheduler = AsyncHyperBandScheduler(
-        time_attr="timesteps_total",  # This corresponds to PTL epochs reported by TuneReportCallback
+        time_attr="global_step",  # This corresponds to PTL epochs reported by TuneReportCallback
         # metric="auroc",
         # mode="max",
-        max_t=1250,  # Max PTL epochs a trial can run before ASHA might stop it (or it hits max_steps)
-        grace_period=625,  # Min PTL epochs before ASHA can stop a trial
-        reduction_factor=2,
+        max_t=config.get("max_t", 1000),
+        grace_period=config.get("grace_period", 500),
     )
 
     tuner = tune.Tuner(

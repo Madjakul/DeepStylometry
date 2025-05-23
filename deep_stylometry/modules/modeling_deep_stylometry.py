@@ -7,8 +7,12 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import (BinaryAUROC, BinaryF1Score,
-                                         BinaryPrecision, BinaryRecall)
+from torchmetrics.classification import (
+    BinaryAUROC,
+    BinaryF1Score,
+    BinaryPrecision,
+    BinaryRecall,
+)
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -184,7 +188,7 @@ class DeepStylometry(L.LightningModule):
         self.initial_gumbel_temp = initial_gumbel_temp
         self.gumbel_temp = initial_gumbel_temp
         self.gumbel_linear_delta = gumbel_linear_delta
-        self.optim_name = optim_name
+        self.optim_name = optim_name.lower()
         self.batch_size = batch_size
         self.min_gumbel_temp = min_gumbel_temp
         self.auto_anneal_gumbel = auto_anneal_gumbel
@@ -286,7 +290,7 @@ class DeepStylometry(L.LightningModule):
         )
         # Calculate steps dynamically
         total_steps = int(self.trainer.estimated_stepping_batches)
-        warmup_steps = max(1, int(0.05 * total_steps))
+        warmup_steps = max(1, int(0.1 * total_steps))
 
         if self.auto_anneal_gumbel:
             total_temp_range = self.initial_gumbel_temp - self.min_gumbel_temp
@@ -310,7 +314,7 @@ class DeepStylometry(L.LightningModule):
         }
 
     def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure):  # type: ignore[override]
-        """Ovverride the optimizer_step method to include custom logic for
+        """Override the optimizer_step method to include custom logic for
         updating the Gumbel temperature. This method is called after each
         optimizer step during training.
 
@@ -405,6 +409,14 @@ class DeepStylometry(L.LightningModule):
             on_epoch=False,
             batch_size=self.batch_size,
         )
+        self.log(
+            "global_step",
+            self.trainer.global_step,
+            prog_bar=False,
+            on_step=True,
+            on_epoch=False,
+            batch_size=self.batch_size,
+        )
         self.log_dict(
             {
                 "train_total_loss": metrics["total_loss"],
@@ -450,9 +462,9 @@ class DeepStylometry(L.LightningModule):
 
             # Update metrics
             self.val_auroc(flat_scores, flat_labels)
-            self.val_f1(flat_scores, flat_labels)
-            self.val_precision(flat_scores, flat_labels)
-            self.val_recall(flat_scores, flat_labels)
+            # self.val_f1(flat_scores, flat_labels)
+            # self.val_precision(flat_scores, flat_labels)
+            # self.val_recall(flat_scores, flat_labels)
 
         self.log_dict(
             {
@@ -473,17 +485,17 @@ class DeepStylometry(L.LightningModule):
         self.log_dict(
             {
                 "val_auroc": self.val_auroc.compute(),
-                "val_f1": self.val_f1.compute(),
-                "val_precision": self.val_precision.compute(),
-                "val_recall": self.val_recall.compute(),
+                # "val_f1": self.val_f1.compute(),
+                # "val_precision": self.val_precision.compute(),
+                # "val_recall": self.val_recall.compute(),
             },
             prog_bar=True,
             sync_dist=True,
         )
         self.val_auroc.reset()
-        self.val_f1.reset()
-        self.val_precision.reset()
-        self.val_recall.reset()
+        # self.val_f1.reset()
+        # self.val_precision.reset()
+        # self.val_recall.reset()
 
     def test_step(self, batch, batch_idx: int):
         """Compute the total loss for the test step, as well as the auroc, f1,
@@ -515,9 +527,9 @@ class DeepStylometry(L.LightningModule):
 
             # Update metrics
             self.test_auroc(flat_scores, flat_labels)
-            self.test_f1(flat_scores, flat_labels)
-            self.test_precision(flat_scores, flat_labels)
-            self.test_recall(flat_scores, flat_labels)
+            # self.test_f1(flat_scores, flat_labels)
+            # self.test_precision(flat_scores, flat_labels)
+            # self.test_recall(flat_scores, flat_labels)
 
         self.log_dict(
             {
@@ -537,13 +549,13 @@ class DeepStylometry(L.LightningModule):
         self.log_dict(
             {
                 "test_auroc": self.test_auroc.compute(),
-                "test_f1": self.test_f1.compute(),
-                "test_precision": self.test_precision.compute(),
-                "test_recall": self.test_recall.compute(),
+                # "test_f1": self.test_f1.compute(),
+                # "test_precision": self.test_precision.compute(),
+                # "test_recall": self.test_recall.compute(),
             },
             prog_bar=True,
         )
         self.test_auroc.reset()
-        self.test_f1.reset()
-        self.test_precision.reset()
-        self.test_recall.reset()
+        # self.test_f1.reset()
+        # self.test_precision.reset()
+        # self.test_recall.reset()
