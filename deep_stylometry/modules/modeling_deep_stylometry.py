@@ -7,8 +7,12 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import (BinaryAUROC, BinaryF1Score,
-                                         BinaryPrecision, BinaryRecall)
+from torchmetrics.classification import (
+    BinaryAUROC,
+    BinaryF1Score,
+    BinaryPrecision,
+    BinaryRecall,
+)
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -405,15 +409,6 @@ class DeepStylometry(L.LightningModule):
             on_epoch=False,
             batch_size=self.batch_size,
             logger=True,
-        )
-        self.log(
-            "global_step",
-            self.trainer.global_step,
-            prog_bar=False,
-            on_step=True,
-            on_epoch=False,
-            batch_size=self.batch_size,
-            logger=False,
         )
         self.log_dict(
             {

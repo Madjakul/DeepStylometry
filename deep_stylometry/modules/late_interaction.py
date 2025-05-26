@@ -57,12 +57,12 @@ class LateInteraction(nn.Module):
         self.use_max = use_max
         if self.do_distance:
             self.distance: torch.Tensor
-            self.alpha_raw = nn.Parameter(torch.tensor(alpha))
+            self.alpha_raw = nn.Parameter(torch.tensor(alpha).unsqueeze(0))
             positions = torch.arange(seq_len)
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
             self.register_buffer("distance", distance)
         self.exp_decay = exp_decay
-        self.logit_scale = nn.Parameter(torch.log(torch.tensor(1.0)))
+        self.logit_scale = nn.Parameter(torch.log(torch.tensor(1.0)).unsqueeze(0))
 
     @property
     def alpha(self):

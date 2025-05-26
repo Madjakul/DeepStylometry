@@ -4,6 +4,7 @@ import logging
 import os
 
 import psutil
+import torch
 
 from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.argparsers import TrainArgparse
@@ -18,10 +19,9 @@ logging_config()
 
 
 if __name__ == "__main__":
+    logging.info(f"--- Fine-tuning ---")
     args = TrainArgparse.parse_known_args()
     config = load_config_from_file(args.config_path)
-    logging.info(f"--- Fine-tuning ---")
-    logging.info(f"Config file: {args.config_path}")
 
     dm = train_utils.setup_datamodule(
         config=config,
