@@ -7,9 +7,9 @@ do_test: false
 # --- tuner ---
 num_samples: 30
 max_concurrent_trials: 3
-time_budget_s: 86400 # 24h (in seconds)
-max_t: 820
-grace_period: 410
+time_budget_s: 129600 # 36h (in seconds)
+max_t: 2
+grace_period: 1
 
 # --- datamodule ---
 ds_name: "se" # or halvest
@@ -66,8 +66,8 @@ device: "gpu"
 num_devices_per_trial: 1
 num_cpus_per_trial: 10
 max_epochs: 2 # max_steps: 410
-log_every_n_steps: 32
-accumulate_grad_batches: 32
+log_every_n_steps: 1
+accumulate_grad_batches: 8
 gradient_clip_val:
   type: uniform
   min: 1.0e-3

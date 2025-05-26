@@ -196,14 +196,14 @@ class DeepStylometry(L.LightningModule):
         self.lr = lr
         # Validation metrics
         self.val_auroc = BinaryAUROC(thresholds=None)
-        self.val_f1 = BinaryF1Score()
-        self.val_precision = BinaryPrecision()
-        self.val_recall = BinaryRecall()
+        # self.val_f1 = BinaryF1Score()
+        # self.val_precision = BinaryPrecision()
+        # self.val_recall = BinaryRecall()
         # Test metrics
         self.test_auroc = BinaryAUROC(thresholds=None)
-        self.test_f1 = BinaryF1Score()
-        self.test_precision = BinaryPrecision()
-        self.test_recall = BinaryRecall()
+        # self.test_f1 = BinaryF1Score()
+        # self.test_precision = BinaryPrecision()
+        # self.test_recall = BinaryRecall()
         if contrastive_weight > 0:
             self.contrastive_loss = InfoNCELoss(
                 do_late_interaction=do_late_interaction,
@@ -408,6 +408,7 @@ class DeepStylometry(L.LightningModule):
             on_step=True,
             on_epoch=False,
             batch_size=self.batch_size,
+            logger=True,
         )
         self.log(
             "global_step",
@@ -416,6 +417,7 @@ class DeepStylometry(L.LightningModule):
             on_step=True,
             on_epoch=False,
             batch_size=self.batch_size,
+            logger=False,
         )
         self.log_dict(
             {
@@ -482,6 +484,15 @@ class DeepStylometry(L.LightningModule):
     def on_validation_epoch_end(self):
         """Aggregate and log the validation metrics at the end of the
         validation epoch."""
+        self.log(
+            "completed_epoch",
+            int(self.current_epoch),
+            on_step=False,
+            on_epoch=True,
+            logger=False,
+            sync_dist=True,
+            prog_bar=False,
+        )
         self.log_dict(
             {
                 "val_auroc": self.val_auroc.compute(),

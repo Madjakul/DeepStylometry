@@ -115,11 +115,11 @@ def setup_tuner(
     )
 
     asha_scheduler = AsyncHyperBandScheduler(
-        time_attr="global_step",  # This corresponds to PTL epochs reported by TuneReportCallback
+        time_attr="completed_epoch",  # This corresponds to PTL epochs reported by TuneReportCallback
         # metric="auroc",
         # mode="max",
-        max_t=config.get("max_t", 1000),
-        grace_period=config.get("grace_period", 500),
+        max_t=config.get("max_t", 2),
+        grace_period=config.get("grace_period", 1),
     )
 
     tuner = tune.Tuner(
@@ -143,7 +143,7 @@ def setup_tuner(
             ),
             storage_path=ray_storage_path,
             failure_config=FailureConfig(max_failures=0, fail_fast=True),
-            stop={"timesteps_total": 1250},
+            stop={"global_step": config.get("max_t", 1000)},
             callbacks=callbacks,
         ),
         param_space=search_space,

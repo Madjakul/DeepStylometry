@@ -4,8 +4,11 @@ from typing import Any, Dict, Optional
 
 import lightning as L
 import psutil
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
@@ -222,7 +225,7 @@ def train_tune(
             {
                 "loss": "val_total_loss",
                 "auroc": "val_auroc",
-                "global_step": "global_step",
+                "completed_epoch": "completed_epoch",
                 # "f1": "val_f1",
                 # "precision": "val_precision",
                 # "recall": "val_recall",
@@ -251,9 +254,9 @@ def train_tune(
     trainer = L.Trainer(
         accelerator=merged_config.get("device", "cpu"),
         devices=merged_config.get("num_devices_per_trial", -1),
-        max_steps=config.get("max_steps", -1),
-        max_epochs=config.get("max_epochs", 1),
-        val_check_interval=0.25,
+        max_steps=merged_config.get("max_steps", -1),
+        max_epochs=merged_config.get("max_epochs", 1),
+        val_check_interval=0.5,
         callbacks=callbacks,
         enable_checkpointing=False,
         logger=loggers,
