@@ -1,7 +1,7 @@
 # train.yml
 
 project_name: "deep-stylometry"
-experiment_name: "train-roberta-512-se-li-gumbel-dist-autoexp"
+experiment_name: "train-roberta-adamw-512-se-li-gumbel-dist-autoexp"
 do_test: true
 
 # --- datamodule ---
@@ -15,15 +15,15 @@ load_from_cache_file: true
 mlm_collator: false # only if you use an encoder
 
 # --- model ---
-optim_name: "soap"
+optim_name: "adamw"
 base_model_name: "FacebookAI/roberta-base"
 is_decoder_model: false
-lr: 2.4e-4
+lr: 2.8e-5
 dropout: 0.1
-weight_decay: 0.05
+weight_decay: 0.015
 lm_weight: 0.0
 contrastive_weight: 1.0
-contrastive_temp: 0.3
+contrastive_temp: 0.13
 # --- late interaction
 do_late_interaction: true
 initial_gumbel_temp: 2.0 # null
@@ -38,12 +38,12 @@ exp_decay: true
 
 # --- wandb logger ---
 use_wandb: true
-log_model: false
+log_model: "all"
 
 # --- trainer ---
 device: "gpu"
-num_devices: 1
-# strategy: "ddp_find_unused_parameters_true"
+num_devices: 2
+strategy: "ddp_find_unused_parameters_true"
 # --- early stopping
 early_stopping: false
 # early_stopping_metric: "val_total_loss"
@@ -52,12 +52,12 @@ early_stopping: false
 # --- checkpointing
 checkpoint_metric: "val_auroc" # only if a checkpoint directory was provided
 checkpoint_mode: "max"
-save_top_k: 1
+save_top_k: 4
 # --- other
 max_epochs: 4 # max_steps: 7000
-val_check_interval: 0.5
+# val_check_interval: 0.5
 log_every_n_steps: 1
-accumulate_grad_batches: 32
+accumulate_grad_batches: 16
 gradient_clip_val: 0.3
 precision: "32" # 32-true or bf16-mixed
 

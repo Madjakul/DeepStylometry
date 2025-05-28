@@ -1,5 +1,6 @@
 # deep_stylometry/utils/train_utils.py
 
+import os.path as osp
 from typing import Any, Dict, Optional
 
 import lightning as L
@@ -34,7 +35,8 @@ def setup_datamodule(
     cache_dir: Optional[str]
         Directory to cache the dataset.
     num_proc: Optional[int]
-        Number of processes to use for data loading. If None, defaults to the number of CPUs.
+        Number of processes to use for data loading. If None, defaults to the number
+        of CPUs.
 
     Returns
     -------
@@ -142,7 +144,9 @@ def setup_trainer(
     # Model checkpoint callback if checkpoint_dir is provided
     if checkpoint_dir is not None:
         checkpoint_callback = ModelCheckpoint(
-            dirpath=checkpoint_dir,
+            dirpath=osp.join(
+                checkpoint_dir, config.get("experiment_name", "training-run")
+            ),
             filename="{epoch}-{val_auroc:.4f}",
             monitor=config.get("checkpoint_metric", "val_auroc"),
             mode=config.get("checkpoint_mode", "max"),
@@ -177,7 +181,7 @@ def setup_trainer(
         devices=config.get("num_devices", -1),
         max_steps=config.get("max_steps", -1),
         max_epochs=config.get("max_epochs", 1),
-        val_check_interval=config.get("val_check_interval", 1000),
+        val_check_interval=config.get("val_check_interval", None),
         enable_checkpointing=checkpoint_dir is not None,
         logger=loggers,
         callbacks=callbacks,
@@ -207,7 +211,8 @@ def train_tune(
     cache_dir: Optional[str]
         Directory to cache the dataset.
     num_proc: Optional[int]
-        Number of processes to use for data loading. If None, defaults to the number of CPUs.
+        Number of processes to use for data loading. If None, defaults to the number
+        of CPUs.
     """
     merged_config = base_config.copy()
     merged_config.update(config)

@@ -4,7 +4,6 @@ import logging
 import os
 
 import psutil
-import torch
 
 from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.argparsers import TrainArgparse

@@ -10,14 +10,27 @@ LOGS_DIR=$PROJECT_ROOT/logs
 
 # --------------------------------------------------------------------------------------
 
+SLURM=true
 # CACHE_DIR=$DATA_ROOT/responses/
 CHECKPOINT_DIR=$PROJECT_ROOT/tmp/checkpoints/
 NUM_PROC=16
 #
 
 # **************************************************************************************
+cmd=()
 
-cmd=(python3 "$PROJECT_ROOT/train.py"
+if [[ -v SLURM ]]; then
+    echo "SLURM_JOB_ID: $SLURM_JOB_ID"
+    echo "SLURM_JOB_NODELIST: $SLURM_JOB_NODELIST"
+    echo "SLURM_NNODES: $SLURM_NNODES"
+    echo "SLURM_NTASKS: $SLURM_NTASKS"
+    echo "SLURM_TASKS_PER_NODE: $SLURM_TASKS_PER_NODE"
+    echo "SLURM_GPUS_ON_NODE: $SLURM_GPUS_ON_NODE"
+    echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
+    cmd+=(srun)
+fi
+
+cmd+=(python3 "$PROJECT_ROOT/train.py"
     --config_path "$CONFIG_PATH"
     --logs_dir "$LOGS_DIR")
 
