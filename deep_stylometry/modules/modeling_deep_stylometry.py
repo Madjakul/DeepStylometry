@@ -454,10 +454,11 @@ class DeepStylometry(L.LightningModule):
             flat_labels = binary_labels.flatten()
 
             # Update metrics
-            self.val_auroc(flat_scores, flat_labels)
-            # self.val_f1(flat_scores, flat_labels)
-            # self.val_precision(flat_scores, flat_labels)
-            # self.val_recall(flat_scores, flat_labels)
+            if flat_scores.numel() > 0:
+                self.val_auroc(flat_scores, flat_labels)
+                # self.val_f1(flat_scores, flat_labels)
+                # self.val_precision(flat_scores, flat_labels)
+                # self.val_recall(flat_scores, flat_labels)
 
         self.log_dict(
             {
@@ -486,15 +487,17 @@ class DeepStylometry(L.LightningModule):
         )
         self.log_dict(
             {
-                "val_auroc": self.val_auroc.compute(),
+                "val_auroc": self.val_auroc,
                 # "val_f1": self.val_f1.compute(),
                 # "val_precision": self.val_precision.compute(),
                 # "val_recall": self.val_recall.compute(),
             },
             prog_bar=True,
-            sync_dist=True,
+            # sync_dist=True,
+            on_step=False,
+            on_epoch=True,
         )
-        self.val_auroc.reset()
+        # self.val_auroc.reset()
         # self.val_f1.reset()
         # self.val_precision.reset()
         # self.val_recall.reset()
@@ -528,10 +531,11 @@ class DeepStylometry(L.LightningModule):
             flat_labels = binary_labels.flatten()
 
             # Update metrics
-            self.test_auroc(flat_scores, flat_labels)
-            # self.test_f1(flat_scores, flat_labels)
-            # self.test_precision(flat_scores, flat_labels)
-            # self.test_recall(flat_scores, flat_labels)
+            if flat_scores.numel() > 0:
+                self.test_auroc(flat_scores, flat_labels)
+                # self.test_f1(flat_scores, flat_labels)
+                # self.test_precision(flat_scores, flat_labels)
+                # self.test_recall(flat_scores, flat_labels)
 
         self.log_dict(
             {
@@ -550,12 +554,14 @@ class DeepStylometry(L.LightningModule):
         """Aggregate and log the test metrics at the end of the test epoch."""
         self.log_dict(
             {
-                "test_auroc": self.test_auroc.compute(),
+                "test_auroc": self.test_auroc,
                 # "test_f1": self.test_f1.compute(),
                 # "test_precision": self.test_precision.compute(),
                 # "test_recall": self.test_recall.compute(),
             },
             prog_bar=True,
+            on_step=False,
+            on_epoch=True,
         )
         self.test_auroc.reset()
         # self.test_f1.reset()

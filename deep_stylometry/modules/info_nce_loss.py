@@ -138,7 +138,11 @@ class InfoNCELoss(nn.Module):
 
         # Early exit if no positive pairs in the batch
         if pos_mask.sum() == 0:
-            return torch.tensor(0.0, device=query_embs.device)
+            return (
+                torch.empty(0, batch_size, device=query_embs.device),
+                torch.empty(0, dtype=torch.long, device=query_embs.device),
+                torch.tensor(0.0, device=query_embs.device, requires_grad=True),
+            )
 
         # --- 3. Prepare for CrossEntropyLoss ---
         # Select rows corresponding to positive queries
