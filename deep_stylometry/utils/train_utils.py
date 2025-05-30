@@ -5,8 +5,11 @@ from typing import Any, Dict, Optional
 
 import lightning as L
 import psutil
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
@@ -155,6 +158,10 @@ def setup_trainer(
     # Configure loggers
     loggers = []
     if use_wandb:
+        watch_kwargs = {
+            "log": config.get("watch", None),
+            "log_freq": config.get("accumulate_grad_batches", 10),
+        }
         wandb_logger = WandbLogger(
             project=config.get("project_name", "deep-stylometry"),
             name=config.get("experiment_name", "training-run"),
@@ -162,6 +169,7 @@ def setup_trainer(
             group=f"""train-{config['ds_name']}-{config['base_model_name']}
                 -li/{config['do_late_interaction']}-max/{config['use_max']}
                 -dist/{config['do_distance']}-expd/{config['exp_decay']}""",
+            watch_model_kwargs=watch_kwargs,
         )
         loggers.append(wandb_logger)
 

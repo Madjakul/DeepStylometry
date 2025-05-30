@@ -1,7 +1,7 @@
 # train.yml
 
 project_name: "deep-stylometry"
-experiment_name: "train-roberta-adamw-512-se-li-gumbel-dist-autoexp"
+experiment_name: "train-roberta-adamw-512-se-li-gumbel-dist-autoexp-v2"
 do_test: true
 
 # --- datamodule ---
@@ -39,6 +39,7 @@ exp_decay: true
 # --- wandb logger ---
 use_wandb: true
 log_model: "all"
+watch: "gradients" # all, gradients, parameters or null
 
 # --- trainer ---
 device: "gpu"
