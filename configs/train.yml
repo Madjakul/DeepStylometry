@@ -43,7 +43,7 @@ log_model: "all"
 # --- trainer ---
 device: "gpu"
 num_devices: 2
-strategy: "ddp" # "ddp_find_unused_parameters_true"
+strategy: "ddp_find_unused_parameters_true" # "ddp"
 # --- early stopping
 early_stopping: false
 # early_stopping_metric: "val_total_loss"

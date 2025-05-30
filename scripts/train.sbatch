@@ -2,8 +2,7 @@
 
 #SBATCH --job-name=deep_strylometry_train                # Job name
 #SBATCH --nodes=1                                       # Run all processes on a single node
-#SBATCH --ntasks=2                                      # Run a single task
-#SBATCH --ntasks-per-node=2                                # Number of tasks per node
+#SBATCH --ntasks=1                                      # Run a single task
 #SBATCH --partition=almanach                            # GPU parition
 #SBATCH --gres=gpu:rtx8000:2                                    # Request 1 GPU
 #SBATCH --cpus-per-task=16                              # Number of CPU cores per task
@@ -16,5 +15,9 @@ source /home/$USER/.bashrc
 conda activate deep_stylometry
 
 mkdir logs || true
+
+export TORCH_NCCL_TRACE_BUFFER_SIZE=1048576 # (e.g., 1MB)
+export CUDA_LAUNCH_BLOCKING=1
+export NCCL_DEBUG=INFO
 
 ./scripts/train.sh

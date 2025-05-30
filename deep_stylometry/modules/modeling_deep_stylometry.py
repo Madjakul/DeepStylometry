@@ -7,8 +7,12 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import (BinaryAUROC, BinaryF1Score,
-                                         BinaryPrecision, BinaryRecall)
+from torchmetrics.classification import (
+    BinaryAUROC,
+    BinaryF1Score,
+    BinaryPrecision,
+    BinaryRecall,
+)
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -452,9 +456,9 @@ class DeepStylometry(L.LightningModule):
             # Update metrics
             if flat_scores.numel() > 0:
                 self.val_auroc(flat_scores, flat_labels)
-                # self.val_f1(flat_scores, flat_labels)
-                # self.val_precision(flat_scores, flat_labels)
-                # self.val_recall(flat_scores, flat_labels)
+            # self.val_f1(flat_scores, flat_labels)
+            # self.val_precision(flat_scores, flat_labels)
+            # self.val_recall(flat_scores, flat_labels)
 
         self.log_dict(
             {
@@ -529,9 +533,9 @@ class DeepStylometry(L.LightningModule):
             # Update metrics
             if flat_scores.numel() > 0:
                 self.test_auroc(flat_scores, flat_labels)
-                # self.test_f1(flat_scores, flat_labels)
-                # self.test_precision(flat_scores, flat_labels)
-                # self.test_recall(flat_scores, flat_labels)
+            # self.test_f1(flat_scores, flat_labels)
+            # self.test_precision(flat_scores, flat_labels)
+            # self.test_recall(flat_scores, flat_labels)
 
         self.log_dict(
             {
