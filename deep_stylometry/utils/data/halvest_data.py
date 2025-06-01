@@ -6,12 +6,16 @@ import lightning as L
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 
-from deep_stylometry.utils.data.custom_data_collator import \
-    CustomDataCollatorForLanguageModeling
+from deep_stylometry.utils.data.custom_data_collator import (
+    CustomDataCollatorForLanguageModeling,
+)
 from deep_stylometry.utils.helpers import get_tokenizer
 
 
 class HALvestDataModule(L.LightningDataModule):
+
+    test_dataset = None
+
     def __init__(
         self,
         batch_size: int,
@@ -117,7 +121,7 @@ class HALvestDataModule(L.LightningDataModule):
                 self.train_dataset = train_dataset.with_format("torch")
                 self.val_dataset = val_dataset.with_format("torch")
 
-        if stage == "test" or stage is None:
+        if (stage == "test" or stage is None) and self.test_dataset is None:
             test_dataset = ds["test"].map(  # type: ignore
                 self.tokenize_function,
                 batched=True,
@@ -143,7 +147,6 @@ class HALvestDataModule(L.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_proc,
             collate_fn=self.mlm_collator,
-            shuffle=True,
         )
 
     def test_dataloader(self):

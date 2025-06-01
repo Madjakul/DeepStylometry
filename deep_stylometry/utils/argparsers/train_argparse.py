@@ -41,6 +41,12 @@ class TrainArgparse:
             help="Directory where the checkpoints are stored.",
         )
         parser.add_argument(
+            "--checkpoint_path",
+            type=str,
+            default=None,
+            help="Path to a checkpoint file if it exists.",
+        )
+        parser.add_argument(
             "--cache_dir",
             type=str,
             default=None,

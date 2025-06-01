@@ -13,6 +13,7 @@ LOGS_DIR=$PROJECT_ROOT/logs
 SLURM=true
 # CACHE_DIR=$DATA_ROOT/responses/
 CHECKPOINT_DIR=$PROJECT_ROOT/tmp/checkpoints/
+CHECKPOINT_PATH=$CHECKPOINT_DIR/train-roberta-adamw-512-se-li-gumbel-dist-autoexp-v2/epoch=3-val_auroc=0.8056.ckpt
 NUM_PROC=16
 #
 
@@ -43,6 +44,10 @@ fi
 if [[ -v CHECKPOINT_DIR ]]; then
     mkdir -p "$CHECKPOINT_DIR" || true
     cmd+=(--checkpoint_dir "$CHECKPOINT_DIR")
+fi
+
+if [[ -v CHECKPOINT_PATH ]]; then
+    cmd+=(--checkpoint_path "$CHECKPOINT_PATH")
 fi
 
 if [[ -v NUM_PROC ]]; then
