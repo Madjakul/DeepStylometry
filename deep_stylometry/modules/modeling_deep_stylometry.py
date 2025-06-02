@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchmetrics.classification import (
+    AUROC,
     BinaryAUROC,
     BinaryF1Score,
     BinaryPrecision,
@@ -200,7 +201,10 @@ class DeepStylometry(L.LightningModule):
         # self.val_precision = BinaryPrecision()
         # self.val_recall = BinaryRecall()
         # Test metrics
-        self.test_auroc = BinaryAUROC(thresholds=None)
+        # self.test_auroc = BinaryAUROC(thresholds=None)
+        self.test_auroc = AUROC(
+            task="multiclass", num_classes=batch_size, average="macro"
+        )
         # self.test_f1 = BinaryF1Score()
         # self.test_precision = BinaryPrecision()
         # self.test_recall = BinaryRecall()
@@ -515,22 +519,33 @@ class DeepStylometry(L.LightningModule):
         """
         metrics = self._compute_losses(batch)
         if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
-            pos_query_scores = metrics["pos_query_scores"]
-            pos_query_targets = metrics["pos_query_targets"]
+            preds = F.softmax(metrics["pos_query_scores"], dim=-1)
+            targets = metrics["pos_query_targets"]
+            # print(f"pos_query_scores: {preds}")
+            # print(f"pos_query_targets: {targets}")
 
             # Generate binary labels (1 for correct key, 0 otherwise)
-            binary_labels = torch.zeros_like(pos_query_scores, dtype=torch.long)
-            rows = torch.arange(
-                pos_query_scores.size(0), device=pos_query_scores.device
-            )
-            binary_labels[rows, pos_query_targets] = 1
-
-            # Flatten scores and labels
-            flat_scores = pos_query_scores.flatten()
-            flat_labels = binary_labels.flatten()
+            # binary_labels = torch.zeros_like(pos_query_scores, dtype=torch.long)
+            # rows = torch.arange(
+            #     pos_query_scores.size(0), device=pos_query_scores.device
+            # )
+            # binary_labels[rows, pos_query_targets] = 1
+            #
+            # # Flatten scores and labels
+            # flat_scores = pos_query_scores.flatten()
+            # flat_labels = binary_labels.flatten()
 
             # Update metrics
-            self.test_auroc(flat_scores, flat_labels)
+            # print(flat_scores)
+            # print(flat_labels)
+            self.test_auroc(preds, targets)
+            self.log(
+                "test_auroc",
+                self.test_auroc,
+                prog_bar=True,
+                on_step=True,
+                on_epoch=True,
+            )
             # self.test_f1(flat_scores, flat_labels)
             # self.test_precision(flat_scores, flat_labels)
             # self.test_recall(flat_scores, flat_labels)
@@ -547,21 +562,3 @@ class DeepStylometry(L.LightningModule):
             sync_dist=True,
             batch_size=self.batch_size,
         )
-
-    def on_test_epoch_end(self):
-        """Aggregate and log the test metrics at the end of the test epoch."""
-        self.log_dict(
-            {
-                "test_auroc": self.test_auroc,
-                # "test_f1": self.test_f1.compute(),
-                # "test_precision": self.test_precision.compute(),
-                # "test_recall": self.test_recall.compute(),
-            },
-            prog_bar=True,
-            on_step=False,
-            on_epoch=True,
-        )
-        self.test_auroc.reset()
-        # self.test_f1.reset()
-        # self.test_precision.reset()
-        # self.test_recall.reset()

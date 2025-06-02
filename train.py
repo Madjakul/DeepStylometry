@@ -59,7 +59,13 @@ if __name__ == "__main__":
             )
 
         test_trainer = train_utils.setup_trainer(
-            config={**config, "num_devices": 1, "strategy": "auto", "max_epochs": 1},
+            config={
+                **config,
+                "num_devices": 1,
+                "strategy": "auto",
+                "max_epochs": 1,
+                "accumulate_grad_batches": 1,
+            },
             model=model,
             logs_dir=args.logs_dir,
             use_wandb=config.get("use_wandb"),
