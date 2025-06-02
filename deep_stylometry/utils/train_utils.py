@@ -6,8 +6,11 @@ from typing import Any, Dict, Optional
 import lightning as L
 import psutil
 import torch
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
@@ -174,7 +177,7 @@ def setup_trainer(
                 model=model,
                 log=watch,
                 log_graph=False,
-                log_freq=config.get("accumulate_grad_batches", 100),
+                log_freq=config.get("accumulate_grad_batches", 1) * 100,
             )
         loggers.append(wandb_logger)
 
