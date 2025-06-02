@@ -543,7 +543,7 @@ class DeepStylometry(L.LightningModule):
                 "test_auroc",
                 self.test_auroc,
                 prog_bar=True,
-                on_step=True,
+                on_step=False,
                 on_epoch=True,
             )
             # self.test_f1(flat_scores, flat_labels)
