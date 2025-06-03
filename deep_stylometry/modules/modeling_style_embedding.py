@@ -7,7 +7,8 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import AUROC, Accuracy, F1Score, Precision, Recall
+from torchmetrics.classification import (AUROC, Accuracy, F1Score, Precision,
+                                         Recall)
 from transformers import AutoModel, get_linear_schedule_with_warmup
 
 
