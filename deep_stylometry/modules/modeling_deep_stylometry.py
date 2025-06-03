@@ -7,13 +7,7 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import (
-    AUROC,
-    BinaryAUROC,
-    BinaryF1Score,
-    BinaryPrecision,
-    BinaryRecall,
-)
+from torcheval.metrics import BinaryAUROC, HitRate, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -196,18 +190,14 @@ class DeepStylometry(L.LightningModule):
         self.dropout = dropout
         self.lr = lr
         # Validation metrics
-        self.val_auroc = BinaryAUROC(thresholds=None)
-        # self.val_f1 = BinaryF1Score()
-        # self.val_precision = BinaryPrecision()
-        # self.val_recall = BinaryRecall()
+
         # Test metrics
-        # self.test_auroc = BinaryAUROC(thresholds=None)
-        self.test_auroc = AUROC(
-            task="multiclass", num_classes=batch_size, average="macro"
-        )
-        # self.test_f1 = BinaryF1Score()
-        # self.test_precision = BinaryPrecision()
-        # self.test_recall = BinaryRecall()
+        self.test_auroc = BinaryAUROC()
+        self.test_hr1 = HitRate(k=1)
+        self.test_hr5 = HitRate(k=5)
+        self.test_hr10 = HitRate(k=10)
+        self.test_rr = ReciprocalRank()
+
         if contrastive_weight > 0:
             self.contrastive_loss = InfoNCELoss(
                 do_late_interaction=do_late_interaction,
@@ -460,7 +450,7 @@ class DeepStylometry(L.LightningModule):
             flat_labels = binary_labels.flatten()
 
             # Update metrics
-            self.val_auroc(flat_scores, flat_labels)
+            # self.val_auroc(flat_scores, flat_labels)
             # self.val_f1(flat_scores, flat_labels)
             # self.val_precision(flat_scores, flat_labels)
             # self.val_recall(flat_scores, flat_labels)
@@ -492,7 +482,7 @@ class DeepStylometry(L.LightningModule):
         )
         self.log_dict(
             {
-                "val_auroc": self.val_auroc,
+                # "val_auroc": self.val_auroc,
                 # "val_f1": self.val_f1.compute(),
                 # "val_precision": self.val_precision.compute(),
                 # "val_recall": self.val_recall.compute(),
@@ -521,36 +511,16 @@ class DeepStylometry(L.LightningModule):
         """
         metrics = self._compute_losses(batch)
         if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
-            preds = F.softmax(metrics["pos_query_scores"], dim=-1)
-            targets = metrics["pos_query_targets"]
-            # print(f"pos_query_scores: {preds}")
-            # print(f"pos_query_targets: {targets}")
+            pos_preds = F.softmax(metrics["pos_query_scores"], dim=-1)
+            preds = F.softmax(metrics["all_scores"], dim=-1).diag()
+            pos_targets = metrics["pos_query_targets"]
+            targets = batch["author_label"]
 
-            # Generate binary labels (1 for correct key, 0 otherwise)
-            # binary_labels = torch.zeros_like(pos_query_scores, dtype=torch.long)
-            # rows = torch.arange(
-            #     pos_query_scores.size(0), device=pos_query_scores.device
-            # )
-            # binary_labels[rows, pos_query_targets] = 1
-            #
-            # # Flatten scores and labels
-            # flat_scores = pos_query_scores.flatten()
-            # flat_labels = binary_labels.flatten()
-
-            # Update metrics
-            # print(flat_scores)
-            # print(flat_labels)
-            self.test_auroc(preds, targets)
-            self.log(
-                "test_auroc",
-                self.test_auroc,
-                prog_bar=True,
-                on_step=False,
-                on_epoch=True,
-            )
-            # self.test_f1(flat_scores, flat_labels)
-            # self.test_precision(flat_scores, flat_labels)
-            # self.test_recall(flat_scores, flat_labels)
+            self.test_auroc.update(preds, targets)
+            self.test_hr1.update(pos_preds, pos_targets)
+            self.test_hr5.update(pos_preds, pos_targets)
+            self.test_hr10.update(pos_preds, pos_targets)
+            self.test_rr.update(preds, targets)
 
         self.log_dict(
             {
@@ -564,3 +534,24 @@ class DeepStylometry(L.LightningModule):
             sync_dist=True,
             batch_size=self.batch_size,
         )
+
+    def on_test_epoch_end(self):
+        if self.contrastive_weight > 0:
+            auroc = self.test_auroc.compute()
+            avg_hr1 = self.test_hr1.compute().mean()
+            avg_hr5 = self.test_hr5.compute().mean()
+            avg_hr10 = self.test_hr10.compute().mean()
+            mrr = self.test_rr.compute().mean()
+            self.log_dict(
+                {
+                    "test_auroc": auroc,
+                    "test_hr1": avg_hr1,
+                    "test_hr5": avg_hr5,
+                    "test_hr10": avg_hr10,
+                    "test_mrr": mrr,
+                },
+                prog_bar=False,
+                on_step=False,
+                on_epoch=True,
+                sync_dist=True,
+            )
