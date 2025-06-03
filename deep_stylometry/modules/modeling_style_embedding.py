@@ -7,8 +7,7 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import (AUROC, Accuracy, F1Score, Precision,
-                                         Recall)
+from torcheval.metrics import BinaryAUROC, HitRate, ReciprocalRank
 from transformers import AutoModel, get_linear_schedule_with_warmup
 
 
@@ -26,18 +25,12 @@ class StyleEmbedding(L.LightningModule):
         self.lr = lr
         self.weight_decay = weight_decay
 
-        self.val_auroc = AUROC(
-            task="multiclass", num_classes=batch_size, average="macro"
-        )
-        self.val_f1 = F1Score()
-        self.val_precision = Precision()
-        self.val_recall = Recall()
-        self.test_auroc = AUROC(
-            task="multiclass", num_classes=batch_size, average="macro"
-        )
-        self.test_f1 = F1Score()
-        self.test_precision = Precision()
-        self.test_recall = Recall()
+        # Test metrics
+        self.test_auroc = BinaryAUROC()
+        self.test_hr1 = HitRate(k=1)
+        self.test_hr5 = HitRate(k=5)
+        self.test_hr10 = HitRate(k=10)
+        self.test_rr = ReciprocalRank()
 
         self.model = AutoModel.from_pretrained(base_model_name)
 

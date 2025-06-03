@@ -520,7 +520,7 @@ class DeepStylometry(L.LightningModule):
             self.test_hr1.update(pos_preds, pos_targets)
             self.test_hr5.update(pos_preds, pos_targets)
             self.test_hr10.update(pos_preds, pos_targets)
-            self.test_rr.update(preds, targets)
+            self.test_rr.update(pos_preds, pos_targets)
 
         self.log_dict(
             {
