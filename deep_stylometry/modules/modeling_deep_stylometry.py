@@ -7,8 +7,13 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import (AUROC, BinaryAUROC, BinaryF1Score,
-                                         BinaryPrecision, BinaryRecall)
+from torchmetrics.classification import (
+    AUROC,
+    BinaryAUROC,
+    BinaryF1Score,
+    BinaryPrecision,
+    BinaryRecall,
+)
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -236,10 +241,11 @@ class DeepStylometry(L.LightningModule):
         )
 
         contrastive_loss = 0.0
+        all_scores = None
         pos_query_scores = None
         pos_query_targets = None
         if self.contrastive_weight > 0:
-            pos_query_scores, pos_query_targets, contrastive_loss = (
+            all_scores, pos_query_scores, pos_query_targets, contrastive_loss = (
                 self.contrastive_loss(
                     q_embs,
                     k_embs,
@@ -255,6 +261,7 @@ class DeepStylometry(L.LightningModule):
         )
 
         metrics = {
+            "all_scores": all_scores,
             "pos_query_scores": pos_query_scores,
             "pos_query_targets": pos_query_targets,
             "lm_loss": lm_loss * self.lm_weight,

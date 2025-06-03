@@ -98,6 +98,8 @@ class InfoNCELoss(nn.Module):
 
         Returns
         -------
+        all_scores: torch.Tensor
+            The similarity scores for all query-key pairs. Shape (B, B).
         pos_query_scores: torch.Tensor
             The similarity scores for the positive query-key pairs. Shape (num_pos, B).
         pos_query_targets: torch.Tensor
@@ -158,4 +160,4 @@ class InfoNCELoss(nn.Module):
             pos_query_scores, pos_query_targets, reduction="mean"
         )
 
-        return pos_query_scores, pos_query_targets, contrastive_loss
+        return all_scores, pos_query_scores, pos_query_targets, contrastive_loss
