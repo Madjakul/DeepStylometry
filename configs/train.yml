@@ -1,9 +1,9 @@
 # train.yml
 
 project_name: "deep-stylometry"
-experiment_name: "train-roberta-adamw-512-se-li-gumbel-dist-autoexp-v2"
-do_test: true
+experiment_name: test-baseline-styleembedding # "train-roberta-adamw-512-se-li-gumbel-dist-autoexp-v2"
 do_train: false
+do_test: true
 
 # --- datamodule ---
 ds_name: "se" # or halvest
@@ -16,6 +16,7 @@ load_from_cache_file: true
 mlm_collator: false # only if you use an encoder
 
 # --- model ---
+architecture: "style-embedding"
 optim_name: "adamw"
 base_model_name: "FacebookAI/roberta-base"
 is_decoder_model: false

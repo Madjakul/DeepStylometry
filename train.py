@@ -5,7 +5,7 @@ import os
 
 import psutil
 
-from deep_stylometry.modules import DeepStylometry
+from deep_stylometry.modules import DeepStylometry, StyleEmbedding
 from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.argparsers import TrainArgparse
 from deep_stylometry.utils.helpers import load_config_from_file
@@ -41,6 +41,7 @@ if __name__ == "__main__":
         trainer = train_utils.setup_trainer(
             config=config,
             model=model,
+            testing_mode=False,
             logs_dir=args.logs_dir,
             use_wandb=config.get("use_wandb"),
             checkpoint_dir=args.checkpoint_dir,
@@ -51,12 +52,15 @@ if __name__ == "__main__":
     if config["do_test"]:
         logging.info("--- Testing ---")
         # Check if 'model' is defined in the current scope; if not, load from checkpoint
-        if "model" not in locals() and args.checkpoint_path is not None:
-            model = DeepStylometry.load_from_checkpoint(args.checkpoint_path)
-        elif "model" not in locals():
-            raise ValueError(
-                "Model is not accessible, and no 'test_checkpoint_path' was provided."
-            )
+        if config["architecture"].lower() == "deep-stylometry":
+            if "model" not in locals() and args.checkpoint_path is not None:
+                model = DeepStylometry.load_from_checkpoint(args.checkpoint_path)
+            elif "model" not in locals():
+                raise ValueError(
+                    "Model is not accessible, and no 'checkpoint_path' was provided."
+                )
+        else:
+            model = StyleEmbedding()
 
         test_trainer = train_utils.setup_trainer(
             config={
@@ -67,6 +71,7 @@ if __name__ == "__main__":
                 "accumulate_grad_batches": 1,
             },
             model=model,
+            testing_mode=True,
             logs_dir=args.logs_dir,
             use_wandb=config.get("use_wandb"),
             checkpoint_dir=None,  # No checkpointing needed during testing

@@ -16,132 +16,6 @@ from deep_stylometry.optimizers import SOAP, SophiaG
 
 
 class DeepStylometry(L.LightningModule):
-    """DeepStylometry model for stylometry tasks. This model combines a
-    language model with a contrastive loss function to learn representations of
-    text data. The model can be trained using different optimizers and supports
-    various hyperparameters for fine-tuning.
-
-    The language model can be either a decoder model (e.g., GPT-2) or an
-    encoder model (e.g., BERT) based on the specified model name. The
-    contrastive loss is computed using InfoNCE, where the distance between
-    query and key sentences is computed using cosine similarity over the average
-    embeddings of the sentences or using a modified late interaction approach.
-    The importance of the language model loss and contrastive loss can be
-    controlled using the `lm_weight` and `contrastive_weight` hyperparameters.
-
-    By default, the scheduler uses a cosine annealing schedule with warmup steps.
-
-    Parameters
-    ----------
-    optim_name: str
-        The name of the optimizer to use. Options are "adamw", "soap", or "sophia".
-    base_model_name: str
-        The name of the pretrained model to load from Hugging Face's transformers
-        library.
-    batch_size: int
-        The batch size for training and evaluation.
-    seq_len: int
-        The maximum sequence length of the input sentences.
-    is_decoder_model: bool
-        If True, load a decoder model (e.g., GPT-2). If False, load an encoder
-        model (e.g., BERT). This parameter determines the type of model to load
-        and affects the behavior of the forward method.
-    lr: float
-        The learning rate for the optimizer.
-    dropout: float
-        The dropout rate for the model.
-    weight_decay: float
-        The weight decay for the optimizer.
-    lm_weight: float
-        The weight for the language model loss. Default is 1.0.
-    contrastive_weight: float
-        The weight for the contrastive loss. Default is 1.0.
-    contrastive_temp: float
-        The temperature parameter for the contrastive loss. Default is 7e-2.
-    do_late_interaction: bool
-        If True, use late interaction to compute the similarity scores.
-    use_max: bool
-        If True, use maximum cosine similarity for late interaction. If False, use Gumbel softmax.
-    initial_gumbel_temp: float
-        The initial temperature for the Gumbel softmax, if `use_max` is False. Default is 1.0.
-        auto_anneal_gumbel: bool
-        If True, automatically anneal the Gumbel temperature linearly alongside the optimizer
-        steps during training. Default is True.
-    gumbel_linear_delta: float
-        The linear delta for the Gumbel temperature. If `auto_anneal_gumbel` is True, this
-        parameter is ignored. Default is 1e-3.
-    min_gumbel_temp: float
-        The minimum Gumbel temperature. Default is 1e-6.
-        do_distance: bool
-        If True, use distance-based weighting for late interaction.
-    exp_decay: bool
-        If True, use exponential decay for the distance weights. Only if
-        `do_distance` is True.
-    alpha: float
-        The alpha parameter for the exponential decay function. Only if
-        `do_distance` is True.
-    project_up: Optional[bool]
-        If True, project the embeddings up to a higher dimension before
-        computing the contrastive loss. If False, project down to the same
-        dimension. If None, use the default projection (up to 4x the hidden
-        size).
-
-    Attributes
-    ----------
-    lm: LanguageModel
-        The language model used for the task.
-    is_decoder_model: bool
-        Indicates whether the loaded model is a decoder model (True) or an
-        encoder model (False).
-    lm_weight: float
-        The weight for the language model loss.
-    contrastive_weight: float
-        The weight for the contrastive loss.
-    initial_gumbel_temp: float
-        The initial temperature for the Gumbel softmax.
-    gumbel_temp: float
-        The current Gumbel temperature.
-    gumbel_linear_delta: Optional[float]
-        The linear delta for the Gumbel temperature.
-    optim_name: str
-        The name of the optimizer to use.
-    batch_size: int
-        The batch size for training and evaluation.
-    min_gumbel_temp: float
-        The minimum Gumbel temperature.
-    auto_anneal_gumbel: bool
-        If True, automatically anneal the Gumbel temperature linearly alongside
-        the optimizer steps during training.
-    dropout: float
-        The dropout rate for the model.
-    lr: float
-        The learning rate for the optimizer.
-    val_auroc: BinaryAUROC
-        The AUROC metric for validation.
-    val_f1: BinaryF1Score
-        The F1 score metric for validation.
-    val_precision: BinaryPrecision
-        The precision metric for validation.
-    val_recall: BinaryRecall
-        The recall metric for validation.
-    test_auroc: BinaryAUROC
-        The AUROC metric for testing.
-    test_f1: BinaryF1Score
-        The F1 score metric for testing.
-    test_precision: BinaryPrecision
-        The precision metric for testing.
-    test_recall: BinaryRecall
-        The recall metric for testing.
-    contrastive_loss: InfoNCELoss
-        The contrastive loss function used for training.
-    fc1: nn.Linear
-        The first linear layer for projecting the embeddings.
-    fc2: nn.Linear
-        The second linear layer for projecting the embeddings.
-    optim_map: Dict[str, Type[torch.optim.Optimizer]]
-        A mapping of optimizer names to their corresponding PyTorch
-        optimizer classes.
-    """
 
     optim_map = {
         "adamw": torch.optim.AdamW,
@@ -175,21 +49,30 @@ class DeepStylometry(L.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()  # Save hyperparameters
-        self.weight_decay = weight_decay
-        self.lm = LanguageModel(base_model_name, is_decoder_model)
+
+        # Misc
         self.is_decoder_model = is_decoder_model
         self.lm_weight = lm_weight
         self.contrastive_weight = contrastive_weight
         self.initial_gumbel_temp = initial_gumbel_temp
         self.gumbel_temp = initial_gumbel_temp
         self.gumbel_linear_delta = gumbel_linear_delta
-        self.optim_name = optim_name.lower()
-        self.batch_size = batch_size
         self.min_gumbel_temp = min_gumbel_temp
         self.auto_anneal_gumbel = auto_anneal_gumbel
+
+        # Training
+        self.weight_decay = weight_decay
+        self.optim_name = optim_name.lower()
+        self.batch_size = batch_size
         self.dropout = dropout
         self.lr = lr
+
         # Validation metrics
+        self.val_auroc = BinaryAUROC()
+        self.val_hr1 = HitRate(k=1)
+        self.val_hr5 = HitRate(k=5)
+        self.val_hr10 = HitRate(k=10)
+        self.val_rr = ReciprocalRank()
 
         # Test metrics
         self.test_auroc = BinaryAUROC()
@@ -198,6 +81,8 @@ class DeepStylometry(L.LightningModule):
         self.test_hr10 = HitRate(k=10)
         self.test_rr = ReciprocalRank()
 
+        # Model
+        self.lm = LanguageModel(base_model_name, is_decoder_model)
         if contrastive_weight > 0:
             self.contrastive_loss = InfoNCELoss(
                 do_late_interaction=do_late_interaction,
@@ -215,7 +100,8 @@ class DeepStylometry(L.LightningModule):
             elif project_up is False:
                 self.fc1 = nn.Linear(hidden_size, hidden_size)
                 self.fc2 = nn.Linear(hidden_size, hidden_size)
-            else:  # Default projection if project_up is None but contrastive_weight > 0
+            # Default projection if project_up is None but contrastive_weight > 0
+            else:
                 self.fc1 = nn.Linear(hidden_size, hidden_size * 4)
                 self.fc2 = nn.Linear(hidden_size * 4, hidden_size)
 
@@ -240,7 +126,7 @@ class DeepStylometry(L.LightningModule):
                     q_embs,
                     k_embs,
                     batch["author_label"],
-                    batch["attention_mask"],  # Use original attention masks
+                    batch["attention_mask"],
                     batch["k_attention_mask"],
                     gumbel_temp=self.gumbel_temp,
                 )
@@ -296,7 +182,7 @@ class DeepStylometry(L.LightningModule):
             optimizer,
             num_warmup_steps=warmup_steps,
             num_training_steps=total_steps,
-            num_cycles=0.5,  # 0.5 cosine cycle → single smooth decay
+            num_cycles=0.5,  # 0.5 cosine cycle -> single smooth decay
             last_epoch=-1,
         )
 
@@ -435,25 +321,16 @@ class DeepStylometry(L.LightningModule):
         metrics = self._compute_losses(batch)
 
         if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
-            pos_query_scores = metrics["pos_query_scores"]
-            pos_query_targets = metrics["pos_query_targets"]
+            pos_preds = F.softmax(metrics["pos_query_scores"], dim=-1)
+            preds = F.softmax(metrics["all_scores"], dim=-1).diag()
+            pos_targets = metrics["pos_query_targets"]
+            targets = batch["author_label"]
 
-            # Generate binary labels (1 for correct key, 0 otherwise)
-            binary_labels = torch.zeros_like(pos_query_scores, dtype=torch.long)
-            rows = torch.arange(
-                pos_query_scores.size(0), device=pos_query_scores.device
-            )
-            binary_labels[rows, pos_query_targets] = 1
-
-            # Flatten scores and labels
-            flat_scores = pos_query_scores.flatten()
-            flat_labels = binary_labels.flatten()
-
-            # Update metrics
-            # self.val_auroc(flat_scores, flat_labels)
-            # self.val_f1(flat_scores, flat_labels)
-            # self.val_precision(flat_scores, flat_labels)
-            # self.val_recall(flat_scores, flat_labels)
+            self.val_auroc.update(preds, targets)
+            self.val_hr1.update(pos_preds, pos_targets)
+            self.val_hr5.update(pos_preds, pos_targets)
+            self.val_hr10.update(pos_preds, pos_targets)
+            self.val_rr.update(pos_preds, pos_targets)
 
         self.log_dict(
             {
@@ -471,31 +348,30 @@ class DeepStylometry(L.LightningModule):
     def on_validation_epoch_end(self):
         """Aggregate and log the validation metrics at the end of the
         validation epoch."""
-        self.log(
-            "completed_epoch",
-            int(self.current_epoch),
-            on_step=False,
-            on_epoch=True,
-            logger=False,
-            sync_dist=True,
-            prog_bar=False,
-        )
-        self.log_dict(
-            {
-                # "val_auroc": self.val_auroc,
-                # "val_f1": self.val_f1.compute(),
-                # "val_precision": self.val_precision.compute(),
-                # "val_recall": self.val_recall.compute(),
-            },
-            prog_bar=True,
-            # sync_dist=True,
-            on_step=False,
-            on_epoch=True,
-        )
-        # self.val_auroc.reset()
-        # self.val_f1.reset()
-        # self.val_precision.reset()
-        # self.val_recall.reset()
+        if self.contrastive_weight > 0:
+            auroc = self.val_auroc.compute()
+            avg_hr1 = self.val_hr1.compute().mean()
+            avg_hr5 = self.val_hr5.compute().mean()
+            avg_hr10 = self.val_hr10.compute().mean()
+            mrr = self.val_rr.compute().mean()
+            self.log_dict(
+                {
+                    "val_auroc": auroc,
+                    "val_hr1": avg_hr1,
+                    "val_hr5": avg_hr5,
+                    "val_hr10": avg_hr10,
+                    "val_mrr": mrr,
+                },
+                prog_bar=False,
+                on_step=False,
+                on_epoch=True,
+                sync_dist=True,
+            )
+            self.val_auroc.reset()
+            self.val_hr1.reset()
+            self.val_hr5.reset()
+            self.val_hr10.reset()
+            self.val_rr.reset()
 
     def test_step(self, batch, batch_idx: int):
         """Compute the total loss for the test step, as well as the auroc, f1,
