@@ -278,7 +278,7 @@ def train_tune(
         strategy=merged_config.get("strategy", "auto"),
         max_steps=merged_config.get("max_steps", -1),
         max_epochs=merged_config.get("max_epochs", 1),
-        val_check_interval=0.5,
+        val_check_interval=None,
         callbacks=callbacks,
         enable_checkpointing=False,
         logger=loggers,

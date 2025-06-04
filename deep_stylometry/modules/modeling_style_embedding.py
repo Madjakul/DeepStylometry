@@ -76,21 +76,6 @@ class StyleEmbedding(L.LightningModule):
         return metrics
 
     def configure_optimizers(self):  # type: ignore[override]
-        """Initializes the optimizer and learning rate scheduler. The default
-        scheduler is a cosine annealing schedule with warmup steps. The
-        optimizer is selected based on the `optim_name` parameter, which can be
-        "adamw", "soap", or "sophia".
-
-        Also initializes the Gumbel temperature if `auto_anneal_gumbel` is True.
-        The Gumbel temperature is linearly annealed during training.
-
-        Returns
-        -------
-        dict
-            A dictionary containing the optimizer and learning rate scheduler.
-            The optimizer is selected based on the `optim_name` parameter, and
-            the scheduler is a cosine annealing schedule with warmup steps.
-        """
         logging.info(
             f"""Configuring optimizer: {self.optim_name} with lr={self.lr},"""
             """weight_decay={self.weight_decay}"""
@@ -128,52 +113,12 @@ class StyleEmbedding(L.LightningModule):
         attention_mask: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
     ):
-        """Compute the loss and return the last hidden states of the model.
-
-        Parameters
-        ----------
-        input_ids: torch.Tensor
-            The input tensor containing the token IDs.
-        attention_mask: torch.Tensor
-            A mask indicating which tokens should be attended to (1) and which
-            should not (0).
-        labels: Optional[torch.Tensor]
-            The labels for the input data. If None and the model is a decoder,
-            the input_ids will be used as labels.
-
-        Returns
-        -------
-        lm_loss: torch.Tensor
-            The computed loss for the input data.
-        last_hidden_states: torch.Tensor
-            The last hidden states of the model, which are the output embeddings
-            for the input data.
-        projected_embs: torch.Tensor
-            The projected embeddings of the model, which are the output
-            embeddings for the input data after applying the linear layers.
-        """
         out = self.lm(input_ids, attention_mask=attention_mask)
         embs = out[0]
 
         return embs
 
     def training_step(self, batch, batch_idx: int):
-        """Compute the total loss for the training step.
-
-        Parameters
-        ----------
-        batch: Dict[str, torch.Tensor]
-            The input batch containing the input IDs, attention masks, and
-            labels for the training step.
-        batch_idx: int
-            The index of the current batch.
-
-        Returns
-        -------
-        total_loss: torch.Tensor
-            The total loss for the training step, which is a combination of the
-            language model loss and the contrastive loss.
-        """
         metrics = self._compute_losses(batch)
 
         self.log(
@@ -188,17 +133,6 @@ class StyleEmbedding(L.LightningModule):
         return metrics["total_loss"]
 
     def validation_step(self, batch, batch_idx: int):
-        """Compute the total loss for the validation step, as well as the
-        auroc, f1, precision, and recall metrics.
-
-        Parameters
-        ----------
-        batch: Dict[str, torch.Tensor]
-            The input batch containing the input IDs, attention masks, and
-            labels for the validation step.
-        batch_idx: int
-            The index of the current batch.
-        """
         metrics = self._compute_losses(batch)
 
         if metrics["pos_query_scores"] is not None:
@@ -224,8 +158,6 @@ class StyleEmbedding(L.LightningModule):
         )
 
     def on_validation_epoch_end(self):
-        """Aggregate and log the validation metrics at the end of the
-        validation epoch."""
         auroc = self.val_auroc.compute()
         avg_hr1 = self.val_hr1.compute().mean()
         avg_hr5 = self.val_hr5.compute().mean()
@@ -251,17 +183,6 @@ class StyleEmbedding(L.LightningModule):
         self.val_rr.reset()
 
     def test_step(self, batch, batch_idx: int):
-        """Compute the total loss for the test step, as well as the auroc, f1,
-        precision, and recall metrics.
-
-        Parameters
-        ----------
-        batch: Dict[str, torch.Tensor]
-            The input batch containing the input IDs, attention masks, and
-            labels for the test step.
-        batch_idx: int
-            The index of the current batch.
-        """
         metrics = self._compute_losses(batch)
         if metrics["pos_query_scores"] is not None:
             pos_preds = F.softmax(metrics["pos_query_scores"], dim=-1)

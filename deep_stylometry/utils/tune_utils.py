@@ -143,7 +143,7 @@ def setup_tuner(
             ),
             storage_path=ray_storage_path,
             failure_config=FailureConfig(max_failures=0, fail_fast=True),
-            stop={"global_step": config.get("max_t", 1000)},
+            stop={"completed_epoch": config.get("max_t", 2)},
             callbacks=callbacks,
         ),
         param_space=search_space,
