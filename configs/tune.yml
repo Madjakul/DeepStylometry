@@ -24,7 +24,7 @@ mlm_collator: false # only if you use an encoder
 # --- model ---
 optim_name:
   type: choice
-  values: ["adamw", "soap", "sophia"]
+  values: ["adamw", "sophia"]
 base_model_name: "FacebookAI/roberta-base"
 is_decoder_model: false
 lr:
