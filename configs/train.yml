@@ -45,8 +45,8 @@ watch: "all" # all, gradients, parameters or null
 
 # --- trainer ---
 device: "gpu"
-num_devices: 2
-strategy: "ddp_find_unused_parameters_true" # "ddp"
+num_devices: 1
+# strategy: "ddp_find_unused_parameters_true" # "ddp"
 # --- early stopping
 early_stopping: false
 # early_stopping_metric: "val_total_loss"

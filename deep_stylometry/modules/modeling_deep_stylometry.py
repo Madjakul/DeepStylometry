@@ -68,18 +68,18 @@ class DeepStylometry(L.LightningModule):
         self.lr = lr
 
         # Validation metrics
-        self.val_auroc = BinaryAUROC()
-        self.val_hr1 = HitRate(k=1)
-        self.val_hr5 = HitRate(k=5)
-        self.val_hr10 = HitRate(k=10)
-        self.val_rr = ReciprocalRank()
+        self.val_auroc = BinaryAUROC().to(self.device)
+        self.val_hr1 = HitRate(k=1).to(self.device)
+        self.val_hr5 = HitRate(k=5).to(self.device)
+        self.val_hr10 = HitRate(k=10).to(self.device)
+        self.val_rr = ReciprocalRank().to(self.device)
 
         # Test metrics
-        self.test_auroc = BinaryAUROC()
-        self.test_hr1 = HitRate(k=1)
-        self.test_hr5 = HitRate(k=5)
-        self.test_hr10 = HitRate(k=10)
-        self.test_rr = ReciprocalRank()
+        self.test_auroc = BinaryAUROC().to(self.device)
+        self.test_hr1 = HitRate(k=1).to(self.device)
+        self.test_hr5 = HitRate(k=5).to(self.device)
+        self.test_hr10 = HitRate(k=10).to(self.device)
+        self.test_rr = ReciprocalRank().to(self.device)
 
         # Model
         self.lm = LanguageModel(base_model_name, is_decoder_model)
@@ -349,11 +349,11 @@ class DeepStylometry(L.LightningModule):
         """Aggregate and log the validation metrics at the end of the
         validation epoch."""
         if self.contrastive_weight > 0:
-            auroc = self.val_auroc.compute()
-            avg_hr1 = self.val_hr1.compute().mean()
-            avg_hr5 = self.val_hr5.compute().mean()
-            avg_hr10 = self.val_hr10.compute().mean()
-            mrr = self.val_rr.compute().mean()
+            auroc = self.val_auroc.compute().to(self.device)
+            avg_hr1 = self.val_hr1.compute().mean().to(self.device)
+            avg_hr5 = self.val_hr5.compute().mean().to(self.device)
+            avg_hr10 = self.val_hr10.compute().mean().to(self.device)
+            mrr = self.val_rr.compute().mean().to(self.device)
             self.log_dict(
                 {
                     "val_auroc": auroc,
@@ -413,11 +413,11 @@ class DeepStylometry(L.LightningModule):
 
     def on_test_epoch_end(self):
         if self.contrastive_weight > 0:
-            auroc = self.test_auroc.compute()
-            avg_hr1 = self.test_hr1.compute().mean()
-            avg_hr5 = self.test_hr5.compute().mean()
-            avg_hr10 = self.test_hr10.compute().mean()
-            mrr = self.test_rr.compute().mean()
+            auroc = self.test_auroc.compute().to(self.device)
+            avg_hr1 = self.test_hr1.compute().mean().to(self.device)
+            avg_hr5 = self.test_hr5.compute().mean().to(self.device)
+            avg_hr10 = self.test_hr10.compute().mean().to(self.device)
+            mrr = self.test_rr.compute().mean().to(self.device)
             self.log_dict(
                 {
                     "test_auroc": auroc,
