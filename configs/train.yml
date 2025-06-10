@@ -20,7 +20,7 @@ architecture: "deep-stylometry"
 optim_name: "sophia"
 base_model_name: "FacebookAI/roberta-base"
 is_decoder_model: false
-lr: 3.49e-5
+lr: 4.28e-5
 dropout: 0.1
 weight_decay: 0.015
 lm_weight: 0.0
@@ -45,8 +45,8 @@ watch: "all" # all, gradients, parameters or null
 
 # --- trainer ---
 device: "gpu"
-num_devices: 1
-# strategy: "ddp_find_unused_parameters_true" # "ddp"
+num_devices: 3
+strategy: "ddp_find_unused_parameters_true" # "ddp"
 # --- early stopping
 early_stopping: false
 # early_stopping_metric: "val_total_loss"
@@ -60,7 +60,7 @@ save_top_k: 8
 max_epochs: 8 # max_steps: 7000
 val_check_interval: 1.0
 log_every_n_steps: 1
-accumulate_grad_batches: 16
+accumulate_grad_batches: 8
 gradient_clip_val: 0.59
 precision: "32" # 32-true or bf16-mixed
 
