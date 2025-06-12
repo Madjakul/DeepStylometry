@@ -1,7 +1,10 @@
+Train config with Sophia optimizer on Style Embedding
+
+```yml
 # train.yml
 
 project_name: "deep-stylometry"
-experiment_name: "train-roberta-adamw-512-se-li-gumbel-dist-autoexp-v1" # test-baseline-styleembedding
+experiment_name: "train-roberta-sophia-512-se-li-gumbel-dist-autoexp-v1"
 do_train: true
 do_test: false
 
@@ -17,21 +20,21 @@ mlm_collator: false # only if you use an encoder
 
 # --- model ---
 architecture: "deep-stylometry"
-optim_name: "adamw"
+optim_name: "sophia"
 base_model_name: "FacebookAI/roberta-base"
 is_decoder_model: false
-lr: 1.27e-4
+lr: 4.28e-5
 dropout: 0.1
-weight_decay: 0.03
+weight_decay: 0.015
 lm_weight: 0.0
 contrastive_weight: 1.0
-contrastive_temp: 0.23
+contrastive_temp: 0.14
 # --- late interaction
 do_late_interaction: true
 initial_gumbel_temp: 2.0 # null
 auto_anneal_gumbel: true
 # gumbel_linear_delta: 1e-3
-min_gumbel_temp: 0.11
+min_gumbel_temp: 0.4
 use_max: false
 do_distance: true
 exp_decay: true
@@ -61,6 +64,6 @@ max_epochs: 8 # max_steps: 7000
 val_check_interval: 1.0
 log_every_n_steps: 1
 accumulate_grad_batches: 8
-gradient_clip_val: 0.535
+gradient_clip_val: 0.59
 precision: "32" # 32-true or bf16-mixed
-
+```
