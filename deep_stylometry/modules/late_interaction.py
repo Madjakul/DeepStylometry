@@ -62,7 +62,7 @@ class LateInteraction(nn.Module):
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
             self.register_buffer("distance", distance)
         self.exp_decay = exp_decay
-        self.logit_scale = nn.Parameter(torch.log(torch.tensor(1.0)).unsqueeze(0))
+        self.logit_scale = nn.Parameter(torch.log(torch.tensor(10.0)).unsqueeze(0))
 
     @property
     def alpha(self):

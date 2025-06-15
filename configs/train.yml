@@ -1,7 +1,7 @@
 # train.yml
 
 project_name: "deep-stylometry"
-experiment_name: "train-roberta-adamw-512-se-li-gumbel-dist-autoexp-v1" # test-baseline-styleembedding
+experiment_name: "train-roberta-adamw-512-se-li-gumbel-dist-autoexp-v3" # test-baseline-styleembedding
 do_train: true
 do_test: false
 
@@ -55,9 +55,9 @@ early_stopping: false
 # --- checkpointing
 checkpoint_metric: "val_auroc" # only if a checkpoint directory was provided
 checkpoint_mode: "max"
-save_top_k: 8
+save_top_k: 4
 # --- other
-max_epochs: 8 # max_steps: 7000
+max_epochs: 4 # max_steps: 7000
 val_check_interval: 1.0
 log_every_n_steps: 1
 accumulate_grad_batches: 8

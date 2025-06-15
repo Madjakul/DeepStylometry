@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from torcheval.metrics import BinaryAUROC, HitRate, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
+from deep_stylometry.modules.contrastive_loss import ContrastiveLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
 from deep_stylometry.optimizers import SOAP, SophiaG
@@ -84,7 +85,7 @@ class DeepStylometry(L.LightningModule):
         # Model
         self.lm = LanguageModel(base_model_name, is_decoder_model)
         if contrastive_weight > 0:
-            self.contrastive_loss = InfoNCELoss(
+            self.contrastive_loss = InfoNCELoss(  # ContrastiveLoss(
                 do_late_interaction=do_late_interaction,
                 do_distance=do_distance,
                 exp_decay=exp_decay,
