@@ -10,41 +10,6 @@ from deep_stylometry.modules.late_interaction import LateInteraction
 
 
 class InfoNCELoss(nn.Module):
-    """Compute the InfoNCE loss for a batch of query-key sentences pairs. The
-    distance between the query and key sentences is computed using cosine
-    similarity over the average embeddings of the sentences or using late
-    interaction. The loss is computed using cross-entropy loss.
-
-    Parameters
-    ----------
-    do_late_interaction: bool
-        If True, use late interaction to compute the similarity scores.
-    do_distance: bool
-        Only if do_late_interaction is True. If True, use distance-based late interaction.
-        Each query token position is weighted by the distance to the key token position.
-    exp_decay: bool
-        Only if do_late_interaction is True. If True, use exponential decay for the distance
-        weights.
-    seq_len: int
-        The maximum sequence length of the input sentences.
-    use_max: bool
-        If True, use maximum cosine similarity for late interaction. If False, use Gumbel softmax.
-    alpha: float
-        The alpha parameter for the exponential decay function.
-    temperature: float
-        The temperature parameter for scaling the similarity scores.
-
-    Attributes
-    ----------
-    temperature: float
-        The temperature parameter for scaling the similarity scores.
-    do_late_interaction: bool
-        If True, use late interaction to compute the similarity scores.
-    do_distance: bool
-        If True, use distance-based late interaction.
-    late_interaction: LateInteraction
-        The LateInteraction module used for computing similarity scores.
-    """
 
     def __init__(
         self,
@@ -78,35 +43,6 @@ class InfoNCELoss(nn.Module):
         k_mask: torch.Tensor,
         gumbel_temp: Optional[float] = None,
     ):
-        """Compute the InfoNCE loss for a batch of query-key sentence pairs.
-
-        Parameters
-        ----------
-        query_embs: torch.Tensor
-            The embeddings of the query sentences. Shape (B, S, H).
-        key_embs: torch.Tensor
-            The embeddings of the key sentences. Shape (1, B, S, H).
-        labels: torch.Tensor
-            The labels indicating the positive query-key pairs. Shape (B,).
-        q_mask: torch.Tensor
-            The attention mask for the query sentences. Shape (B, S).
-        k_mask: torch.Tensor
-            The attention mask for the key sentences. Shape (1, B, S).
-        gumbel_temp: Optional[float]
-            The temperature parameter for the Gumbel softmax. Only used if
-            do_late_interaction is True and use_max is False.
-
-        Returns
-        -------
-        all_scores: torch.Tensor
-            The similarity scores for all query-key pairs. Shape (B, B).
-        pos_query_scores: torch.Tensor
-            The similarity scores for the positive query-key pairs. Shape (num_pos, B).
-        pos_query_targets: torch.Tensor
-            The target indices for the positive query-key pairs. Shape (num_pos,).
-        contrastive_loss: torch.Tensor
-            The computed InfoNCE loss. Shape (1,).
-        """
         batch_size = query_embs.size(0)
 
         # --- 1. Compute the (B, B) similarity matrix ---

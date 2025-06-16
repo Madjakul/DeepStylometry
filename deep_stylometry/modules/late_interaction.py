@@ -62,6 +62,7 @@ class LateInteraction(nn.Module):
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
             self.register_buffer("distance", distance)
         self.exp_decay = exp_decay
+        # TODO: test other ways of scaling that does not require exp as it saturates the grad
         self.logit_scale = nn.Parameter(torch.log(torch.tensor(10.0)).unsqueeze(0))
 
     @property
@@ -111,6 +112,7 @@ class LateInteraction(nn.Module):
         sim_matrix = torch.einsum("insh, mjth->ijst", query_embs, key_embs)
 
         if self.do_distance:
+            # TODO: try the other distance weighting as it can be more stabe than exp decay when differentiated
             if self.exp_decay:
                 w = torch.exp(-self.alpha * self.distance)
             else:
@@ -128,6 +130,7 @@ class LateInteraction(nn.Module):
             return scores
 
         # Scale similarities with learnable logit scale
+        # TODO: remove this exp and the log in the init
         scale = torch.exp(self.logit_scale)
         logits = scale * sim_matrix
         logits = logits.masked_fill(
@@ -136,27 +139,28 @@ class LateInteraction(nn.Module):
 
         all_inf_slices = torch.all(logits == -float("inf"), dim=-1, keepdim=True)
 
-        # For softmax calculation, replace all-inf slices with zeros. Softmax of zeros is uniform.
+        # For softmax calculation, replace all-inf slices with zeros.
+        # Softmax of zeros is uniform.
         # This prevents NaN from softmax itself.
         safe_logits_for_softmax = torch.where(
             all_inf_slices.expand_as(logits), torch.zeros_like(logits), logits
         )
 
-        if gumbel_temp is not None:
-            soft_p_ij = F.gumbel_softmax(
+        if gumbel_temp is not None and self.training:
+            # TODO: test the stability with on STE
+            # --- DURING TRAINING ---
+            # Use the soft, differentiable Gumbel-softmax probabilities directly.
+            p_ij_candidate = F.gumbel_softmax(
                 safe_logits_for_softmax, tau=gumbel_temp, hard=False, dim=-1
             )
-            if self.training:
-                # use straight-through estimator during training
-                # early training logits are more uniform
-                hard_p_ij_temp = F.one_hot(
-                    safe_logits_for_softmax.argmax(dim=-1), num_classes=logits.size(-1)
-                ).float()
-                p_ij_candidate = hard_p_ij_temp + (soft_p_ij - soft_p_ij.detach())
-            else:
-                # use softmax during evaluation
-                p_ij_candidate = soft_p_ij
+        elif not self.training and gumbel_temp is not None:
+            # --- DURING EVALUATION (OPTIONAL) ---
+            # For deterministic output, use the hard argmax. No gradients needed here.
+            p_ij_candidate = F.one_hot(
+                safe_logits_for_softmax.argmax(dim=-1), num_classes=logits.size(-1)
+            ).float()
         else:
+            # Fallback to standard softmax if no Gumbel temperature is provided
             p_ij_candidate = F.softmax(safe_logits_for_softmax, dim=-1)
 
         p_ij = torch.where(
