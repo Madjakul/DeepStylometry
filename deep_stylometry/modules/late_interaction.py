@@ -8,41 +8,6 @@ import torch.nn.functional as F
 
 
 class LateInteraction(nn.Module):
-    r"""Late interaction module for computing similarity scores between query
-    and key embeddings. This module can use either distance-based weighting or
-    cosine similarity for computing the similarity scores. The module also
-    supports Gumbel softmax for sampling from the similarity scores.
-
-    Parameters
-    ----------
-    do_distance: bool
-        If True, use distance-based weighting for late interaction.
-    exp_decay: bool
-        If True, use exponential decay for the distance weights:
-        $w = exp(-\alpha \cdot d)$, where $d$ is the distance between token positions.
-        If False, use the formula $w = 1 / (1 + \alpha \cdot d)$.
-    seq_len: int
-        The maximum sequence length of the input sentences.
-    alpha: float
-        The alpha parameter for the distance weighting function.
-    use_max: bool
-        If True, use maximum cosine similarity for late interaction. If False, use Gumbel softmax.
-
-    Attributes
-    ----------
-    alpha: float
-        The alpha parameter for the distance weighting function, constrained to be positive.
-    distance: torch.Tensor
-        The distance matrix for computing distance-based weights.
-    logit_scale: torch.nn.Parameter
-        The learnable parameter for scaling the logits.
-    exp_decay: bool
-        If True, use exponential decay for the distance weights.
-    do_distance: bool
-        If True, use distance-based weighting for late interaction.
-    use_max: bool
-        If True, use maximum cosine similarity for late interaction. If False, use Gumbel softmax.
-    """
 
     def __init__(
         self,
@@ -133,41 +98,34 @@ class LateInteraction(nn.Module):
         # TODO: remove this exp and the log in the init
         scale = torch.exp(self.logit_scale)
         logits = scale * sim_matrix
-        logits = logits.masked_fill(
-            ~valid_mask, -float("inf")
-        )  # Mask invalid positions
 
-        all_inf_slices = torch.all(logits == -float("inf"), dim=-1, keepdim=True)
+        # Mask invalid positions with a large negative value (not -inf)
+        neg_inf = -1e9
+        logits = torch.where(valid_mask, logits, neg_inf)
 
-        # For softmax calculation, replace all-inf slices with zeros.
-        # Softmax of zeros is uniform.
-        # This prevents NaN from softmax itself.
-        safe_logits_for_softmax = torch.where(
-            all_inf_slices.expand_as(logits), torch.zeros_like(logits), logits
-        )
+        # Add a tiny ridge term so no row is entirely flat
+        eps = 1e-6
+        logits = logits + eps
 
         if gumbel_temp is not None and self.training:
             # TODO: test the stability with on STE
             # --- DURING TRAINING ---
             # Use the soft, differentiable Gumbel-softmax probabilities directly.
             p_ij_candidate = F.gumbel_softmax(
-                safe_logits_for_softmax, tau=gumbel_temp, hard=False, dim=-1
+                logits, tau=gumbel_temp, hard=False, dim=-1
             )
         elif not self.training and gumbel_temp is not None:
             # --- DURING EVALUATION (OPTIONAL) ---
             # For deterministic output, use the hard argmax. No gradients needed here.
             p_ij_candidate = F.one_hot(
-                safe_logits_for_softmax.argmax(dim=-1), num_classes=logits.size(-1)
+                logits.argmax(dim=-1), num_classes=logits.size(-1)
             ).float()
         else:
             # Fallback to standard softmax if no Gumbel temperature is provided
-            p_ij_candidate = F.softmax(safe_logits_for_softmax, dim=-1)
+            p_ij_candidate = F.softmax(logits, dim=-1)
 
-        p_ij = torch.where(
-            all_inf_slices.expand_as(p_ij_candidate),
-            torch.zeros_like(p_ij_candidate),
-            p_ij_candidate,
-        )  # Aggregate key embeddings using attention weights
+        p_ij = p_ij_candidate
+
         key_embs_squeezed = key_embs.squeeze(0)  # (B, S, H)
         aggregated = torch.einsum("ijst,jth->ijsh", p_ij, key_embs_squeezed)
 
