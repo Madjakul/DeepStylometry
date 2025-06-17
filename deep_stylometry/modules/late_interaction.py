@@ -80,7 +80,6 @@ class LateInteraction(nn.Module):
         sim_matrix = torch.einsum("insh, mjth->ijst", query_embs, key_embs)
 
         if self.do_distance:
-            # TODO: try the other distance weighting as it can be more stabe than exp decay when differentiated
             if self.exp_decay:
                 w = torch.exp(-self.alpha * self.distance)
             else:
