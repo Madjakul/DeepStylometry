@@ -242,7 +242,7 @@ class DeepStylometry(L.LightningModule):
 
         if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
             pos_preds = F.softmax(metrics["pos_query_scores"], dim=-1)
-            preds = F.softmax(metrics["all_scores"], dim=-1).diag()
+            preds = torch.sigmoid(metrics["all_scores"]).diag()
             pos_targets = metrics["pos_query_targets"]
             targets = batch["author_label"]
 
@@ -295,7 +295,7 @@ class DeepStylometry(L.LightningModule):
         metrics = self._compute_losses(batch)
         if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
             pos_preds = F.softmax(metrics["pos_query_scores"], dim=-1)
-            preds = F.softmax(metrics["all_scores"], dim=-1).diag()
+            preds = torch.sigmoid(metrics["all_scores"]).diag()
             pos_targets = metrics["pos_query_targets"]
             targets = batch["author_label"]
 

@@ -1,7 +1,7 @@
 # train.yml
 
 project_name: "deep-stylometry"
-experiment_name: "train-roberta-adamw-512-se-li-gumbel-dist-autoexp-v3" # test-baseline-styleembedding
+experiment_name: "train-roberta-adamw-512-se-li-gumbel-dist-v1" # test-baseline-styleembedding
 do_train: true
 do_test: false
 
@@ -31,10 +31,10 @@ do_late_interaction: true
 initial_gumbel_temp: 2.0 # null
 auto_anneal_gumbel: true
 # gumbel_linear_delta: 1e-3
-min_gumbel_temp: 0.11
+min_gumbel_temp: 0.5
 use_max: false
 do_distance: true
-exp_decay: true
+exp_decay: false
 # alpha: 0.5
 # project_up: true
 

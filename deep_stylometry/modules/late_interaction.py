@@ -27,7 +27,6 @@ class LateInteraction(nn.Module):
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
             self.register_buffer("distance", distance)
         self.exp_decay = exp_decay
-        # TODO: test other ways of scaling that does not require exp as it saturates the grad
         self.logit_scale = nn.Parameter(torch.log(torch.tensor(10.0)).unsqueeze(0))
 
     @property
@@ -95,7 +94,6 @@ class LateInteraction(nn.Module):
             return scores
 
         # Scale similarities with learnable logit scale
-        # TODO: remove this exp and the log in the init
         scale = torch.exp(self.logit_scale)
         logits = scale * sim_matrix
 
@@ -108,7 +106,7 @@ class LateInteraction(nn.Module):
         logits = logits + eps
 
         if gumbel_temp is not None and self.training:
-            # TODO: test the stability with on STE
+            # TODO: test the stability with no STE
             # --- DURING TRAINING ---
             # Use the soft, differentiable Gumbel-softmax probabilities directly.
             p_ij_candidate = F.gumbel_softmax(
