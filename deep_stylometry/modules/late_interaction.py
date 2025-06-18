@@ -29,8 +29,8 @@ class LateInteraction(nn.Module):
             self.register_buffer("distance", distance)
         self.exp_decay = exp_decay
         self.logit_scale = nn.Parameter(torch.log(torch.tensor(10.0)))
-        self.max_logit_scale = torch.tensor(math.log(1 / 0.07))
-        self.min_logit_scale = torch.tensor(0.0)
+        self.register_buffer("max_logit_scale", torch.tensor(math.log(1 / 0.07)))
+        self.register_buffer("min_logit_scale", torch.tensor(0.0))
 
     @property
     def alpha(self):
@@ -88,6 +88,8 @@ class LateInteraction(nn.Module):
 
         # Compute valid mask for token pairs
         valid_mask = torch.einsum("ixs, xjt->ijst", q_mask, k_mask).bool()
+        # (B, B, S) - True if token i can attend to something
+        token_has_valid = valid_mask.any(dim=-1)
 
         if self.use_max:  # Max-based interaction
             logit_scale_ = self.logit_scale.clamp(
@@ -98,7 +100,7 @@ class LateInteraction(nn.Module):
             masked_sim = sim_matrix_scaled.masked_fill(~valid_mask, -float("inf"))
             max_sim_values, _ = masked_sim.max(dim=-1)  # (B, B, S)
             scores = (max_sim_values * q_mask.squeeze(1).unsqueeze(1)).sum(dim=-1)
-            scores = scores / q_mask.squeeze(1).sum(dim=-1, keepdim=True).clamp(min=1)
+            # scores = scores / q_mask.squeeze(1).sum(dim=-1, keepdim=True).clamp(min=1)
             return scores
 
         # Scale similarities with learnable logit scale
@@ -113,10 +115,13 @@ class LateInteraction(nn.Module):
 
         if self.training and gumbel_temp is not None:
             p_ij = F.gumbel_softmax(logits, tau=gumbel_temp, hard=False)
+            p_ij = torch.nan_to_num(p_ij, nan=0.0)
         elif not self.training and gumbel_temp is not None:
             p_ij = F.gumbel_softmax(logits, tau=gumbel_temp, hard=True)
+            p_ij = torch.nan_to_num(p_ij, nan=0.0)
         else:
             p_ij = F.softmax(logits, dim=-1)
+            p_ij = torch.nan_to_num(p_ij, nan=0.0)
 
         key_embs_squeezed = key_embs.squeeze(0)  # (B, S, H)
         aggregated = torch.einsum("ijst,jth->ijsh", p_ij, key_embs_squeezed)
@@ -125,8 +130,10 @@ class LateInteraction(nn.Module):
         query_embs_expanded = query_embs.squeeze(1)  # (B, S, H)
         scores = (query_embs_expanded.unsqueeze(1) * aggregated).sum(dim=-1)
         scores = scores * q_mask.squeeze(1).unsqueeze(1)
-        scores = scores.sum(dim=-1) / q_mask.squeeze(1).sum(dim=-1, keepdim=True).clamp(
-            min=1
-        )
+        scores = scores.sum(
+            dim=-1
+        )  # / q_mask.squeeze(1).sum(dim=-1, keepdim=True).clamp(
+        #    min=1
+        # )
 
         return scores

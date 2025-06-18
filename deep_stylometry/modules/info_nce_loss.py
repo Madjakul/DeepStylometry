@@ -18,7 +18,7 @@ class InfoNCELoss(nn.Module):
         exp_decay: bool,
         seq_len: int,
         use_max: bool = True,
-        alpha: float = 0.5,
+        alpha: float = 1.0,
         temperature: float = 0.07,
     ):
         super().__init__()

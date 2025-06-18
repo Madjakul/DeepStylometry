@@ -95,6 +95,7 @@ class DeepStylometry(L.LightningModule):
                 use_max=use_max,
             )
             hidden_size = self.lm.hidden_size
+            # TODO: select between one projection or two, no projection upward
             if project_up is True:
                 self.fc1 = nn.Linear(hidden_size, hidden_size * 4)
                 self.fc2 = nn.Linear(hidden_size * 4, hidden_size * 4)
@@ -201,10 +202,11 @@ class DeepStylometry(L.LightningModule):
         )
 
         if self.contrastive_weight > 0:
+            # TODO: test swapping gelu for ReLU and removing residual
             embs = F.dropout(last_hidden_states, p=self.dropout, training=self.training)
             embs = F.gelu(self.fc1(embs))
             embs = F.dropout(embs, p=self.dropout, training=self.training)
-            projected_embs = self.fc2(embs)
+            projected_embs = self.fc2(embs) + last_hidden_states  # residual
         else:
             projected_embs = last_hidden_states
 
