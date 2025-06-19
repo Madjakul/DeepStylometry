@@ -28,14 +28,14 @@ contrastive_weight: 1.0
 contrastive_temp: 0.23
 # --- late interaction
 do_late_interaction: true
-initial_gumbel_temp: 2.0 # null
+initial_gumbel_temp: 1.0 # null
 auto_anneal_gumbel: true
 # gumbel_linear_delta: 1e-3
 min_gumbel_temp: 0.5
 use_max: false
 do_distance: true
-exp_decay: false
-# alpha: 0.5
+exp_decay: true
+alpha: 0.1
 # project_up: false
 
 # --- wandb logger ---

@@ -28,9 +28,9 @@ class LateInteraction(nn.Module):
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
             self.register_buffer("distance", distance)
         self.exp_decay = exp_decay
-        self.logit_scale = nn.Parameter(torch.log(torch.tensor(10.0)))
-        self.register_buffer("max_logit_scale", torch.tensor(math.log(1 / 0.07)))
-        self.register_buffer("min_logit_scale", torch.tensor(0.0))
+        self.logit_scale = nn.Parameter(torch.log(torch.tensor(math.log(1 / 0.07))))
+        # self.register_buffer("max_logit_scale", torch.tensor(math.log(1 / 0.07)))
+        # self.register_buffer("min_logit_scale", torch.tensor(0.0))
 
     @property
     def alpha(self):
@@ -92,10 +92,10 @@ class LateInteraction(nn.Module):
         token_has_valid = valid_mask.any(dim=-1)
 
         if self.use_max:  # Max-based interaction
-            logit_scale_ = self.logit_scale.clamp(
-                min=self.min_logit_scale, max=self.max_logit_scale
-            )
-            scale = torch.exp(logit_scale_)
+            # logit_scale_ = self.logit_scale.clamp(
+            #     min=self.min_logit_scale, max=self.max_logit_scale
+            # )
+            scale = torch.exp(self.logit_scale)
             sim_matrix_scaled = scale * sim_matrix
             masked_sim = sim_matrix_scaled.masked_fill(~valid_mask, -float("inf"))
             max_sim_values, _ = masked_sim.max(dim=-1)  # (B, B, S)
@@ -104,10 +104,10 @@ class LateInteraction(nn.Module):
             return scores
 
         # Scale similarities with learnable logit scale
-        logit_scale_ = self.logit_scale.clamp(
-            min=self.min_logit_scale, max=self.max_logit_scale
-        )
-        scale = torch.exp(logit_scale_)
+        # logit_scale_ = self.logit_scale.clamp(
+        #     min=self.min_logit_scale, max=self.max_logit_scale
+        # )
+        scale = torch.exp(self.logit_scale)
         logits = scale * sim_matrix
 
         # Mask the padding tokens
