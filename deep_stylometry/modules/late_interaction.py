@@ -1,6 +1,5 @@
 # deep_stylometry/modules/late_interaction.py
 
-import math
 from typing import Optional
 
 import torch
@@ -15,7 +14,7 @@ class LateInteraction(nn.Module):
         do_distance: bool,
         exp_decay: bool,
         seq_len: int,
-        alpha: float = 1.0,
+        alpha: float = 0.1,
         use_max: bool = False,
     ):
         super().__init__()
@@ -28,15 +27,18 @@ class LateInteraction(nn.Module):
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
             self.register_buffer("distance", distance)
         self.exp_decay = exp_decay
-        self.logit_scale = nn.Parameter(torch.log(torch.tensor(math.log(1 / 0.07))))
-        # self.register_buffer("max_logit_scale", torch.tensor(math.log(1 / 0.07)))
-        # self.register_buffer("min_logit_scale", torch.tensor(0.0))
+        self.logit_scale = nn.Parameter(torch.log(torch.tensor(1 / 0.07)))
 
     @property
     def alpha(self):
         """Leaky ReLU ensures alpha >= 0 and has a non-saturating gradient for
         positive values and won't be stuck when it gets slightly below zero."""
         return F.leaky_relu(self.alpha_raw)
+
+    @property
+    def scale(self):
+        """Exponentiate the scale to get the actual scaling factor."""
+        return torch.exp(self.logit_scale)
 
     def forward(
         self,
@@ -46,28 +48,6 @@ class LateInteraction(nn.Module):
         k_mask: torch.Tensor,
         gumbel_temp: Optional[float] = None,
     ):
-        """Compute similarity scores between query and key embeddings using
-        late interaction.
-
-        Parameters
-        ----------
-        query_embs: torch.Tensor
-            The query embeddings of shape (B, S, H), where B is the batch size,
-            S is the sequence length, and H is the hidden size.
-        key_embs: torch.Tensor
-            The key embeddings of shape (B, S, H).
-        q_mask: torch.Tensor
-            The attention mask for the query embeddings of shape (B, S).
-        k_mask: torch.Tensor
-            The attention mask for the key embeddings of shape (B, S).
-        gumbel_temp: Optional[float]
-            The temperature for Gumbel softmax. If None, use softmax.
-
-        Returns
-        -------
-        scores: torch.Tensor
-            The computed similarity scores of shape (B, B) for each query-key pair.
-        """
         # Normalize embeddings to preserve cosine similarity
         query_embs = query_embs.unsqueeze(1)  # (B, 1, S, H)
         query_embs = F.normalize(query_embs, p=2, dim=-1)
@@ -84,31 +64,21 @@ class LateInteraction(nn.Module):
                 w = torch.exp(-self.alpha * self.distance)
             else:
                 w = 1.0 / (1.0 + self.alpha * self.distance)
-            sim_matrix = sim_matrix * w.to(sim_matrix.device)
+            sim_matrix = sim_matrix * w  # .to(sim_matrix.device)
 
         # Compute valid mask for token pairs
         valid_mask = torch.einsum("ixs, xjt->ijst", q_mask, k_mask).bool()
-        # (B, B, S) - True if token i can attend to something
-        token_has_valid = valid_mask.any(dim=-1)
 
-        if self.use_max:  # Max-based interaction
-            # logit_scale_ = self.logit_scale.clamp(
-            #     min=self.min_logit_scale, max=self.max_logit_scale
-            # )
-            scale = torch.exp(self.logit_scale)
-            sim_matrix_scaled = scale * sim_matrix
+        if self.use_max:
+            # Max-based interaction
+            sim_matrix_scaled = self.scale * sim_matrix
             masked_sim = sim_matrix_scaled.masked_fill(~valid_mask, -float("inf"))
             max_sim_values, _ = masked_sim.max(dim=-1)  # (B, B, S)
             scores = (max_sim_values * q_mask.squeeze(1).unsqueeze(1)).sum(dim=-1)
-            # scores = scores / q_mask.squeeze(1).sum(dim=-1, keepdim=True).clamp(min=1)
             return scores
 
         # Scale similarities with learnable logit scale
-        # logit_scale_ = self.logit_scale.clamp(
-        #     min=self.min_logit_scale, max=self.max_logit_scale
-        # )
-        scale = torch.exp(self.logit_scale)
-        logits = scale * sim_matrix
+        logits = self.scale * sim_matrix
 
         # Mask the padding tokens
         logits = logits.masked_fill(~valid_mask, float("-inf"))
@@ -124,16 +94,12 @@ class LateInteraction(nn.Module):
             p_ij = torch.nan_to_num(p_ij, nan=0.0)
 
         key_embs_squeezed = key_embs.squeeze(0)  # (B, S, H)
-        aggregated = torch.einsum("ijst,jth->ijsh", p_ij, key_embs_squeezed)
+        aggregated = torch.einsum("ijst, jth->ijsh", p_ij, key_embs_squeezed)
 
         # Compute final scores
         query_embs_expanded = query_embs.squeeze(1)  # (B, S, H)
         scores = (query_embs_expanded.unsqueeze(1) * aggregated).sum(dim=-1)
         scores = scores * q_mask.squeeze(1).unsqueeze(1)
-        scores = scores.sum(
-            dim=-1
-        )  # / q_mask.squeeze(1).sum(dim=-1, keepdim=True).clamp(
-        #    min=1
-        # )
+        scores = scores.sum(dim=-1)
 
         return scores

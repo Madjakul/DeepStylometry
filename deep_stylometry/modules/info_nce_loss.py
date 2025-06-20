@@ -24,7 +24,6 @@ class InfoNCELoss(nn.Module):
         super().__init__()
         self.temperature = temperature
         self.do_late_interaction = do_late_interaction
-        self.do_distance = do_distance
         if self.do_late_interaction:
             self.late_interaction = LateInteraction(
                 do_distance=do_distance,
@@ -49,10 +48,10 @@ class InfoNCELoss(nn.Module):
         if self.do_late_interaction:
             all_scores = (
                 self.late_interaction(
-                    query_embs=query_embs,
-                    key_embs=key_embs,  # (1, B, S, H)
-                    q_mask=q_mask,  # (B, 1, S)
-                    k_mask=k_mask,  # (1, B, S)
+                    query_embs=query_embs,  # (B, S, H)
+                    key_embs=key_embs,  # (B, S, H)
+                    q_mask=q_mask,  # (B, S)
+                    k_mask=k_mask,  # (B, S)
                     gumbel_temp=gumbel_temp,
                 )
                 / self.temperature
@@ -72,7 +71,7 @@ class InfoNCELoss(nn.Module):
 
         # --- 2. Identify positive pairs ---
         # labels are 1 if (q_i, k_i) is a positive pair, 0 otherwise
-        pos_mask = labels.bool()  # Shape (B,)
+        pos_mask = labels.bool()  # (B,)
 
         # Early exit if no positive pairs in the batch
         if pos_mask.sum() == 0:
@@ -84,12 +83,12 @@ class InfoNCELoss(nn.Module):
 
         # --- 3. Prepare for CrossEntropyLoss ---
         # Select rows corresponding to positive queries
-        pos_query_scores = all_scores[pos_mask]  # Shape (num_pos, B)
+        pos_query_scores = all_scores[pos_mask]  # (num_pos, B)
 
         # Targets: For a positive query i, the positive key is at index i
         pos_query_targets = torch.arange(batch_size, device=all_scores.device)[
             pos_mask
-        ]  # Shape (num_pos,)
+        ]  # (num_pos,)
 
         # --- 4. Compute InfoNCE loss ---
         contrastive_loss = F.cross_entropy(
