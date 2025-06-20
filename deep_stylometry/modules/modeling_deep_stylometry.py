@@ -25,6 +25,7 @@ class DeepStylometry(L.LightningModule):
         lr: float = 2e-5,
         dropout: float = 0.1,
         weight_decay: float = 1e-2,
+        num_cycles: float = 0.5,
         lm_weight: float = 1.0,
         contrastive_weight: float = 1.0,
         contrastive_temp: float = 7e-2,
@@ -53,6 +54,7 @@ class DeepStylometry(L.LightningModule):
         # Training
         self.weight_decay = weight_decay
         self.batch_size = batch_size
+        self.num_cycles = num_cycles
         self.dropout = dropout
         self.lr = lr
         self.betas = betas
@@ -155,7 +157,7 @@ class DeepStylometry(L.LightningModule):
             optimizer,
             num_warmup_steps=warmup_steps,
             num_training_steps=total_steps,
-            num_cycles=0.5,  # 0.5 cosine cycle -> single smooth decay
+            num_cycles=self.num_cycles,
             last_epoch=-1,
         )
 

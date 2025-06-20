@@ -29,6 +29,7 @@ lr: 1.27e-4
 betas: [0.9, 0.999]
 eps: 1.0e-8
 weight_decay: 0.03
+num_cycles: 0.5
 # --- late interaction
 distance_weightning: "none" # none, exp or linear
 initial_gumbel_temp: 1.0 # null
