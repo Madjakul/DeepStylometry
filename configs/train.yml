@@ -26,17 +26,15 @@ weight_decay: 0.03
 lm_weight: 0.0
 contrastive_weight: 1.0
 contrastive_temp: 0.23
+pooling_method: "li" # li or mean
 # --- late interaction
-do_late_interaction: true
+distance_weightning: "none" # none, exp or linear
 initial_gumbel_temp: 1.0 # null
 auto_anneal_gumbel: true
 # gumbel_linear_delta: 1e-3
 min_gumbel_temp: 0.5
 use_max: false
-do_distance: true
-exp_decay: true
 alpha: 0.1
-# project_up: false
 
 # --- wandb logger ---
 use_wandb: true

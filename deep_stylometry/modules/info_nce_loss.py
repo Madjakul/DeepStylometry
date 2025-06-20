@@ -13,25 +13,30 @@ class InfoNCELoss(nn.Module):
 
     def __init__(
         self,
-        do_late_interaction: bool,
-        do_distance: bool,
-        exp_decay: bool,
         seq_len: int,
         use_max: bool = True,
         alpha: float = 1.0,
         temperature: float = 0.07,
+        pooling_method: str = "mean",
+        distance_weightning: str = "none",
     ):
         super().__init__()
+        assert pooling_method in (
+            "mean",
+            "li",
+        ), "Pooling method must be 'mean' or 'li' for late interaction."
+
         self.temperature = temperature
-        self.do_late_interaction = do_late_interaction
-        if self.do_late_interaction:
-            self.late_interaction = LateInteraction(
-                do_distance=do_distance,
-                exp_decay=exp_decay,
+
+        if pooling_method == "li":
+            self.pool = LateInteraction(
                 alpha=alpha,
                 seq_len=seq_len,
                 use_max=use_max,
+                distance_weightning=distance_weightning,
             )
+        else:
+            self.pool = self.mean_pooling
 
     def forward(
         self,
@@ -45,29 +50,16 @@ class InfoNCELoss(nn.Module):
         batch_size = query_embs.size(0)
 
         # --- 1. Compute the (B, B) similarity matrix ---
-        if self.do_late_interaction:
-            all_scores = (
-                self.late_interaction(
-                    query_embs=query_embs,  # (B, S, H)
-                    key_embs=key_embs,  # (B, S, H)
-                    q_mask=q_mask,  # (B, S)
-                    k_mask=k_mask,  # (B, S)
-                    gumbel_temp=gumbel_temp,
-                )
-                / self.temperature
+        all_scores = (
+            self.pool(
+                query_embs=query_embs,  # (B, S, H)
+                key_embs=key_embs,  # (B, S, H)
+                q_mask=q_mask,  # (B, S)
+                k_mask=k_mask,  # (B, S)
+                gumbel_temp=gumbel_temp,
             )
-        else:
-            # Mean pooling and normalization
-            q_mask_sum = q_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
-            query_vec = (query_embs * q_mask.unsqueeze(-1)).sum(dim=1) / q_mask_sum
-            query_vec = F.normalize(query_vec, p=2, dim=-1)
-
-            k_mask_sum = k_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
-            key_vec = (key_embs * k_mask.unsqueeze(-1)).sum(dim=1) / k_mask_sum
-            key_vec = F.normalize(key_vec, p=2, dim=-1)
-
-            # Calculate cosine similarity matrix (B, B)
-            all_scores = torch.matmul(query_vec, key_vec.T) / self.temperature
+            / self.temperature
+        )
 
         # --- 2. Identify positive pairs ---
         # labels are 1 if (q_i, k_i) is a positive pair, 0 otherwise
@@ -96,3 +88,24 @@ class InfoNCELoss(nn.Module):
         )
 
         return all_scores, pos_query_scores, pos_query_targets, contrastive_loss
+
+    @staticmethod
+    def mean_pooling(
+        query_embs: torch.Tensor,
+        key_embs: torch.Tensor,
+        q_mask: torch.Tensor,
+        k_mask: torch.Tensor,
+        **kwargs,
+    ):
+        # Mean pooling and normalization
+        q_mask_sum = q_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
+        query_vec = (query_embs * q_mask.unsqueeze(-1)).sum(dim=1) / q_mask_sum
+        query_vec = F.normalize(query_vec, p=2, dim=-1)
+
+        k_mask_sum = k_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
+        key_vec = (key_embs * k_mask.unsqueeze(-1)).sum(dim=1) / k_mask_sum
+        key_vec = F.normalize(key_vec, p=2, dim=-1)
+
+        # Calculate cosine similarity matrix (B, B)
+        all_scores = torch.matmul(query_vec, key_vec.T)
+        return all_scores

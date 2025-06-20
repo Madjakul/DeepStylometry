@@ -10,23 +10,14 @@ import torch.nn.functional as F
 from torcheval.metrics import BinaryAUROC, HitRate, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
-from deep_stylometry.modules.contrastive_loss import ContrastiveLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
-from deep_stylometry.optimizers import SOAP, SophiaG
 
 
 class DeepStylometry(L.LightningModule):
 
-    optim_map = {
-        "adamw": torch.optim.AdamW,
-        "soap": SOAP,
-        "sophia": SophiaG,
-    }
-
     def __init__(
         self,
-        optim_name: str,
         base_model_name: str,
         batch_size: int,
         seq_len: int,
@@ -37,19 +28,17 @@ class DeepStylometry(L.LightningModule):
         lm_weight: float = 1.0,
         contrastive_weight: float = 1.0,
         contrastive_temp: float = 7e-2,
-        do_late_interaction: bool = True,
         use_max: bool = False,
+        pooling_method: str = "mean",
+        distance_weightning: str = "none",
         initial_gumbel_temp: float = 1.0,
         auto_anneal_gumbel: bool = True,
         gumbel_linear_delta: float = 1e-3,
         min_gumbel_temp: float = 1e-6,
-        do_distance: bool = True,
-        exp_decay: bool = True,
         alpha: float = 1.0,
-        project_up: Optional[bool] = None,
     ):
         super().__init__()
-        self.save_hyperparameters()  # Save hyperparameters
+        self.save_hyperparameters()
 
         # Misc
         self.is_decoder_model = is_decoder_model
@@ -63,7 +52,6 @@ class DeepStylometry(L.LightningModule):
 
         # Training
         self.weight_decay = weight_decay
-        self.optim_name = optim_name.lower()
         self.batch_size = batch_size
         self.dropout = dropout
         self.lr = lr
@@ -85,27 +73,17 @@ class DeepStylometry(L.LightningModule):
         # Model
         self.lm = LanguageModel(base_model_name, is_decoder_model)
         if contrastive_weight > 0:
-            self.contrastive_loss = InfoNCELoss(  # ContrastiveLoss(
-                do_late_interaction=do_late_interaction,
-                do_distance=do_distance,
-                exp_decay=exp_decay,
+            self.contrastive_loss = InfoNCELoss(
                 alpha=alpha,
                 temperature=contrastive_temp,
                 seq_len=seq_len,
                 use_max=use_max,
+                pooling_method=pooling_method,
+                distance_weightning=distance_weightning,
             )
             hidden_size = self.lm.hidden_size
-            # TODO: select between one projection or two, no projection upward
-            if project_up is True:
-                self.fc1 = nn.Linear(hidden_size, hidden_size * 4)
-                self.fc2 = nn.Linear(hidden_size * 4, hidden_size * 4)
-            elif project_up is False:
-                self.fc1 = nn.Linear(hidden_size, hidden_size)
-                self.fc2 = nn.Linear(hidden_size, hidden_size)
-            # Default projection if project_up is None but contrastive_weight > 0
-            else:
-                self.fc1 = nn.Linear(hidden_size, hidden_size * 4)
-                self.fc2 = nn.Linear(hidden_size * 4, hidden_size)
+            self.fc1 = nn.Linear(hidden_size, hidden_size)
+            self.fc2 = nn.Linear(hidden_size, hidden_size)
 
     def _compute_losses(self, batch: Dict[str, torch.Tensor]):
         lm_loss, _, q_embs = self(

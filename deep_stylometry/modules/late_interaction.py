@@ -11,23 +11,29 @@ class LateInteraction(nn.Module):
 
     def __init__(
         self,
-        do_distance: bool,
-        exp_decay: bool,
         seq_len: int,
         alpha: float = 0.1,
         use_max: bool = False,
+        distance_weightning: str = "none",
     ):
         super().__init__()
-        self.do_distance = do_distance
+        assert distance_weightning in (
+            "none",
+            "exp",
+            "linear",
+        ), "Distance weighting must be 'none', 'exp', or 'linear'."
+        assert alpha >= 0, "Alpha must be non-negative."
+
+        self.distance_weightning = distance_weightning
         self.use_max = use_max
-        if self.do_distance:
+        self.logit_scale = nn.Parameter(torch.log(torch.tensor(1 / 0.07)))
+
+        if self.distance_weightning != "none":
             self.distance: torch.Tensor
             self.alpha_raw = nn.Parameter(torch.tensor(alpha))
             positions = torch.arange(seq_len)
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
             self.register_buffer("distance", distance)
-        self.exp_decay = exp_decay
-        self.logit_scale = nn.Parameter(torch.log(torch.tensor(1 / 0.07)))
 
     @property
     def alpha(self):
