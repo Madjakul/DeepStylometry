@@ -7,7 +7,7 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torcheval.metrics import BinaryAUROC, HitRate, ReciprocalRank
+from torcheval.metrics import HitRate, MulticlassAUROC, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -33,9 +33,10 @@ class DeepStylometry(L.LightningModule):
         distance_weightning: str = "none",
         initial_gumbel_temp: float = 1.0,
         auto_anneal_gumbel: bool = True,
-        gumbel_linear_delta: float = 1e-3,
         min_gumbel_temp: float = 1e-6,
         alpha: float = 1.0,
+        betas=(0.9, 0.999),
+        eps: float = 1e-8,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -46,7 +47,6 @@ class DeepStylometry(L.LightningModule):
         self.contrastive_weight = contrastive_weight
         self.initial_gumbel_temp = initial_gumbel_temp
         self.gumbel_temp = initial_gumbel_temp
-        self.gumbel_linear_delta = gumbel_linear_delta
         self.min_gumbel_temp = min_gumbel_temp
         self.auto_anneal_gumbel = auto_anneal_gumbel
 
@@ -55,16 +55,18 @@ class DeepStylometry(L.LightningModule):
         self.batch_size = batch_size
         self.dropout = dropout
         self.lr = lr
+        self.betas = betas
+        self.eps = eps
 
         # Validation metrics
-        self.val_auroc = BinaryAUROC().to(self.device)
+        self.val_auroc = MulticlassAUROC(num_classes=self.batch_size).to(self.device)
         self.val_hr1 = HitRate(k=1).to(self.device)
         self.val_hr5 = HitRate(k=5).to(self.device)
         self.val_hr10 = HitRate(k=10).to(self.device)
         self.val_rr = ReciprocalRank().to(self.device)
 
         # Test metrics
-        self.test_auroc = BinaryAUROC().to(self.device)
+        self.test_auroc = MulticlassAUROC(num_classes=self.batch_size).to(self.device)
         self.test_hr1 = HitRate(k=1).to(self.device)
         self.test_hr5 = HitRate(k=5).to(self.device)
         self.test_hr10 = HitRate(k=10).to(self.device)
@@ -129,11 +131,17 @@ class DeepStylometry(L.LightningModule):
 
     def configure_optimizers(self):  # type: ignore[override]
         logging.info(
-            f"Configuring optimizer: {self.optim_name} with lr={self.lr}, weight_decay={self.weight_decay}"
+            f"""Configuring optimizer: {self.optim_name} with lr={self.lr},"""
+            f"""" weight_decay={self.weight_decay}, betas={self.betas},"""
+            f""" eps={self.eps}."""
         )
 
-        optimizer = self.optim_map[self.optim_name](
-            self.parameters(), lr=self.lr, weight_decay=self.weight_decay
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.lr,
+            weight_decay=self.weight_decay,
+            betas=self.betas,
+            eps=self.eps,
         )
         # Calculate steps dynamically
         total_steps = int(self.trainer.estimated_stepping_batches)
@@ -180,7 +188,7 @@ class DeepStylometry(L.LightningModule):
         )
 
         if self.contrastive_weight > 0:
-            # TODO: test swapping gelu for ReLU and removing residual
+            # TODO: test swapping gelu for ReLU
             embs = F.dropout(last_hidden_states, p=self.dropout, training=self.training)
             embs = F.gelu(self.fc1(embs))
             embs = F.dropout(embs, p=self.dropout, training=self.training)
@@ -222,11 +230,9 @@ class DeepStylometry(L.LightningModule):
 
         if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
             pos_preds = metrics["pos_query_scores"]
-            preds = metrics["all_scores"].diag()
             pos_targets = metrics["pos_query_targets"]
-            targets = batch["author_label"]
 
-            self.val_auroc.update(preds, targets)
+            self.val_auroc.update(pos_preds, pos_targets)
             self.val_hr1.update(pos_preds, pos_targets)
             self.val_hr5.update(pos_preds, pos_targets)
             self.val_hr10.update(pos_preds, pos_targets)
@@ -275,11 +281,9 @@ class DeepStylometry(L.LightningModule):
         metrics = self._compute_losses(batch)
         if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
             pos_preds = metrics["pos_query_scores"]
-            preds = metrics["all_scores"].diag()
             pos_targets = metrics["pos_query_targets"]
-            targets = batch["author_label"]
 
-            self.test_auroc.update(preds, targets)
+            self.test_auroc.update(pos_preds, pos_targets)
             self.test_hr1.update(pos_preds, pos_targets)
             self.test_hr5.update(pos_preds, pos_targets)
             self.test_hr10.update(pos_preds, pos_targets)

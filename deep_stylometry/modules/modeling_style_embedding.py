@@ -5,8 +5,7 @@ from typing import Dict, Optional
 
 import lightning as L
 import torch
-import torch.nn.functional as F
-from torcheval.metrics import BinaryAUROC, HitRate, ReciprocalRank
+from torcheval.metrics import HitRate, MulticlassAUROC, ReciprocalRank
 from transformers import AutoModel, get_linear_schedule_with_warmup
 
 from deep_stylometry.modules.contrastive_loss import ContrastiveLoss
@@ -31,14 +30,14 @@ class StyleEmbedding(L.LightningModule):
         self.weight_decay = weight_decay
 
         # Validation metrics
-        self.val_auroc = BinaryAUROC().to(self.device)
+        self.val_auroc = MulticlassAUROC(num_classes=self.batch_size).to(self.device)
         self.val_hr1 = HitRate(k=1).to(self.device)
         self.val_hr5 = HitRate(k=5).to(self.device)
         self.val_hr10 = HitRate(k=10).to(self.device)
         self.val_rr = ReciprocalRank().to(self.device)
 
         # Test metrics
-        self.test_auroc = BinaryAUROC().to(self.device)
+        self.test_auroc = MulticlassAUROC(num_classes=self.batch_size).to(self.device)
         self.test_hr1 = HitRate(k=1).to(self.device)
         self.test_hr5 = HitRate(k=5).to(self.device)
         self.test_hr10 = HitRate(k=10).to(self.device)
@@ -111,7 +110,6 @@ class StyleEmbedding(L.LightningModule):
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
-        labels: Optional[torch.Tensor] = None,
     ):
         out = self.lm(input_ids, attention_mask=attention_mask)
         embs = out[0]
@@ -137,11 +135,9 @@ class StyleEmbedding(L.LightningModule):
 
         if metrics["pos_query_scores"] is not None:
             pos_preds = metrics["pos_query_scores"]
-            preds = metrics["all_scores"].diag()
             pos_targets = metrics["pos_query_targets"]
-            targets = batch["author_label"]
 
-            self.val_auroc.update(preds, targets)
+            self.val_auroc.update(pos_preds, pos_targets)
             self.val_hr1.update(pos_preds, pos_targets)
             self.val_hr5.update(pos_preds, pos_targets)
             self.val_hr10.update(pos_preds, pos_targets)
@@ -186,11 +182,9 @@ class StyleEmbedding(L.LightningModule):
         metrics = self._compute_losses(batch)
         if metrics["pos_query_scores"] is not None:
             pos_preds = metrics["pos_query_scores"]
-            preds = metrics["all_scores"].diag()
             pos_targets = metrics["pos_query_targets"]
-            targets = batch["author_label"]
 
-            self.test_auroc.update(preds, targets)
+            self.test_auroc.update(pos_preds, pos_targets)
             self.test_hr1.update(pos_preds, pos_targets)
             self.test_hr5.update(pos_preds, pos_targets)
             self.test_hr10.update(pos_preds, pos_targets)

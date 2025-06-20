@@ -1,7 +1,7 @@
 # train.yml
 
 project_name: "deep-stylometry"
-experiment_name: "train-roberta-adamw-512-se-li-gumbel-dist-v1" # test-baseline-styleembedding
+experiment_name: "train-roberta-512-se-li-gumbel-dist-v1" # test-baseline-styleembedding
 do_train: true
 do_test: false
 
@@ -17,21 +17,22 @@ mlm_collator: false # only if you use an encoder
 
 # --- model ---
 architecture: "deep-stylometry"
-optim_name: "adamw"
 base_model_name: "FacebookAI/roberta-base"
 is_decoder_model: false
-lr: 1.27e-4
 dropout: 0.1
-weight_decay: 0.03
 lm_weight: 0.0
 contrastive_weight: 1.0
 contrastive_temp: 0.23
 pooling_method: "li" # li or mean
+# --- trainer
+lr: 1.27e-4
+betas: [0.9, 0.999]
+eps: 1.0e-8
+weight_decay: 0.03
 # --- late interaction
 distance_weightning: "none" # none, exp or linear
 initial_gumbel_temp: 1.0 # null
 auto_anneal_gumbel: true
-# gumbel_linear_delta: 1e-3
 min_gumbel_temp: 0.5
 use_max: false
 alpha: 0.1
