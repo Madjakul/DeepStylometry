@@ -235,6 +235,33 @@ class DeepStylometry(L.LightningModule):
             pos_preds = metrics["pos_query_scores"]
             pos_targets = metrics["pos_query_targets"]
 
+            # --- START: PADDING LOGIC ---
+
+            # Get the expected number of classes from the metric itself
+            num_classes = self.val_auroc.num_classes  # This will be 32
+
+            # Get the shape of the current predictions
+            current_batch_size, current_num_classes = pos_preds.shape
+
+            # If the current number of classes doesn't match the expected, pad it.
+            # This will only happen on the last, smaller batch.
+            if current_num_classes != num_classes:
+                # Create a new tensor with the correct shape [16, 32] and fill with a large negative value
+                padded_preds = torch.full(
+                    (current_batch_size, num_classes),
+                    -torch.inf,  # Use -inf to ensure these are ranked last
+                    device=pos_preds.device,
+                    dtype=pos_preds.dtype,
+                )
+
+                # Copy the actual predictions into the new padded tensor
+                padded_preds[:, :current_num_classes] = pos_preds
+
+                # Use the padded tensor for the update
+                pos_preds = padded_preds
+
+            # --- END: PADDING LOGIC ---
+
             self.val_auroc.update(pos_preds, pos_targets)
             self.val_hr1.update(pos_preds, pos_targets)
             self.val_hr5.update(pos_preds, pos_targets)
@@ -285,6 +312,33 @@ class DeepStylometry(L.LightningModule):
         if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
             pos_preds = metrics["pos_query_scores"]
             pos_targets = metrics["pos_query_targets"]
+
+            # --- START: PADDING LOGIC ---
+
+            # Get the expected number of classes from the metric itself
+            num_classes = self.val_auroc.num_classes  # This will be 32
+
+            # Get the shape of the current predictions
+            current_batch_size, current_num_classes = pos_preds.shape
+
+            # If the current number of classes doesn't match the expected, pad it.
+            # This will only happen on the last, smaller batch.
+            if current_num_classes != num_classes:
+                # Create a new tensor with the correct shape [16, 32] and fill with a large negative value
+                padded_preds = torch.full(
+                    (current_batch_size, num_classes),
+                    -torch.inf,  # Use -inf to ensure these are ranked last
+                    device=pos_preds.device,
+                    dtype=pos_preds.dtype,
+                )
+
+                # Copy the actual predictions into the new padded tensor
+                padded_preds[:, :current_num_classes] = pos_preds
+
+                # Use the padded tensor for the update
+                pos_preds = padded_preds
+
+            # --- END: PADDING LOGIC ---
 
             self.test_auroc.update(pos_preds, pos_targets)
             self.test_hr1.update(pos_preds, pos_targets)
