@@ -89,7 +89,9 @@ def setup_tuner(
         callbacks.append(
             WandbLoggerCallback(
                 project=config["project_name"],
-                name=config["experiment_name"],
+                name=f"""tune-{config['base_model_name']}-{config['ds_name']}
+                -pooling:{config['pooling_method']}-max:{config['use_max']}
+                -dist:{config['distance_weightning']}""",
                 group="tune",
                 log_config=True,
                 log_checkpoints=False,
@@ -116,8 +118,6 @@ def setup_tuner(
 
     asha_scheduler = AsyncHyperBandScheduler(
         time_attr="completed_epoch",  # This corresponds to PTL epochs reported by TuneReportCallback
-        # metric="auroc",
-        # mode="max",
         max_t=config.get("max_t", 2),
         grace_period=config.get("grace_period", 1),
     )
@@ -135,7 +135,7 @@ def setup_tuner(
             reuse_actors=False,
         ),
         run_config=tune.RunConfig(
-            name=config["experiment_name"],
+            name=config["group_name"],
             checkpoint_config=tune.CheckpointConfig(
                 num_to_keep=1,
                 checkpoint_at_end=False,

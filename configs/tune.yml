@@ -1,17 +1,16 @@
 # tune.yml
 
 project_name: "deep-stylometry"
-experiment_name: "tune-roberta-512-se-li-gumbel-dist-autoexp-v2"
-do_test: false
+group_name: "tune-deepstylometry-512-se-default"
 
-# --- tuner ---
+# === tuner ===
 num_samples: 30
 max_concurrent_trials: 3
 time_budget_s: 151200 # 42h (in seconds)
 max_t: 3
 grace_period: 1
 
-# --- datamodule ---
+# === datamodule ===
 ds_name: "se" # or halvest
 batch_size: 32
 tokenizer_name: "FacebookAI/roberta-base"
@@ -21,56 +20,61 @@ load_from_cache_file: true
 # config_name: null
 mlm_collator: false # only if you use an encoder
 
-# --- model ---
-optim_name:
-  type: choice
-  values: ["adamw", "sophia"]
+# === model ===
+architecture: "deep-stylometry"
 base_model_name: "FacebookAI/roberta-base"
 is_decoder_model: false
-lr:
-  type: loguniform
-  min: 7.0e-6
-  max: 5.0e-4
 dropout: 0.1
-weight_decay:
-  type: loguniform
-  min: 0.01
-  max: 0.1
 lm_weight: 0.0
 contrastive_weight: 1.0
 contrastive_temp:
   type: uniform
-  min: 0.15
+  min: 0.01
   max: 1.0
+pooling_method: "li" # li or mean
+# --- trainer
+lr:
+  type: loguniform
+  min: 7.0e-6
+  max: 5.0e-4
+betas:
+  type: choice
+  values: [[0.9, 0.999], [0.8, 0.999], [0.7, 0.999]]
+eps:
+  type: choice
+  values: [1.0e-7, 1.0e-8, 1.0e-9]
+weight_decay:
+  type: loguniform
+  min: 0.01
+  max: 0.2
+num_cycles:
+  type: choice
+  values: [0.5, 1.0, 1.5]
 # --- late interaction
-do_late_interaction: true
-initial_gumbel_temp: 2.0
+distance_weightning:
+  type: choice
+  values: ["none", "exp", "linear"]
+initial_gumbel_temp:
+  type: choice
+  values: [2.0, 1.0, null]
 auto_anneal_gumbel: true
-# gumbel_linear_delta: 1e-3
-min_gumbel_temp:
-  type: uniform
-  min: 0.1
-  max: 0.5
+min_gumbel_temp: 0.5
 use_max: false
-do_distance: true
-exp_decay: true
-# alpha: 0.5
-# project_up: true
+alpha:
+  type: loguniform
+  min: 0.1
+  max: 1.0
 
-# --- wandb logger ---
+# === wandb logger ===
 use_wandb: true
-group: "tune-encoder-lm0-contrast-1"
 
-# --- trainer ---
+# === trainer ===
 device: "gpu"
 num_devices_per_trial: 1
 num_cpus_per_trial: 10
 max_epochs: 3
 log_every_n_steps: 1
-accumulate_grad_batches: 8
-gradient_clip_val:
-  type: uniform
-  min: 0.1
-  max: 2.0
+accumulate_grad_batches: 4
+gradient_clip_val: null
 precision: "32" # 32-true or bf16-mixed
 

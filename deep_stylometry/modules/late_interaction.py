@@ -65,11 +65,11 @@ class LateInteraction(nn.Module):
         # Compute token-level cosine similarities
         sim_matrix = torch.einsum("insh, mjth->ijst", query_embs, key_embs)
 
-        if self.do_distance:
-            if self.exp_decay:
-                w = torch.exp(-self.alpha * self.distance)
-            else:
-                w = 1.0 / (1.0 + self.alpha * self.distance)
+        if self.distance_weightning == "exp":
+            w = torch.exp(-self.alpha * self.distance)
+            sim_matrix = sim_matrix * w  # .to(sim_matrix.device)
+        elif self.distance_weightning == "linear":
+            w = 1.0 / (1.0 + self.alpha * self.distance)
             sim_matrix = sim_matrix * w  # .to(sim_matrix.device)
 
         # Compute valid mask for token pairs

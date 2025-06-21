@@ -6,8 +6,11 @@ from typing import Any, Dict, Optional
 import lightning as L
 import psutil
 import torch
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
@@ -16,6 +19,24 @@ from deep_stylometry.utils.data.halvest_data import HALvestDataModule
 from deep_stylometry.utils.data.se_data import SEDataModule
 
 NUM_PROC = psutil.cpu_count(logical=False)
+
+
+class TestEveryNEpochs(L.Callback):
+    """Run the test set every N epochs.
+
+    Args:
+        n: The number of epochs to wait before running a test set.
+    """
+
+    def __init__(self, n: int):
+        # Call the parent class constructor
+        super().__init__()
+        self.n = n
+
+    def on_train_epoch_end(self, trainer: "L.Trainer", pl_module: "L.LightningModule"):
+        if (trainer.current_epoch + 1) % self.n == 0:
+            test_loader = trainer.datamodule.test_dataloader()
+            trainer.test(pl_module, dataloaders=test_loader)
 
 
 def setup_datamodule(
@@ -73,27 +94,26 @@ def setup_model(config: Dict[str, Any]):
         The model instance with the specified parameters.
     """
     model = DeepStylometry(
-        optim_name=config.get("optim_name", "adamw"),
         base_model_name=config.get("base_model_name", "FacebookAI/roberta-base"),
         batch_size=config.get("batch_size", 32),
         seq_len=config.get("max_length", 512),
         is_decoder_model=config.get("is_decoder_model", False),
         lr=config.get("lr", 1e-5),
-        dropout=config.get("dropout", 0.01),
+        dropout=config.get("dropout", 0.1),
         weight_decay=config.get("weight_decay", 0.015),
+        num_cycles=config.get("num_cycles", 1.0),
         lm_weight=config.get("lm_weight", 0.0),
         contrastive_weight=config.get("contrastive_weight", 1.0),
         contrastive_temp=config.get("contrastive_temp", 0.13),
-        do_late_interaction=config.get("do_late_interaction", True),
         use_max=config.get("use_max", False),
-        initial_gumbel_temp=config.get("initial_gumbel_temp", 2.0),
+        pooling_method=config.get("pooling_method", "mean"),
+        distance_weightning=config.get("distance_weightning", "none"),
+        initial_gumbel_temp=config.get("initial_gumbel_temp", 1.0),
         auto_anneal_gumbel=config.get("auto_anneal_gumbel", True),
-        gumbel_linear_delta=config.get("gumbel_linear_delta", 1e-3),
-        min_gumbel_temp=config.get("min_gumbel_temp", 0.4),
-        do_distance=config.get("do_distance", True),
-        exp_decay=config.get("exp_decay", True),
-        alpha=config.get("alpha", 0.5),
-        project_up=config.get("project_up", None),
+        min_gumbel_temp=config.get("min_gumbel_temp", 0.5),
+        alpha=config.get("alpha", 0.1),
+        betas=tuple(config.get("betas", (0.9, 0.999))),
+        eps=config.get("eps", 1e-8),
     )
 
     return model
@@ -141,13 +161,17 @@ def setup_trainer(
         )
         callbacks.append(early_stop_callback)
 
+    # Test every n epochs
+    test_callback = TestEveryNEpochs(config.get("test_every_n_epochs", 1))
+    callbacks.append(test_callback)
+
     # Model checkpoint callback if checkpoint_dir is provided
     if checkpoint_dir is not None:
         checkpoint_callback = ModelCheckpoint(
             dirpath=osp.join(
                 checkpoint_dir, config.get("experiment_name", "training-run")
             ),
-            filename="{epoch}-{val_auroc:.4f}",
+            filename="{epoch}",
             monitor=config.get("checkpoint_metric", "val_auroc"),
             mode=config.get("checkpoint_mode", "max"),
             save_top_k=config.get("save_top_k", 2),
@@ -157,18 +181,15 @@ def setup_trainer(
 
     # Configure loggers
     loggers = []
+    mode = "test" if testing_mode else "train"
     if use_wandb:
-        mode = "test" if testing_mode else "train"
         wandb_logger = WandbLogger(
             project=config.get("project_name", "deep-stylometry"),
-            name=config.get("experiment_name", "training-run"),
+            name=f"""{mode}-{config['base_model_name']}-{config['ds_name']}
+                -pooling:{config['pooling_method']}-max:{config['use_max']}
+                -dist:{config['distance_weightning']}""",
             log_model=config.get("log_model", False),
-            group=f"""{mode}-{config['ds_name']}-{config['base_model_name']}
-                -li/{config['do_late_interaction']}-max/{config['use_max']}
-                -dist/{config['do_distance']}-expd/{config['exp_decay']}""",
-            # watch=config.get("watch", None),
-            # log_graph=False,
-            # log_freq=config.get("accumulate_grad_batches", 100),
+            group=config.get("group_name", "training-run"),
         )
         watch = config.get("watch", None)
         if watch is not None:
@@ -176,14 +197,16 @@ def setup_trainer(
                 model=model,
                 log=watch,
                 log_graph=False,
-                log_freq=min(100, config.get("accumulate_grad_batches", 1) * 10),
+                log_freq=config.get("accumulate_grad_batches", 1) * 100,
             )
         loggers.append(wandb_logger)
 
     # Add CSV logger by default
     csv_logger = CSVLogger(
         save_dir=logs_dir,
-        name=config.get("experiment_name", "training-run"),
+        name=f"""{mode}-{config['base_model_name']}-{config['ds_name']}
+                -pooling:{config['pooling_method']}-max:{config['use_max']}
+                -dist:{config['distance_weightning']}""",
     )
     loggers.append(csv_logger)
 
@@ -199,7 +222,7 @@ def setup_trainer(
         callbacks=callbacks,
         log_every_n_steps=config.get("log_every_n_steps", 100),
         accumulate_grad_batches=config.get("accumulate_grad_batches", 1),
-        gradient_clip_val=config.get("gradient_clip_val", 1e-3),
+        gradient_clip_val=config.get("gradient_clip_val", None),
         precision=config.get("precision", "16-mixed"),
     )
     return trainer
@@ -244,9 +267,6 @@ def train_tune(
                 "loss": "val_total_loss",
                 "auroc": "val_auroc",
                 "completed_epoch": "completed_epoch",
-                # "f1": "val_f1",
-                # "precision": "val_precision",
-                # "recall": "val_recall",
             },
             on="validation_end",
             save_checkpoints=False,
@@ -257,13 +277,15 @@ def train_tune(
     loggers.append(
         CSVLogger(
             save_dir=logs_dir,
-            name=merged_config.get("experiment_name", "training-run"),
+            name=f"""tune-{merged_config['base_model_name']}-{merged_config['ds_name']}
+                -pooling:{merged_config['pooling_method']}-max:{merged_config['use_max']}
+                -dist:{merged_config['distance_weightning']}""",
         )
     )
     if merged_config["use_wandb"]:
         wandb_logger = WandbLogger(
             project=merged_config.get("project_name", "deep-stylometry"),
-            group=merged_config.get("group", "tune"),
+            group=merged_config.get("group_name", "tune"),
             prefix="trial",
             log_model=False,
         )
@@ -281,7 +303,7 @@ def train_tune(
         logger=loggers,
         log_every_n_steps=merged_config.get("log_every_n_steps", 10),
         accumulate_grad_batches=merged_config.get("accumulate_grad_batches", 2),
-        gradient_clip_val=merged_config.get("gradient_clip_val", 1e-3),
+        gradient_clip_val=merged_config.get("gradient_clip_val", None),
         precision=merged_config.get("precision", "16-mixed"),
     )
     trainer.fit(model=model, datamodule=dm)

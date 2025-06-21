@@ -133,7 +133,7 @@ class DeepStylometry(L.LightningModule):
 
     def configure_optimizers(self):  # type: ignore[override]
         logging.info(
-            f"""Configuring optimizer: {self.optim_name} with lr={self.lr},"""
+            f"""Configuring optimizer: AdamW with lr={self.lr},"""
             f"""" weight_decay={self.weight_decay}, betas={self.betas},"""
             f""" eps={self.eps}."""
         )
@@ -149,7 +149,7 @@ class DeepStylometry(L.LightningModule):
         total_steps = int(self.trainer.estimated_stepping_batches)
         warmup_steps = max(1, int(0.1 * total_steps))
 
-        if self.auto_anneal_gumbel:
+        if self.auto_anneal_gumbel and self.initial_gumbel_temp is not None:
             total_temp_range = self.initial_gumbel_temp - self.min_gumbel_temp
             self.gumbel_linear_delta = total_temp_range / total_steps
 
@@ -174,7 +174,7 @@ class DeepStylometry(L.LightningModule):
         super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
 
         # Update Gumbel temperature after each optimizer step
-        if self.auto_anneal_gumbel:
+        if self.auto_anneal_gumbel and self.initial_gumbel_temp is not None:
             new_temp = self.gumbel_temp - self.gumbel_linear_delta
             self.gumbel_temp = max(new_temp, self.min_gumbel_temp)
             self.log("gumbel_temp", self.gumbel_temp, prog_bar=True)
@@ -204,15 +204,16 @@ class DeepStylometry(L.LightningModule):
         metrics = self._compute_losses(batch)
 
         # Log metrics
-        self.log(
-            "gumbel_temp",
-            self.gumbel_temp,
-            prog_bar=False,
-            on_step=True,
-            on_epoch=False,
-            batch_size=self.batch_size,
-            logger=True,
-        )
+        if self.initial_gumbel_temp is not None:
+            self.log(
+                "gumbel_temp",
+                self.gumbel_temp,
+                prog_bar=False,
+                on_step=True,
+                on_epoch=False,
+                batch_size=self.batch_size,
+                logger=True,
+            )
         self.log_dict(
             {
                 "train_total_loss": metrics["total_loss"],

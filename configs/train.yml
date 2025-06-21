@@ -1,11 +1,11 @@
 # train.yml
 
 project_name: "deep-stylometry"
-experiment_name: "train-roberta-512-se-li-gumbel-dist-v1" # test-baseline-styleembedding
+group_name: "train-deepstylometry-512-se-default"
 do_train: true
 do_test: false
 
-# --- datamodule ---
+# === datamodule ===
 ds_name: "se" # or halvest
 batch_size: 32
 tokenizer_name: "FacebookAI/roberta-base"
@@ -15,7 +15,7 @@ load_from_cache_file: true
 # config_name: null
 mlm_collator: false # only if you use an encoder
 
-# --- model ---
+# === model ===
 architecture: "deep-stylometry"
 base_model_name: "FacebookAI/roberta-base"
 is_decoder_model: false
@@ -38,12 +38,12 @@ min_gumbel_temp: 0.5
 use_max: false
 alpha: 0.1
 
-# --- wandb logger ---
+# === wandb logger ===
 use_wandb: true
 log_model: true
 watch: "all" # all, gradients, parameters or null
 
-# --- trainer ---
+# === trainer ===
 device: "gpu"
 num_devices: 3
 strategy: "ddp_find_unused_parameters_true" # "ddp"
@@ -60,7 +60,8 @@ save_top_k: 4
 max_epochs: 4 # max_steps: 7000
 val_check_interval: 1.0
 log_every_n_steps: 1
+test_every_n_epochs: 1
 accumulate_grad_batches: 8
-gradient_clip_val: 1.0 # 0.535
+gradient_clip_val: 1.0 # null
 precision: "32" # 32-true or bf16-mixed
 
