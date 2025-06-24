@@ -282,6 +282,7 @@ class DeepStylometry(L.LightningModule):
         )
 
     def on_validation_epoch_end(self):
+        self.log("completed_epoch", self.current_epoch, prog_bar=False)
         if self.contrastive_weight > 0:
             auroc = self.val_auroc.compute().to(self.device)
             avg_hr1 = self.val_hr1.compute().mean().to(self.device)
