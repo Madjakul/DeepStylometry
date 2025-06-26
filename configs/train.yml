@@ -25,7 +25,7 @@ contrastive_weight: 1.0
 contrastive_temp: 0.91
 pooling_method: "li" # li or mean
 # --- trainer
-lr: 2.65e-4
+lr: 2.65e-5
 betas: [0.8, 0.999]
 eps: 1.0e-7
 weight_decay: 0.02
@@ -58,7 +58,8 @@ checkpoint_mode: "max"
 save_top_k: 4
 # --- other
 max_epochs: 4 # max_steps: 7000
-val_check_interval: 0.0
+val_check_interval: null
+check_val_every_n_epoch: null
 log_every_n_steps: 1
 test_every_n_epochs: 1
 accumulate_grad_batches: 4

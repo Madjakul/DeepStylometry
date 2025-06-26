@@ -35,8 +35,13 @@ class TestEveryNEpochs(L.Callback):
 
     def on_train_epoch_end(self, trainer: "L.Trainer", pl_module: "L.LightningModule"):
         if (trainer.current_epoch + 1) % self.n == 0:
+            # Backup current callback metrics
+            backup_metrics = dict(trainer.callback_metrics)
             test_loader = trainer.datamodule.test_dataloader()
+            # Run test
             trainer.test(pl_module, dataloaders=test_loader)
+            # Restore validation callback metrics
+            trainer.callback_metrics = backup_metrics
 
 
 def setup_datamodule(
@@ -162,8 +167,8 @@ def setup_trainer(
         callbacks.append(early_stop_callback)
 
     # Test every n epochs
-    test_callback = TestEveryNEpochs(config.get("test_every_n_epochs", 1))
-    callbacks.append(test_callback)
+    # test_callback = TestEveryNEpochs(config.get("test_every_n_epochs", 1))
+    # callbacks.append(test_callback)
 
     # Model checkpoint callback if checkpoint_dir is provided
     if checkpoint_dir is not None:
