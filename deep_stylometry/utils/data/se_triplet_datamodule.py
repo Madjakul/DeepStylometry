@@ -1,4 +1,4 @@
-# deep_strylometry/utils/data/se_data.py
+# deep_stylometry/utils/data/se_triplet_datamodule.py
 
 from typing import Any, Dict, List
 
@@ -13,7 +13,7 @@ from deep_stylometry.utils.data.custom_sampler import PadLastBatchSampler
 from deep_stylometry.utils.helpers import get_tokenizer
 
 
-class SEDataModule(L.LightningDataModule):
+class SETripletDataModule(L.LightningDataModule):
 
     test_dataset = None
 
@@ -26,7 +26,7 @@ class SEDataModule(L.LightningDataModule):
         map_batch_size: int,
         load_from_cache_file: bool,
         cache_dir: str,
-        ds_name: str = "Madjakul/StyleEmbeddingPairwiseData",
+        ds_name: str = "AnnaWegmann/StyleEmbeddingData",
         mlm_collator: bool = False,
         **kwargs: Any,
     ):
@@ -53,16 +53,26 @@ class SEDataModule(L.LightningDataModule):
         load_dataset(self.ds_name, cache_dir=self.cache_dir)
 
     def tokenize_function(self, batch: Dict[str, List[Any]]):
+        if batch["Same Author Label"] == 1:
+            pos_text = batch["Utterance 1 (U1)"]
+            neg_text = batch["Utterance 2 (U2)"]
+        else:
+            pos_text = batch["Utterance 2 (U2)"]
+            neg_text = batch["Utterance 1 (U1)"]
         tokenized_q = self.tokenizer(
-            # qs,
             batch["query_text"],
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
         )
-        tokenized_k = self.tokenizer(
-            # ks,
-            batch["key_text"],
+        tokenized_pos = self.tokenizer(
+            pos_text,
+            truncation=True,
+            padding="max_length",
+            max_length=self.max_length,
+        )
+        tokenized_neg = self.tokenizer(
+            neg_text,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
@@ -70,9 +80,10 @@ class SEDataModule(L.LightningDataModule):
         return {
             "input_ids": tokenized_q["input_ids"],
             "attention_mask": tokenized_q["attention_mask"],
-            "k_input_ids": tokenized_k["input_ids"],
-            "k_attention_mask": tokenized_k["attention_mask"],
-            "author_label": batch["author_label"],
+            "pos_input_ids": tokenized_pos["input_ids"],
+            "pos_attention_mask": tokenized_pos["attention_mask"],
+            "neg_input_ids": tokenized_neg["input_ids"],
+            "neg_attention_mask": tokenized_neg["attention_mask"],
         }
 
     def setup(self, stage: str):
@@ -109,7 +120,7 @@ class SEDataModule(L.LightningDataModule):
                     load_from_cache_file=self.load_from_cache_file,
                     remove_columns=columns_to_remove,
                 )
-                val_dataset = ds["validation"].map(  # type: ignore
+                val_dataset = ds["test"].map(  # type: ignore
                     self.tokenize_function,
                     batched=True,
                     batch_size=self.map_batch_size,

@@ -27,7 +27,7 @@ class DeepStylometry(L.LightningModule):
         weight_decay: float = 1e-2,
         num_cycles: float = 0.5,
         lm_weight: float = 1.0,
-        contrastive_weight: float = 1.0,
+        linear_layers: bool = True,
         contrastive_temp: float = 7e-2,
         use_max: bool = False,
         pooling_method: str = "mean",
@@ -45,7 +45,7 @@ class DeepStylometry(L.LightningModule):
         # Misc
         self.is_decoder_model = is_decoder_model
         self.lm_weight = lm_weight
-        self.contrastive_weight = contrastive_weight
+        self.linear_layers = linear_layers
         self.initial_gumbel_temp = initial_gumbel_temp
         self.gumbel_temp = initial_gumbel_temp
         self.min_gumbel_temp = min_gumbel_temp
@@ -76,16 +76,16 @@ class DeepStylometry(L.LightningModule):
 
         # Model
         self.lm = LanguageModel(base_model_name, is_decoder_model)
-        if contrastive_weight > 0:
-            self.contrastive_loss = InfoNCELoss(
-                alpha=alpha,
-                temperature=contrastive_temp,
-                seq_len=seq_len,
-                use_max=use_max,
-                pooling_method=pooling_method,
-                distance_weightning=distance_weightning,
-            )
-            hidden_size = self.lm.hidden_size
+        self.contrastive_loss = InfoNCELoss(
+            alpha=alpha,
+            temperature=contrastive_temp,
+            seq_len=seq_len,
+            use_max=use_max,
+            pooling_method=pooling_method,
+            distance_weightning=distance_weightning,
+        )
+        hidden_size = self.lm.hidden_size
+        if self.linear_layers:
             self.fc1 = nn.Linear(hidden_size, hidden_size)
             self.fc2 = nn.Linear(hidden_size, hidden_size)
 
@@ -104,28 +104,25 @@ class DeepStylometry(L.LightningModule):
         all_scores = None
         pos_query_scores = None
         pos_query_targets = None
-        if self.contrastive_weight > 0:
-            all_scores, pos_query_scores, pos_query_targets, contrastive_loss = (
-                self.contrastive_loss(
-                    q_embs,
-                    k_embs,
-                    batch["author_label"],
-                    batch["attention_mask"],
-                    batch["k_attention_mask"],
-                    gumbel_temp=self.gumbel_temp,
-                )
+        all_scores, pos_query_scores, pos_query_targets, contrastive_loss = (
+            self.contrastive_loss(
+                q_embs,
+                k_embs,
+                batch["author_label"],
+                batch["attention_mask"],
+                batch["k_attention_mask"],
+                gumbel_temp=self.gumbel_temp,
             )
-
-        total_loss = (self.lm_weight * lm_loss) + (
-            self.contrastive_weight * contrastive_loss
         )
+
+        total_loss = (self.lm_weight * lm_loss) + contrastive_loss
 
         metrics = {
             "all_scores": all_scores,
             "pos_query_scores": pos_query_scores,
             "pos_query_targets": pos_query_targets,
             "lm_loss": lm_loss * self.lm_weight,
-            "contrastive_loss": contrastive_loss * self.contrastive_weight,
+            "contrastive_loss": contrastive_loss,
             "total_loss": total_loss,
         }
 
@@ -189,8 +186,7 @@ class DeepStylometry(L.LightningModule):
             input_ids, attention_mask=attention_mask, labels=labels
         )
 
-        if self.contrastive_weight > 0:
-            # TODO: test swapping gelu for ReLU
+        if self.linear_layers:
             embs = F.dropout(last_hidden_states, p=self.dropout, training=self.training)
             embs = F.gelu(self.fc1(embs))
             embs = F.dropout(embs, p=self.dropout, training=self.training)
@@ -231,7 +227,7 @@ class DeepStylometry(L.LightningModule):
     def validation_step(self, batch, batch_idx: int):
         metrics = self._compute_losses(batch)
 
-        if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
+        if metrics["pos_query_scores"] is not None:
             pos_preds = metrics["pos_query_scores"]
             pos_targets = metrics["pos_query_targets"]
 
@@ -283,34 +279,33 @@ class DeepStylometry(L.LightningModule):
 
     def on_validation_epoch_end(self):
         self.log("completed_epoch", self.current_epoch, prog_bar=False)
-        if self.contrastive_weight > 0:
-            auroc = self.val_auroc.compute().to(self.device)
-            avg_hr1 = self.val_hr1.compute().mean().to(self.device)
-            avg_hr5 = self.val_hr5.compute().mean().to(self.device)
-            avg_hr10 = self.val_hr10.compute().mean().to(self.device)
-            mrr = self.val_rr.compute().mean().to(self.device)
-            self.log_dict(
-                {
-                    "val_auroc": auroc,
-                    "val_hr1": avg_hr1,
-                    "val_hr5": avg_hr5,
-                    "val_hr10": avg_hr10,
-                    "val_mrr": mrr,
-                },
-                prog_bar=False,
-                on_step=False,
-                on_epoch=True,
-                sync_dist=True,
-            )
-            self.val_auroc.reset()
-            self.val_hr1.reset()
-            self.val_hr5.reset()
-            self.val_hr10.reset()
-            self.val_rr.reset()
+        auroc = self.val_auroc.compute().to(self.device)
+        avg_hr1 = self.val_hr1.compute().mean().to(self.device)
+        avg_hr5 = self.val_hr5.compute().mean().to(self.device)
+        avg_hr10 = self.val_hr10.compute().mean().to(self.device)
+        mrr = self.val_rr.compute().mean().to(self.device)
+        self.log_dict(
+            {
+                "val_auroc": auroc,
+                "val_hr1": avg_hr1,
+                "val_hr5": avg_hr5,
+                "val_hr10": avg_hr10,
+                "val_mrr": mrr,
+            },
+            prog_bar=False,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
+        )
+        self.val_auroc.reset()
+        self.val_hr1.reset()
+        self.val_hr5.reset()
+        self.val_hr10.reset()
+        self.val_rr.reset()
 
     def test_step(self, batch, batch_idx: int):
         metrics = self._compute_losses(batch)
-        if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
+        if metrics["pos_query_scores"] is not None:
             pos_preds = metrics["pos_query_scores"]
             pos_targets = metrics["pos_query_targets"]
 
@@ -361,22 +356,21 @@ class DeepStylometry(L.LightningModule):
         )
 
     def on_test_epoch_end(self):
-        if self.contrastive_weight > 0:
-            auroc = self.test_auroc.compute().to(self.device)
-            avg_hr1 = self.test_hr1.compute().mean().to(self.device)
-            avg_hr5 = self.test_hr5.compute().mean().to(self.device)
-            avg_hr10 = self.test_hr10.compute().mean().to(self.device)
-            mrr = self.test_rr.compute().mean().to(self.device)
-            self.log_dict(
-                {
-                    "test_auroc": auroc,
-                    "test_hr1": avg_hr1,
-                    "test_hr5": avg_hr5,
-                    "test_hr10": avg_hr10,
-                    "test_mrr": mrr,
-                },
-                prog_bar=False,
-                on_step=False,
-                on_epoch=True,
-                sync_dist=True,
-            )
+        auroc = self.test_auroc.compute().to(self.device)
+        avg_hr1 = self.test_hr1.compute().mean().to(self.device)
+        avg_hr5 = self.test_hr5.compute().mean().to(self.device)
+        avg_hr10 = self.test_hr10.compute().mean().to(self.device)
+        mrr = self.test_rr.compute().mean().to(self.device)
+        self.log_dict(
+            {
+                "test_auroc": auroc,
+                "test_hr1": avg_hr1,
+                "test_hr5": avg_hr5,
+                "test_hr10": avg_hr10,
+                "test_mrr": mrr,
+            },
+            prog_bar=False,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
+        )

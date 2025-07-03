@@ -13,118 +13,81 @@ class ContrastiveLoss(nn.Module):
 
     def __init__(
         self,
-        do_late_interaction: bool = False,
-        margin: float = 0.5,
-        temperature: float = 1.0,
-        do_distance: bool = False,
-        exp_decay: bool = False,
-        seq_len: int = 512,
+        seq_len: int,
         use_max: bool = True,
-        alpha: float = 0.5,
+        alpha: float = 1.0,
+        margin: float = 0.2,
+        pooling_method: str = "mean",
+        distance_weightning: str = "none",
     ):
         super().__init__()
+        assert pooling_method in (
+            "mean",
+            "li",
+        ), "Pooling method must be 'mean' or 'li' for late interaction."
+
         self.margin = margin
-        self.temperature = temperature
-        self.do_late_interaction = do_late_interaction
-        if self.do_late_interaction:
-            self.late_interaction = LateInteraction(
-                do_distance=do_distance,
-                exp_decay=exp_decay,
+
+        if pooling_method == "li":
+            self.pool = LateInteraction(
                 alpha=alpha,
                 seq_len=seq_len,
                 use_max=use_max,
+                distance_weightning=distance_weightning,
             )
+        else:
+            self.pool = self.mean_pooling
 
     def forward(
         self,
         query_embs: torch.Tensor,
-        key_embs: torch.Tensor,
-        labels: torch.Tensor,
+        pos_embs: torch.Tensor,
+        neg_embs: torch.Tensor,
         q_mask: torch.Tensor,
-        k_mask: torch.Tensor,
+        pos_mask: torch.Tensor,
+        neg_mask: torch.Tensor,
         gumbel_temp: Optional[float] = None,
     ):
         batch_size = query_embs.size(0)
 
         # --- 1. Compute the (B, B) similarity matrix ---
-        if self.do_late_interaction:
-            all_scores = (
-                self.late_interaction(
-                    query_embs=query_embs,
-                    key_embs=key_embs,  # (1, B, S, H)
-                    q_mask=q_mask,  # (B, 1, S)
-                    k_mask=k_mask,  # (1, B, S)
-                    gumbel_temp=gumbel_temp,
-                )
-                / self.temperature
-            )
-        else:
-            # --- 1. Compute sentence embeddings (mean pooling and normalization) ---
-            # Shape (B, 1)
-            q_len = q_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
-            # Shape (B, H)
-            query_vec = (query_embs * q_mask.unsqueeze(-1)).sum(dim=1) / q_len
-            # Shape (B, H)
-            query_vec = F.normalize(query_vec, p=2, dim=-1)
-            k_len = k_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
-            key_vec = (key_embs * k_mask.unsqueeze(-1)).sum(dim=1) / k_len
-            key_vec = F.normalize(key_vec, p=2, dim=-1)
+        pos_scores = self.pool(
+            query_embs=query_embs,  # (B, S, H)
+            key_embs=pos_embs,  # (B, S, H)
+            q_mask=q_mask,  # (B, S)
+            k_mask=pos_mask,  # (B, S)
+            gumbel_temp=gumbel_temp,
+        ).diag()
 
-            # --- 2. Compute the (B, B) raw cosine similarity matrix ---
-            all_scores = torch.matmul(query_vec, key_vec.T)  # Shape (B, B)
+        neg_scores = self.pool(
+            query_embs=query_embs,  # (B, S, H)
+            key_embs=neg_embs,  # (B, S, H)
+            q_mask=q_mask,  # (B, S)
+            k_mask=neg_mask,  # (B, S)
+            gumbel_temp=gumbel_temp,
+        ).diag()
 
-        # --- 3. Compute Contrastive Loss on the diagonal elements (q_i, k_i) ---
-        diag_cos_sim = torch.diag(all_scores)  # Shape (B,)
+        loss = F.relu(self.margin - pos_scores + neg_scores).mean()
 
-        # Compute squared Euclidean distances from cosine similarities for these diag
-        # dist^2 = 2 - 2 * cos_sim (since vectors are normalized)
-        sq_dist_diag = torch.clamp(2.0 - 2.0 * diag_cos_sim, min=0.0)  # Shape (B,)
-        dist_diag = torch.sqrt(sq_dist_diag)  # Shape (B,)
+        return pos_scores, neg_scores, loss
 
-        # Ensure labels are float for arithmetic operations in the loss
-        labels_float = labels.to(dist_diag.dtype)
+    @staticmethod
+    def mean_pooling(
+        query_embs: torch.Tensor,
+        key_embs: torch.Tensor,
+        q_mask: torch.Tensor,
+        k_mask: torch.Tensor,
+        **kwargs,
+    ):
+        # Mean pooling and normalization
+        q_mask_sum = q_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
+        query_vec = (query_embs * q_mask.unsqueeze(-1)).sum(dim=1) / q_mask_sum
+        query_vec = F.normalize(query_vec, p=2, dim=-1)
 
-        # If labels_float[i]=1 (positive pair): loss_pair = sq_dist_diag[i]
-        # If labels_float[i]=0 (negative pair): loss_pair = max(0, margin - dist_diag[i])^2
-        loss_pos_terms = labels_float * sq_dist_diag
+        k_mask_sum = k_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
+        key_vec = (key_embs * k_mask.unsqueeze(-1)).sum(dim=1) / k_mask_sum
+        key_vec = F.normalize(key_vec, p=2, dim=-1)
 
-        neg_margin_terms = torch.relu(self.margin - dist_diag)
-        loss_neg_terms = (1.0 - labels_float) * (neg_margin_terms**2)
-
-        # Combine positive and negative loss terms for each diagonal pair
-        individual_losses = 0.5 * (loss_pos_terms + loss_neg_terms)
-        contrastive_loss = individual_losses.mean()  # Mean over the batch
-
-        # --- 4. Prepare outputs for metrics (similar to InfoNCELoss structure) ---
-        # Scale the full raw similarity matrix by temperature for output.
-        # This is for consistency if downstream metrics expect temperature-scaled scores (e.g., for softmax).
-        all_scores_output = all_scores / self.temperature
-
-        # Identify "positive queries" using the 'labels' tensor.
-        # A query q_i is considered for retrieval metrics if labels[i] is 1 (meaning k_i is its positive).
-        pos_mask = labels.bool()  # Shape (B,)
-
-        if pos_mask.sum() == 0:
-            # If no positive queries are indicated by 'labels', return empty tensors for these.
-            pos_query_scores_output = torch.empty(
-                0, batch_size, device=query_embs.device
-            )
-            pos_query_targets = torch.empty(
-                0, dtype=torch.long, device=query_embs.device
-            )
-        else:
-            # Select rows from the temperature-scaled scores corresponding to positive queries
-            pos_query_scores_output = all_scores_output[pos_mask]  # Shape (num_pos, B)
-
-            # Targets: For a positive query i (where labels[i]=1), the positive key is k_i (index i)
-            # Shape (num_pos,)
-            pos_query_targets = torch.arange(
-                batch_size, device=all_scores_output.device
-            )[pos_mask]
-
-        return (
-            all_scores_output,
-            pos_query_scores_output,
-            pos_query_targets,
-            contrastive_loss,
-        )
+        # Calculate cosine similarity matrix (B, B)
+        all_scores = torch.matmul(query_vec, key_vec.T)
+        return all_scores

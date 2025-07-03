@@ -22,21 +22,21 @@ is_decoder_model: false
 dropout: 0.1
 lm_weight: 0.0
 contrastive_weight: 1.0
-contrastive_temp: 0.91
+contrastive_temp: 0.98
 pooling_method: "li" # li or mean
 # --- trainer
-lr: 2.65e-5
-betas: [0.8, 0.999]
-eps: 1.0e-7
-weight_decay: 0.02
-num_cycles: 1
+lr: 4.73e-5
+betas: [0.7, 0.999]
+eps: 1.0e-9
+weight_decay: 0.09
+num_cycles: 0.5
 # --- late interaction
-distance_weightning: "none" # none, exp or linear
+distance_weightning: "exp" # none, exp or linear
 initial_gumbel_temp: 1.0 # null
 auto_anneal_gumbel: true
 min_gumbel_temp: 0.5
 use_max: false
-alpha: 0.59
+alpha: 0.22
 
 # === wandb logger ===
 use_wandb: true
@@ -55,9 +55,9 @@ early_stopping: false
 # --- checkpointing
 checkpoint_metric: "val_auroc" # only if a checkpoint directory was provided
 checkpoint_mode: "max"
-save_top_k: 4
+save_top_k: 2
 # --- other
-max_epochs: 4 # max_steps: 7000
+max_epochs: 2 # max_steps: 7000
 val_check_interval: null
 check_val_every_n_epoch: null
 log_every_n_steps: 1
