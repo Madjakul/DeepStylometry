@@ -13,7 +13,7 @@ class LateInteraction(nn.Module):
         self,
         seq_len: int,
         alpha: float = 0.1,
-        use_max: bool = False,
+        use_softmax: bool = False,
         distance_weightning: str = "none",
     ):
         super().__init__()
@@ -25,7 +25,7 @@ class LateInteraction(nn.Module):
         assert alpha >= 0, "Alpha must be non-negative."
 
         self.distance_weightning = distance_weightning
-        self.use_max = use_max
+        self.use_softmax = use_softmax
         self.logit_scale = nn.Parameter(torch.log(torch.tensor(1 / 0.07)))
 
         if self.distance_weightning != "none":
@@ -75,7 +75,7 @@ class LateInteraction(nn.Module):
         # Compute valid mask for token pairs
         valid_mask = torch.einsum("ixs, xjt->ijst", q_mask, k_mask).bool()
 
-        if self.use_max:
+        if not self.use_softmax:
             # Max-based interaction
             sim_matrix_scaled = self.scale * sim_matrix
             masked_sim = sim_matrix_scaled.masked_fill(~valid_mask, -float("inf"))

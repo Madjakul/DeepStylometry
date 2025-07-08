@@ -14,7 +14,7 @@ class InfoNCELoss(nn.Module):
     def __init__(
         self,
         seq_len: int,
-        use_max: bool = True,
+        use_softmax: bool = True,
         alpha: float = 1.0,
         temperature: float = 0.07,
         pooling_method: str = "mean",
@@ -32,7 +32,7 @@ class InfoNCELoss(nn.Module):
             self.pool = LateInteraction(
                 alpha=alpha,
                 seq_len=seq_len,
-                use_max=use_max,
+                use_softmax=use_softmax,
                 distance_weightning=distance_weightning,
             )
         else:

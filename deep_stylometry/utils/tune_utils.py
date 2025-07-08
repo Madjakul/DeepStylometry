@@ -36,6 +36,8 @@ def build_search_space(config: Dict[str, Any]):
     for param, spec in config.items():
         if not isinstance(spec, dict):
             continue
+        if "type" not in spec:
+            continue
         if spec["type"] not in ("choice", "quniform"):
             search_space[param] = type_map[spec["type"]](
                 spec["min"],
@@ -90,7 +92,7 @@ def setup_tuner(
             WandbLoggerCallback(
                 project=config["project_name"],
                 name=f"""tune-{config['base_model_name']}-{config['ds_name']}
-                -pooling:{config['pooling_method']}-max:{config['use_max']}
+                -pooling:{config['pooling_method']}-softmax:{config['use_softmax']}
                 -dist:{config['distance_weightning']}""",
                 group="tune",
                 log_config=True,

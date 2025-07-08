@@ -6,13 +6,14 @@ import lightning as L
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 
-from deep_stylometry.utils.data.custom_data_collator import \
-    CustomDataCollatorForLanguageModeling
+from deep_stylometry.utils.data.custom_data_collator import (
+    CustomDataCollatorForLanguageModeling,
+)
 from deep_stylometry.utils.data.custom_sampler import PadLastBatchSampler
 from deep_stylometry.utils.helpers import get_tokenizer
 
 
-class SETripletDataModule(L.LightningDataModule):
+class StyleEmbeddingDataModule(L.LightningDataModule):
 
     test_dataset = None
 
@@ -45,7 +46,6 @@ class SETripletDataModule(L.LightningDataModule):
             )
         else:
             self.mlm_collator = None
-        # Get tuning_mode from kwargs, default to False
         self.tuning_mode = kwargs.get("tuning_mode", False)
 
     def prepare_data(self):
@@ -169,6 +169,6 @@ class SETripletDataModule(L.LightningDataModule):
             self.test_dataset,  # type: ignore
             batch_size=self.batch_size,
             num_workers=self.num_proc,
-            sampler=PadLastBatchSampler(len(self.test_dataset), self.batch_size),
+            sampler=PadLastBatchSampler(len(self.test_dataset), self.batch_size),  # type: ignore
             shuffle=False,
         )

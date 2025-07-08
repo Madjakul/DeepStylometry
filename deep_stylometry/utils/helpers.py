@@ -4,11 +4,28 @@ import json
 import logging
 import os
 import os.path as osp
+from typing import Any, Dict
 
 import yaml
 from transformers import AutoTokenizer
 
 WIDTH = 88
+
+
+class DictAccessMixin:
+    """Mixin to add dictionary-like access to dataclass instances."""
+
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        setattr(self, key, value)
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
 
 def get_tokenizer(model_name: str, **kwargs):

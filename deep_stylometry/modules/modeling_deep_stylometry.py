@@ -27,9 +27,9 @@ class DeepStylometry(L.LightningModule):
         weight_decay: float = 1e-2,
         num_cycles: float = 0.5,
         lm_weight: float = 1.0,
-        linear_layers: bool = True,
+        add_linear_layers: bool = True,
         contrastive_temp: float = 7e-2,
-        use_max: bool = False,
+        use_softmax: bool = True,
         pooling_method: str = "mean",
         distance_weightning: str = "none",
         initial_gumbel_temp: float = 1.0,
@@ -45,7 +45,7 @@ class DeepStylometry(L.LightningModule):
         # Misc
         self.is_decoder_model = is_decoder_model
         self.lm_weight = lm_weight
-        self.linear_layers = linear_layers
+        self.add_linear_layers = add_linear_layers
         self.initial_gumbel_temp = initial_gumbel_temp
         self.gumbel_temp = initial_gumbel_temp
         self.min_gumbel_temp = min_gumbel_temp
@@ -80,12 +80,12 @@ class DeepStylometry(L.LightningModule):
             alpha=alpha,
             temperature=contrastive_temp,
             seq_len=seq_len,
-            use_max=use_max,
+            use_softmax=use_softmax,
             pooling_method=pooling_method,
             distance_weightning=distance_weightning,
         )
         hidden_size = self.lm.hidden_size
-        if self.linear_layers:
+        if self.add_linear_layers:
             self.fc1 = nn.Linear(hidden_size, hidden_size)
             self.fc2 = nn.Linear(hidden_size, hidden_size)
 
