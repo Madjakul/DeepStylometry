@@ -19,6 +19,8 @@ NUM_PROC=32
 
 mkdir -p "$RAY_STORAGE_PATH" || true
 mkdir -p "$LOGS_DIR" || true
+mkdir -p "$PROJECT_ROOT/tmp/ray" || true
+export RAY_TMPDIR="$PROJECT_ROOT/tmp/ray"
 
 cmd=(python3 "$PROJECT_ROOT/tune.py"
     --config_path "$CONFIG_PATH"
