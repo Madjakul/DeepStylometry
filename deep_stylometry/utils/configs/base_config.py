@@ -23,23 +23,13 @@ class BaseConfig(DictAccessMixin):
     do_train: bool = True
     do_test: bool = False
 
-    data: Optional[DataConfig] = None
-    model: Optional[ModelConfig] = None
-    _train: Optional[TrainConfig] = None
-    _tune: Optional[TuneConfig] = None
-
-    def __post_init__(self):
-        if self.data is None:
-            self.data = DataConfig()
-        if self.model is None:
-            self.model = ModelConfig()
-        if self._train is None:
-            self._train = TrainConfig()
-        if self._tune is None:
-            self._tune = TuneConfig()
+    data: DataConfig = DataConfig()
+    model: ModelConfig = ModelConfig()
+    _train: TrainConfig = TrainConfig()
+    _tune: TuneConfig = TuneConfig()
 
     @property
-    def train(self) -> Union[TrainConfig, None]:
+    def train(self) -> TrainConfig:
         """Access the training configuration."""
         if self.mode != "train":
             raise ValueError(
@@ -48,7 +38,7 @@ class BaseConfig(DictAccessMixin):
         return self._train
 
     @property
-    def tune(self) -> Union[TuneConfig, None]:
+    def tune(self) -> TuneConfig:
         """Access the tuning configuration."""
         if self.mode != "tune":
             raise ValueError(

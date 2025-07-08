@@ -16,33 +16,11 @@ from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
 import wandb
 from deep_stylometry.modules import DeepStylometry
+from deep_stylometry.utils.configs import BaseConfig
 from deep_stylometry.utils.data.halvest_data import HALvestDataModule
 from deep_stylometry.utils.data.se_data import SEDataModule
 
 NUM_PROC = psutil.cpu_count(logical=False)
-
-
-class TestEveryNEpochs(L.Callback):
-    """Run the test set every N epochs.
-
-    Args:
-        n: The number of epochs to wait before running a test set.
-    """
-
-    def __init__(self, n: int):
-        # Call the parent class constructor
-        super().__init__()
-        self.n = n
-
-    def on_train_epoch_end(self, trainer: "L.Trainer", pl_module: "L.LightningModule"):
-        if (trainer.current_epoch + 1) % self.n == 0:
-            # Backup current callback metrics
-            backup_metrics = dict(trainer.callback_metrics)
-            test_loader = trainer.datamodule.test_dataloader()
-            # Run test
-            trainer.test(pl_module, dataloaders=test_loader)
-            # Restore validation callback metrics
-            trainer.callback_metrics = backup_metrics
 
 
 def setup_datamodule(
@@ -236,7 +214,6 @@ def setup_trainer(
 
 def train_tune(
     config: Dict[str, Any],
-    base_config: Dict[str, Any],
     logs_dir: str,
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
@@ -255,16 +232,17 @@ def train_tune(
         Number of processes to use for data loading. If None, defaults to the number
         of CPUs.
     """
-    merged_config = base_config.copy()
-    merged_config.update(config)
+
+    cfg = BaseConfig.from_dict(config)
 
     dm = setup_datamodule(
-        merged_config,
+        cfg,
         cache_dir=cache_dir,
         num_proc=num_proc,
         tuning_mode=True,
     )
-    model = setup_model(merged_config)
+    model = setup_model(cfg)
+    # TODO: Finish case handling for cfg
     callbacks = []
     callbacks.append(LearningRateMonitor(logging_interval="step"))
     callbacks.append(
@@ -284,9 +262,9 @@ def train_tune(
     loggers.append(
         CSVLogger(
             save_dir=logs_dir,
-            name=f"""tune-{merged_config['base_model_name']}-{merged_config['ds_name']}
-                -pooling:{merged_config['pooling_method']}-max:{merged_config['use_max']}
-                -dist:{merged_config['distance_weightning']}""",
+            name=f"""tune-{config['base_model_name']}-{config['ds_name']}
+                -pooling:{config['pooling_method']}-max:{config['use_max']}
+                -dist:{config['distance_weightning']}""",
         )
     )
     if merged_config["use_wandb"]:
