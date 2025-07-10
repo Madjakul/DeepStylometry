@@ -6,15 +6,12 @@ from typing import Any, Dict, Optional
 import lightning as L
 import psutil
 import torch
-from lightning.pytorch.callbacks import (
-    EarlyStopping,
-    LearningRateMonitor,
-    ModelCheckpoint,
-)
+import wandb
+from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
+                                         ModelCheckpoint)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
-import wandb
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils.configs import BaseConfig
 from deep_stylometry.utils.data.halvest_data import HALvestDataModule
