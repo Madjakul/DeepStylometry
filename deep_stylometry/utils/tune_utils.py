@@ -2,7 +2,7 @@
 
 import logging
 from functools import partial
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ray import tune
 from ray.air.integrations.wandb import WandbLoggerCallback
@@ -14,7 +14,7 @@ from deep_stylometry.utils.configs import BaseConfig
 from deep_stylometry.utils.train_utils import train_tune
 
 
-def make_tuners(o) -> Any:
+def make_tuners(o: Any) -> Any:
     if isinstance(o, dict) and "type" in o:
         t = o["type"]
         if t == "loguniform":

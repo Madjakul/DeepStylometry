@@ -7,34 +7,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from deep_stylometry.modules.late_interaction import LateInteraction
+from deep_stylometry.utils.configs import BaseConfig
 
 
 class InfoNCELoss(nn.Module):
 
-    def __init__(
-        self,
-        seq_len: int,
-        use_softmax: bool = True,
-        alpha: float = 1.0,
-        temperature: float = 0.07,
-        pooling_method: str = "mean",
-        distance_weightning: str = "none",
-    ):
+    def __init__(self, cfg: BaseConfig):
         super().__init__()
-        assert pooling_method in (
-            "mean",
-            "li",
-        ), "Pooling method must be 'mean' or 'li' for late interaction."
+        self.cfg = cfg
 
-        self.temperature = temperature
-
-        if pooling_method == "li":
-            self.pool = LateInteraction(
-                alpha=alpha,
-                seq_len=seq_len,
-                use_softmax=use_softmax,
-                distance_weightning=distance_weightning,
-            )
+        if self.cfg.model.pooling_method == "li":
+            self.pool = LateInteraction(self.cfg)
         else:
             self.pool = self.mean_pooling
 
@@ -58,7 +41,7 @@ class InfoNCELoss(nn.Module):
                 k_mask=k_mask,  # (B, S)
                 gumbel_temp=gumbel_temp,
             )
-            / self.temperature
+            / self.cfg.model.contrastive_temp
         )
 
         # --- 2. Identify positive pairs ---

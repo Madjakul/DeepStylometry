@@ -21,17 +21,18 @@ class TrainConfig(DictAccessMixin):
         Literal["val_total_loss", "val_auroc", "val_hr1", "val_mrr"]
     ] = None
     early_stopping_mode: Optional[Literal["min", "max"]] = None
-    early_stopping_patience: Optional[int] = None
+    early_stopping_patience: int = 3
     # --- checkpointing ---
     checkpoint_metric: Literal["val_total_loss", "val_auroc", "val_hr1", "val_mrr"] = (
-        "val_auroc"
+        "val_total_loss"
     )
-    checkpoint_mode: Literal["min", "max"] = "max"
+    checkpoint_mode: Literal["min", "max"] = "min"
     save_top_k: int = 2
     # --- trainer ---
     device: str = "gpu"
     num_devices: int = 3
     strategy: str = "ddp_find_unused_parameters_true"
+    max_steps: int = -1
     max_epochs: int = 4
     val_check_interval: Optional[float] = None
     check_val_every_n_epoch: Optional[int] = None

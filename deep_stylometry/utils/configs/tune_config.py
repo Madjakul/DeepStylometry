@@ -19,6 +19,7 @@ class TuneConfig(DictAccessMixin):
     device: str = "gpu"
     num_devices_per_trial: int = 3
     num_cpus_per_trial: int = 10
+    max_steps: int = -1
     max_epochs: int = 3
     log_every_n_steps: int = 1
     accumulate_grad_batches: int = 4

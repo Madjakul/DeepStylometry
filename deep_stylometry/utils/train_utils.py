@@ -24,7 +24,7 @@ NUM_PROC = psutil.cpu_count(logical=False)
 
 
 def setup_datamodule(
-    config: Dict[str, Any],
+    cfg: BaseConfig,
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
     tuning_mode: bool = False,
@@ -49,66 +49,25 @@ def setup_datamodule(
     num_proc = num_proc if num_proc is not None else NUM_PROC
     dm_map = {"se": SEDataModule, "halvest": HALvestDataModule}
 
-    dm = dm_map[config["ds_name"]](
-        batch_size=config.get("batch_size", 32),
+    dm = dm_map[cfg.data.ds_name](
+        batch_size=cfg.data.batch_size,
         num_proc=num_proc if num_proc is not None else NUM_PROC,
-        tokenizer_name=config["tokenizer_name"],
-        max_length=config.get("max_length", 512),
-        map_batch_size=config.get("map_batch_size", 1000),
-        load_from_cache_file=config.get("load_from_cache_file", True),
+        tokenizer_name=cfg.data.tokenizer_name,
+        max_length=cfg.data.max_length,
+        map_batch_size=cfg.data.map_batch_size,
+        load_from_cache_file=cfg.data.load_from_cache_file,
         cache_dir=cache_dir,
-        config_name=config.get("config_name", None),
-        mlm_collator=config.get("mlm_collator", False),
+        config_name=cfg.data.config_name,
+        mlm_collator=cfg.data.mlm_collator,
         tuning_mode=tuning_mode,
     )
     return dm
 
 
-def setup_model(config: Dict[str, Any]):
-    """Use the config to set up the model.
-
-    Parameters
-    ----------
-    config: Dict[str, Any]
-        Configuration dictionary containing the model parameters.
-
-    Returns
-    -------
-    model: DeepStylometry
-        The model instance with the specified parameters.
-    """
-    model = DeepStylometry(
-        base_model_name=config.get("base_model_name", "FacebookAI/roberta-base"),
-        batch_size=config.get("batch_size", 32),
-        seq_len=config.get("max_length", 512),
-        is_decoder_model=config.get("is_decoder_model", False),
-        lr=config.get("lr", 1e-5),
-        dropout=config.get("dropout", 0.1),
-        weight_decay=config.get("weight_decay", 0.015),
-        num_cycles=config.get("num_cycles", 1.0),
-        lm_weight=config.get("lm_weight", 0.0),
-        contrastive_weight=config.get("contrastive_weight", 1.0),
-        contrastive_temp=config.get("contrastive_temp", 0.13),
-        use_max=config.get("use_max", False),
-        pooling_method=config.get("pooling_method", "mean"),
-        distance_weightning=config.get("distance_weightning", "none"),
-        initial_gumbel_temp=config.get("initial_gumbel_temp", 1.0),
-        auto_anneal_gumbel=config.get("auto_anneal_gumbel", True),
-        min_gumbel_temp=config.get("min_gumbel_temp", 0.5),
-        alpha=config.get("alpha", 0.1),
-        betas=tuple(config.get("betas", (0.9, 0.999))),
-        eps=config.get("eps", 1e-8),
-    )
-
-    return model
-
-
 def setup_trainer(
-    config: Dict[str, Any],
+    cfg: BaseConfig,
     model: torch.nn.Module,
     logs_dir: str,
-    use_wandb: bool = False,
-    testing_mode: bool = False,
     checkpoint_dir: Optional[str] = None,
 ):
     """Setup the Lightning trainer with the specified configuration.
@@ -136,78 +95,68 @@ def setup_trainer(
     lr_monitor = LearningRateMonitor(logging_interval="step")
     callbacks.append(lr_monitor)
 
+    name = f"""{cfg.model.base_model_name}-{cfg.data.ds_name}
+        -pooling:{cfg.model.pooling_method}-softmax:{cfg.model.use_softmax}
+        -dist:{cfg.model.distance_weightning}"""
+
     # Early stopping if configured
-    if config.get("early_stopping", False):
+    if cfg.train.early_stopping:
         early_stop_callback = EarlyStopping(
-            monitor=config.get("early_stopping_metric", "val_total_loss"),
-            mode=config.get("early_stopping_mode", "min"),
-            patience=config.get("early_stopping_patience", 10),
+            monitor=cfg.train.early_stopping_metric,
+            mode=cfg.train.early_stopping_mode,
+            patience=cfg.train.early_stopping_patience,
         )
         callbacks.append(early_stop_callback)
-
-    # Test every n epochs
-    # test_callback = TestEveryNEpochs(config.get("test_every_n_epochs", 1))
-    # callbacks.append(test_callback)
 
     # Model checkpoint callback if checkpoint_dir is provided
     if checkpoint_dir is not None:
         checkpoint_callback = ModelCheckpoint(
-            dirpath=osp.join(
-                checkpoint_dir, config.get("experiment_name", "training-run")
-            ),
+            dirpath=osp.join(checkpoint_dir, name),
             filename="{epoch}",
-            monitor=config.get("checkpoint_metric", "val_auroc"),
-            mode=config.get("checkpoint_mode", "max"),
-            save_top_k=config.get("save_top_k", 2),
+            monitor=cfg.train.checkpoint_metric,
+            mode=cfg.train.checkpoint_mode,
+            save_top_k=cfg.train.save_top_k,
             save_last=True,
         )
         callbacks.append(checkpoint_callback)
 
     # Configure loggers
     loggers = []
-    mode = "test" if testing_mode else "train"
-    if use_wandb:
+    if cfg.train.use_wandb:
         wandb_logger = WandbLogger(
-            project=config.get("project_name", "deep-stylometry"),
-            name=f"""{mode}-{config['base_model_name']}-{config['ds_name']}
-                -pooling:{config['pooling_method']}-max:{config['use_max']}
-                -dist:{config['distance_weightning']}""",
-            log_model=config.get("log_model", False),
-            group=config.get("group_name", "training-run"),
+            project=cfg.project_name,
+            name=name,
+            log_model=cfg.train.log_model,
+            group=cfg.group_name,
         )
-        watch = config.get("watch", None)
+        watch = cfg.train.watch
         if watch is not None:
             wandb_logger.watch(
                 model=model,
                 log=watch,
                 log_graph=False,
-                log_freq=config.get("accumulate_grad_batches", 1) * 100,
+                log_freq=cfg.train.accumulate_grad_batches * 100,
             )
         loggers.append(wandb_logger)
 
     # Add CSV logger by default
-    csv_logger = CSVLogger(
-        save_dir=logs_dir,
-        name=f"""{mode}-{config['base_model_name']}-{config['ds_name']}
-                -pooling:{config['pooling_method']}-max:{config['use_max']}
-                -dist:{config['distance_weightning']}""",
-    )
+    csv_logger = CSVLogger(save_dir=logs_dir, name=name)
     loggers.append(csv_logger)
 
     trainer = L.Trainer(
-        accelerator=config.get("device", "cpu"),
-        strategy=config.get("strategy", "auto"),
-        devices=config.get("num_devices", -1),
-        max_steps=config.get("max_steps", -1),
-        max_epochs=config.get("max_epochs", 1),
-        val_check_interval=config.get("val_check_interval", None),
+        accelerator=cfg.train.device,
+        strategy=cfg.train.strategy,
+        devices=cfg.train.num_devices,
+        max_steps=cfg.train.max_steps,
+        max_epochs=cfg.train.max_epochs,
+        val_check_interval=cfg.train.val_check_interval,
         enable_checkpointing=checkpoint_dir is not None,
         logger=loggers,
         callbacks=callbacks,
-        log_every_n_steps=config.get("log_every_n_steps", 100),
-        accumulate_grad_batches=config.get("accumulate_grad_batches", 1),
-        gradient_clip_val=config.get("gradient_clip_val", None),
-        precision=config.get("precision", "16-mixed"),
+        log_every_n_steps=cfg.train.log_every_n_steps,
+        accumulate_grad_batches=cfg.train.accumulate_grad_batches,
+        gradient_clip_val=cfg.train.gradient_clip_val,
+        precision=cfg.train.precision,
     )
     return trainer
 
@@ -241,8 +190,7 @@ def train_tune(
         num_proc=num_proc,
         tuning_mode=True,
     )
-    model = setup_model(cfg)
-    # TODO: Finish case handling for cfg
+    model = DeepStylometry(cfg)
     callbacks = []
     callbacks.append(LearningRateMonitor(logging_interval="step"))
     callbacks.append(
@@ -262,36 +210,35 @@ def train_tune(
     loggers.append(
         CSVLogger(
             save_dir=logs_dir,
-            name=f"""tune-{config['base_model_name']}-{config['ds_name']}
-                -pooling:{config['pooling_method']}-max:{config['use_max']}
-                -dist:{config['distance_weightning']}""",
+            name=f"""tune-{cfg.model.base_model_name}-{cfg.data.ds_name}
+                -pooling:{cfg.model.pooling_method}-softmax:{cfg.model.use_softmax}
+                -dist:{cfg.model.distance_weightning}""",
         )
     )
-    if merged_config["use_wandb"]:
+    if cfg.train.use_wandb:
         wandb_logger = WandbLogger(
-            project=merged_config.get("project_name", "deep-stylometry"),
-            group=merged_config.get("group_name", "tune"),
+            project=cfg.project_name,
+            group=cfg.group_name,
             prefix="trial",
             log_model=False,
         )
         loggers.append(wandb_logger)
 
     trainer = L.Trainer(
-        accelerator=merged_config.get("device", "cpu"),
-        devices=merged_config.get("num_devices_per_trial", -1),
-        strategy=merged_config.get("strategy", "auto"),
-        max_steps=merged_config.get("max_steps", -1),
-        max_epochs=merged_config.get("max_epochs", 1),
+        accelerator=cfg.tune.device,
+        devices=cfg.tune.num_devices_per_trial,
+        max_steps=cfg.tune.max_steps,
+        max_epochs=cfg.tune.max_epochs,
         val_check_interval=None,
         callbacks=callbacks,
         enable_checkpointing=False,
         logger=loggers,
-        log_every_n_steps=merged_config.get("log_every_n_steps", 10),
-        accumulate_grad_batches=merged_config.get("accumulate_grad_batches", 2),
-        gradient_clip_val=merged_config.get("gradient_clip_val", None),
-        precision=merged_config.get("precision", "16-mixed"),
+        log_every_n_steps=cfg.tune.log_every_n_steps,
+        accumulate_grad_batches=cfg.tune.accumulate_grad_batches,
+        gradient_clip_val=cfg.tune.gradient_clip_val,
+        precision=cfg.tune.precision,
     )
     trainer.fit(model=model, datamodule=dm)
 
-    if merged_config["use_wandb"]:
+    if cfg.train.use_wandb:
         wandb.finish()

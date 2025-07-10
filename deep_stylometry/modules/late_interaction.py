@@ -6,32 +6,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from deep_stylometry.utils.configs import BaseConfig
+
 
 class LateInteraction(nn.Module):
 
-    def __init__(
-        self,
-        seq_len: int,
-        alpha: float = 0.1,
-        use_softmax: bool = False,
-        distance_weightning: str = "none",
-    ):
+    def __init__(self, cfg: BaseConfig):
         super().__init__()
-        assert distance_weightning in (
-            "none",
-            "exp",
-            "linear",
-        ), "Distance weighting must be 'none', 'exp', or 'linear'."
-        assert alpha >= 0, "Alpha must be non-negative."
+        self.cfg = cfg
 
-        self.distance_weightning = distance_weightning
-        self.use_softmax = use_softmax
         self.logit_scale = nn.Parameter(torch.log(torch.tensor(1 / 0.07)))
 
-        if self.distance_weightning != "none":
-            self.distance: torch.Tensor
-            self.alpha_raw = nn.Parameter(torch.tensor(alpha))
-            positions = torch.arange(seq_len)
+        if self.cfg.model.distance_weightning != "none":
+            # self.distance: torch.Tensor
+            self.alpha_raw = nn.Parameter(torch.tensor(self.cfg.model.alpha))
+            positions = torch.arange(self.cfg.data.max_length)
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
             self.register_buffer("distance", distance)
 
@@ -65,7 +54,7 @@ class LateInteraction(nn.Module):
         # Compute token-level cosine similarities
         sim_matrix = torch.einsum("insh, mjth->ijst", query_embs, key_embs)
 
-        if self.distance_weightning == "exp":
+        if self.cfg.model.distance_weightning == "exp":
             w = torch.exp(-self.alpha * self.distance)
             sim_matrix = sim_matrix * w  # .to(sim_matrix.device)
         elif self.distance_weightning == "linear":
@@ -75,7 +64,7 @@ class LateInteraction(nn.Module):
         # Compute valid mask for token pairs
         valid_mask = torch.einsum("ixs, xjt->ijst", q_mask, k_mask).bool()
 
-        if not self.use_softmax:
+        if not self.cfg.model.use_softmax:
             # Max-based interaction
             sim_matrix_scaled = self.scale * sim_matrix
             masked_sim = sim_matrix_scaled.masked_fill(~valid_mask, -float("inf"))
