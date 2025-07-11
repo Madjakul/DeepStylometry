@@ -42,6 +42,8 @@ model:
   min_gumbel_temp: 0.5
 
 tune:
+  loss: "info_nce"
+  margin: null # Only if using triplet loss
   # --- optimizer ---
   lr:
     type: loguniform

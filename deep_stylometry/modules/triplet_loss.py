@@ -1,4 +1,4 @@
-# deep_stylometry/modules/info_nce_loss.py
+# deep_stylometry/modules/triplet_loss.py
 
 from typing import TYPE_CHECKING, Optional
 
@@ -12,13 +12,14 @@ if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
 
 
-class InfoNCELoss(nn.Module):
+class TripletLoss(nn.Module):
 
     def __init__(self, cfg: "BaseConfig"):
         super().__init__()
+        assert cfg.train.margin is not None
         self.cfg = cfg
 
-        if self.cfg.model.pooling_method == "li":
+        if cfg.model.pooling_method == "li":
             self.pool = LateInteraction(self.cfg)
         else:
             self.pool = self.mean_pooling
@@ -34,29 +35,28 @@ class InfoNCELoss(nn.Module):
         batch_size = query_embs.size(0)
 
         # Compute the (B, 3B) similarity matrix
-        all_scores = (
-            self.pool(
-                query_embs=query_embs,  # (B, S, H)
-                key_embs=key_embs,  # (3B, S, H)
-                q_mask=q_mask,  # (B, S)
-                k_mask=k_mask,  # (3B, S)
-                gumbel_temp=gumbel_temp,
-            )
-            / self.cfg.model.contrastive_temp
+        all_scores = self.pool(
+            query_embs=query_embs,  # (B, S, H)
+            key_embs=key_embs,  # (3B, S, H)
+            q_mask=q_mask,  # (B, S)
+            k_mask=k_mask,  # (3B, S)
+            gumbel_temp=gumbel_temp,
         )
 
-        # Mask out the anchor–anchor scores in columns [0, ..., B-1]
+        # For each anchor i, select the score for positive i and negative i
         # Not in buffer because it would require a fixe batch size
-        idx = torch.arange(batch_size)
-        all_scores[idx, idx] = float("-inf")
+        row_indices = torch.arange(batch_size)
 
-        # Get positive columns
-        # For row i, the positive column is i + 1
-        targets = idx + batch_size
+        # Positive scores are in columns [B, B+1, ..., 2B-1]
+        targets_indices = row_indices + batch_size
+        pos_scores = all_scores[row_indices, row_indices + batch_size]
 
-        contrastive_loss = F.cross_entropy(all_scores, targets, reduction="mean")
+        # Negative scores are in columns [2B, 2B+1, ..., 3B-1]
+        neg_scores = all_scores[row_indices, row_indices + (2 * batch_size)]
 
-        return all_scores, targets, contrastive_loss
+        loss = F.relu(self.cfg.train.margin - pos_scores + neg_scores).mean()
+
+        return all_scores, targets_indices, loss
 
     @staticmethod
     def mean_pooling(

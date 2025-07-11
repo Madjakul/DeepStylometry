@@ -34,6 +34,8 @@ model:
   min_gumbel_temp: 0.5
 
 train:
+  loss: "info_nce"
+  margin: null # Only if using triplet loss
   # --- optimizer ---
   lr: 4.73e-5
   betas: [0.7, 0.999]

@@ -10,7 +10,7 @@ from ray.tune import FailureConfig
 from ray.tune.schedulers import AsyncHyperBandScheduler
 from ray.tune.search.hyperopt import HyperOptSearch
 
-from deep_stylometry.utils.configs import BaseConfig
+from deep_stylometry.utils.configs.base_config import BaseConfig
 from deep_stylometry.utils.train_utils import train_tune
 
 

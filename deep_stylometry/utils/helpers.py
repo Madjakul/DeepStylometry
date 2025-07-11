@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import os.path as osp
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 from transformers import AutoTokenizer

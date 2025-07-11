@@ -1,17 +1,18 @@
 # deep_stylometry/modules/late_interaction.py
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from deep_stylometry.utils.configs import BaseConfig
+if TYPE_CHECKING:
+    from deep_stylometry.utils.configs import BaseConfig
 
 
 class LateInteraction(nn.Module):
 
-    def __init__(self, cfg: BaseConfig):
+    def __init__(self, cfg: "BaseConfig"):
         super().__init__()
         self.cfg = cfg
 
@@ -57,7 +58,7 @@ class LateInteraction(nn.Module):
         if self.cfg.model.distance_weightning == "exp":
             w = torch.exp(-self.alpha * self.distance)
             sim_matrix = sim_matrix * w  # .to(sim_matrix.device)
-        elif self.distance_weightning == "linear":
+        elif self.cfg.model.distance_weightning == "linear":
             w = 1.0 / (1.0 + self.alpha * self.distance)
             sim_matrix = sim_matrix * w  # .to(sim_matrix.device)
 

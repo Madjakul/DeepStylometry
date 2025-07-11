@@ -10,6 +10,8 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 class TrainConfig(DictAccessMixin):
 
     # --- optimizer ---
+    loss: Literal["info_nce", "triplet"] = "info_nce"
+    margin: Optional[float] = None  # Only used for triplet loss
     lr: float = 4.73e-5
     betas: Tuple[float, float] = (0.7, 0.999)
     eps: float = 1e-9

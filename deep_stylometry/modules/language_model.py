@@ -1,13 +1,14 @@
 # deep_stylometry/modules/language_model.py
 
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import torch
 import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForMaskedLM
 
-from deep_stylometry.utils.configs import BaseConfig
+if TYPE_CHECKING:
+    from deep_stylometry.utils.configs import BaseConfig
 
 
 class LanguageModel(nn.Module):
@@ -42,7 +43,7 @@ class LanguageModel(nn.Module):
         that the model can handle.
     """
 
-    def __init__(self, cfg: BaseConfig):
+    def __init__(self, cfg: "BaseConfig"):
         super(LanguageModel, self).__init__()
         self.cfg = cfg
 

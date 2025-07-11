@@ -6,16 +6,19 @@ from typing import Any, Dict, Optional
 import lightning as L
 import psutil
 import torch
-import wandb
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
-from deep_stylometry.modules import DeepStylometry
-from deep_stylometry.utils.configs import BaseConfig
+import wandb
+from deep_stylometry.modules.modeling_deep_stylometry import DeepStylometry
+from deep_stylometry.utils.configs.base_config import BaseConfig
 from deep_stylometry.utils.data.halvest_data import HALvestDataModule
-from deep_stylometry.utils.data.se_data import SEDataModule
+from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDataModule
 
 NUM_PROC = psutil.cpu_count(logical=False)
 
@@ -44,7 +47,7 @@ def setup_datamodule(
         The data module for the specified dataset.
     """
     num_proc = num_proc if num_proc is not None else NUM_PROC
-    dm_map = {"se": SEDataModule, "halvest": HALvestDataModule}
+    dm_map = {"se": StyleEmbeddingDataModule, "halvest": HALvestDataModule}
 
     dm = dm_map[cfg.data.ds_name](
         batch_size=cfg.data.batch_size,

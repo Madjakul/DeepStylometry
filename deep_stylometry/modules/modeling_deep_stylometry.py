@@ -1,7 +1,7 @@
 # deep_stylometry/modules/modeling_deep_stylometry.py
 
 import logging
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 import lightning as L
 import torch
@@ -12,37 +12,26 @@ from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
-from deep_stylometry.utils.configs import BaseConfig
+from deep_stylometry.modules.triplet_loss import TripletLoss
+
+if TYPE_CHECKING:
+    from deep_stylometry.utils.configs import BaseConfig
 
 
 class DeepStylometry(L.LightningModule):
 
-    def __init__(self, cfg: BaseConfig):
+    loss_map = {"info_nce": InfoNCELoss, "triplet": TripletLoss}
+
+    def __init__(self, cfg: "BaseConfig"):
         super().__init__()
         self.save_hyperparameters()
 
-        # Misc
-        # self.is_decoder_model = is_decoder_model
-        # self.lm_weight = lm_weight
-        # self.add_linear_layers = add_linear_layers
-        # self.initial_gumbel_temp = initial_gumbel_temp
-        # self.gumbel_temp = initial_gumbel_temp
-        # self.min_gumbel_temp = min_gumbel_temp
-        # self.auto_anneal_gumbel = auto_anneal_gumbel
-        #
-        # # Training
-        # self.weight_decay = weight_decay
-        # self.batch_size = batch_size
-        # self.num_cycles = num_cycles
-        # self.dropout = dropout
-        # self.lr = lr
-        # self.betas = betas
-        # self.eps = eps
         self.cfg = cfg
         self.gumbel_temp = self.cfg.model.initial_gumbel_temp
+        self.contrastive_loss = self.loss_map[cfg.train.loss](cfg)
 
         # Validation metrics
-        self.val_auroc = MulticlassAUROC(num_classes=self.cfg.data.batch_size).to(
+        self.val_auroc = MulticlassAUROC(num_classes=3 * self.cfg.data.batch_size).to(
             self.device
         )
         self.val_hr1 = HitRate(k=1).to(self.device)
@@ -51,7 +40,7 @@ class DeepStylometry(L.LightningModule):
         self.val_rr = ReciprocalRank().to(self.device)
 
         # Test metrics
-        self.test_auroc = MulticlassAUROC(num_classes=self.cfg.data.batch_size).to(
+        self.test_auroc = MulticlassAUROC(num_classes=3 * self.cfg.data.batch_size).to(
             self.device
         )
         self.test_hr1 = HitRate(k=1).to(self.device)
@@ -61,9 +50,8 @@ class DeepStylometry(L.LightningModule):
 
         # Model
         self.lm = LanguageModel(cfg)
-        self.contrastive_loss = InfoNCELoss(cfg)
-        hidden_size = self.lm.hidden_size
         if self.add_linear_layers:
+            hidden_size = self.lm.hidden_size
             self.fc1 = nn.Linear(hidden_size, hidden_size)
             self.fc2 = nn.Linear(hidden_size, hidden_size)
 
@@ -71,34 +59,40 @@ class DeepStylometry(L.LightningModule):
         lm_loss, _, q_embs = self(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-            labels=batch.get("labels", None),
+            labels=batch.get("labels", None),  # only exists if MLM collator is used
         )
-        _, _, k_embs = self(
-            input_ids=batch["k_input_ids"],
-            attention_mask=batch["k_attention_mask"],
+        _, _, pos_embs = self(
+            input_ids=batch["pos_input_ids"],
+            attention_mask=batch["pos_attention_mask"],
+        )
+        _, _, neg_embs = self(
+            input_ids=batch["neg_input_ids"],
+            attention_mask=batch["neg_attention_mask"],
         )
 
-        contrastive_loss = 0.0
-        all_scores = None
-        pos_query_scores = None
-        pos_query_targets = None
-        all_scores, pos_query_scores, pos_query_targets, contrastive_loss = (
-            self.contrastive_loss(
-                q_embs,
-                k_embs,
-                batch["author_label"],
+        k_embs = torch.cat([q_embs, pos_embs, neg_embs], dim=0)  # (3B, S, H)
+        k_mask = torch.cat(
+            [
                 batch["attention_mask"],
-                batch["k_attention_mask"],
-                gumbel_temp=self.gumbel_temp,
-            )
+                batch["pos_attention_mask"],
+                batch["neg_attention_mask"],
+            ],
+            dim=0,
+        )  # (3B, S)
+
+        all_scores, targets, contrastive_loss = self.contrastive_loss(
+            query_embs=q_embs,
+            key_embs=k_embs,
+            q_mask=batch["attention_mask"],
+            k_mask=k_mask,
+            gumbel_temp=self.gumbel_temp,
         )
 
         total_loss = (self.lm_weight * lm_loss) + contrastive_loss
 
         metrics = {
             "all_scores": all_scores,
-            "pos_query_scores": pos_query_scores,
-            "pos_query_targets": pos_query_targets,
+            "targets": targets,
             "lm_loss": lm_loss * self.lm_weight,
             "contrastive_loss": contrastive_loss,
             "total_loss": total_loss,
@@ -194,7 +188,6 @@ class DeepStylometry(L.LightningModule):
                 on_step=True,
                 on_epoch=False,
                 batch_size=self.cfg.data.batch_size,
-                logger=True,
             )
         self.log_dict(
             {
@@ -213,41 +206,14 @@ class DeepStylometry(L.LightningModule):
     def validation_step(self, batch, batch_idx: int):
         metrics = self._compute_losses(batch)
 
-        if metrics["pos_query_scores"] is not None:
-            pos_preds = metrics["pos_query_scores"]
-            pos_targets = metrics["pos_query_targets"]
+        all_scores = metrics["all_scores"]
+        targets = metrics["targets"]
 
-            # --- START: PADDING LOGIC ---
-
-            # Get the expected number of classes from the metric itself
-            num_classes = self.val_auroc.num_classes
-
-            # Get the shape of the current predictions
-            current_batch_size, current_num_classes = pos_preds.shape
-
-            # If the current number of classes doesn't match the expected, pad it.
-            # This will only happen on the last, smaller batch.
-            if current_num_classes != num_classes:
-                padded_preds = torch.full(
-                    (current_batch_size, num_classes),
-                    -torch.inf,  # Use -inf to ensure these are ranked last
-                    device=pos_preds.device,
-                    dtype=pos_preds.dtype,
-                )
-
-                # Copy the actual predictions into the new padded tensor
-                padded_preds[:, :current_num_classes] = pos_preds
-
-                # Use the padded tensor for the update
-                pos_preds = padded_preds
-
-            # --- END: PADDING LOGIC ---
-
-            self.val_auroc.update(pos_preds, pos_targets)
-            self.val_hr1.update(pos_preds, pos_targets)
-            self.val_hr5.update(pos_preds, pos_targets)
-            self.val_hr10.update(pos_preds, pos_targets)
-            self.val_rr.update(pos_preds, pos_targets)
+        self.val_auroc.update(all_scores, targets)
+        self.val_hr1.update(all_scores, targets)
+        self.val_hr5.update(all_scores, targets)
+        self.val_hr10.update(all_scores, targets)
+        self.val_rr.update(all_scores, targets)
 
         self.log_dict(
             {
@@ -290,42 +256,15 @@ class DeepStylometry(L.LightningModule):
 
     def test_step(self, batch, batch_idx: int):
         metrics = self._compute_losses(batch)
-        if metrics["pos_query_scores"] is not None:
-            pos_preds = metrics["pos_query_scores"]
-            pos_targets = metrics["pos_query_targets"]
 
-            # --- START: PADDING LOGIC ---
+        all_scores = metrics["all_scores"]
+        targets = metrics["targets"]
 
-            # Get the expected number of classes from the metric itself
-            num_classes = self.val_auroc.num_classes  # This will be 32
-
-            # Get the shape of the current predictions
-            current_batch_size, current_num_classes = pos_preds.shape
-
-            # If the current number of classes doesn't match the expected, pad it.
-            # This will only happen on the last, smaller batch.
-            if current_num_classes != num_classes:
-                # Create a new tensor with the correct shape [16, 32] and fill with a large negative value
-                padded_preds = torch.full(
-                    (current_batch_size, num_classes),
-                    -torch.inf,  # Use -inf to ensure these are ranked last
-                    device=pos_preds.device,
-                    dtype=pos_preds.dtype,
-                )
-
-                # Copy the actual predictions into the new padded tensor
-                padded_preds[:, :current_num_classes] = pos_preds
-
-                # Use the padded tensor for the update
-                pos_preds = padded_preds
-
-            # --- END: PADDING LOGIC ---
-
-            self.test_auroc.update(pos_preds, pos_targets)
-            self.test_hr1.update(pos_preds, pos_targets)
-            self.test_hr5.update(pos_preds, pos_targets)
-            self.test_hr10.update(pos_preds, pos_targets)
-            self.test_rr.update(pos_preds, pos_targets)
+        self.test_auroc.update(all_scores, targets)
+        self.test_hr1.update(all_scores, targets)
+        self.test_hr5.update(all_scores, targets)
+        self.test_hr10.update(all_scores, targets)
+        self.test_rr.update(all_scores, targets)
 
         self.log_dict(
             {
