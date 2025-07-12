@@ -1,10 +1,11 @@
 # deep_stylometry/modules/info_nce_loss.py
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from jaxtyping import Float, Int
 
 from deep_stylometry.modules.late_interaction import LateInteraction
 
@@ -14,9 +15,10 @@ if TYPE_CHECKING:
 
 class InfoNCELoss(nn.Module):
 
-    def __init__(self, cfg: "BaseConfig"):
+    def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
         self.cfg = cfg
+        self.register_buffer("IGNORE", torch.tensor(float("-inf")))
 
         if self.cfg.model.pooling_method == "li":
             self.pool = LateInteraction(self.cfg)
@@ -25,12 +27,16 @@ class InfoNCELoss(nn.Module):
 
     def forward(
         self,
-        query_embs: torch.Tensor,
-        key_embs: torch.Tensor,
-        q_mask: torch.Tensor,
-        k_mask: torch.Tensor,
+        query_embs: Float[torch.Tensor, "batch seq hidden"],
+        key_embs: Float[torch.Tensor, "three_times_batch seq hidden"],
+        q_mask: Int[torch.Tensor, "batch seq"],
+        k_mask: Int[torch.Tensor, "three_times_batch seq"],
         gumbel_temp: Optional[float] = None,
-    ):
+    ) -> Tuple[
+        Float[torch.Tensor, "batch three_times_batch"],
+        Float[torch.Tensor, "batch"],
+        Float[torch.Tensor, ""],
+    ]:
         batch_size = query_embs.size(0)
 
         # Compute the (B, 3B) similarity matrix
@@ -48,7 +54,7 @@ class InfoNCELoss(nn.Module):
         # Mask out the anchor–anchor scores in columns [0, ..., B-1]
         # Not in buffer because it would require a fixe batch size
         idx = torch.arange(batch_size)
-        all_scores[idx, idx] = float("-inf")
+        all_scores[idx, idx] = self.IGNORE
 
         # Get positive columns
         # For row i, the positive column is i + 1
@@ -60,12 +66,12 @@ class InfoNCELoss(nn.Module):
 
     @staticmethod
     def mean_pooling(
-        query_embs: torch.Tensor,
-        key_embs: torch.Tensor,
-        q_mask: torch.Tensor,
-        k_mask: torch.Tensor,
+        query_embs: Float[torch.Tensor, "batch seq hidden"],
+        key_embs: Float[torch.Tensor, "three_times_batch seq hidden"],
+        q_mask: Int[torch.Tensor, "batch seq"],
+        k_mask: Int[torch.Tensor, "three_times_batch seq"],
         **kwargs,
-    ):
+    ) -> Float[torch.Tensor, "batch three_times_batch"]:
         # Mean pooling and normalization
         q_mask_sum = q_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
         query_vec = (query_embs * q_mask.unsqueeze(-1)).sum(dim=1) / q_mask_sum

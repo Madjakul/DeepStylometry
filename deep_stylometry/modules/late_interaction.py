@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from jaxtyping import Float, Int
 
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
@@ -12,11 +13,12 @@ if TYPE_CHECKING:
 
 class LateInteraction(nn.Module):
 
-    def __init__(self, cfg: "BaseConfig"):
+    def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
         self.cfg = cfg
 
         self.logit_scale = nn.Parameter(torch.log(torch.tensor(1 / 0.07)))
+        self.register_buffer("IGNORE", torch.tensor(float("-inf")))
 
         if self.cfg.model.distance_weightning != "none":
             # self.distance: torch.Tensor
@@ -26,24 +28,24 @@ class LateInteraction(nn.Module):
             self.register_buffer("distance", distance)
 
     @property
-    def alpha(self):
+    def alpha(self) -> Float[torch.Tensor, ""]:
         """Leaky ReLU ensures alpha >= 0 and has a non-saturating gradient for
         positive values and won't be stuck when it gets slightly below zero."""
         return F.leaky_relu(self.alpha_raw)
 
     @property
-    def scale(self):
+    def scale(self) -> Float[torch.Tensor, ""]:
         """Exponentiate the scale to get the actual scaling factor."""
         return torch.exp(self.logit_scale)
 
     def forward(
         self,
-        query_embs: torch.Tensor,
-        key_embs: torch.Tensor,
-        q_mask: torch.Tensor,
-        k_mask: torch.Tensor,
+        query_embs: Float[torch.Tensor, "batch seq hidden"],
+        key_embs: Float[torch.Tensor, "three_times_batch seq hidden"],
+        q_mask: Int[torch.Tensor, "batch seq"],
+        k_mask: Int[torch.Tensor, "three_times_batch seq"],
         gumbel_temp: Optional[float] = None,
-    ):
+    ) -> Float[torch.Tensor, "batch three_times_batch"]:
         # Normalize embeddings to preserve cosine similarity
         query_embs = query_embs.unsqueeze(1)  # (B, 1, S, H)
         query_embs = F.normalize(query_embs, p=2, dim=-1)
@@ -68,7 +70,7 @@ class LateInteraction(nn.Module):
         if not self.cfg.model.use_softmax:
             # Max-based interaction
             sim_matrix_scaled = self.scale * sim_matrix
-            masked_sim = sim_matrix_scaled.masked_fill(~valid_mask, -float("inf"))
+            masked_sim = sim_matrix_scaled.masked_fill(~valid_mask, self.IGNORE)
             max_sim_values, _ = masked_sim.max(dim=-1)  # (B, B, S)
             scores = (max_sim_values * q_mask.squeeze(1).unsqueeze(1)).sum(dim=-1)
             return scores
@@ -77,7 +79,7 @@ class LateInteraction(nn.Module):
         logits = self.scale * sim_matrix
 
         # Mask the padding tokens
-        logits = logits.masked_fill(~valid_mask, float("-inf"))
+        logits = logits.masked_fill(~valid_mask, self.IGNORE)
 
         if self.training and gumbel_temp is not None:
             p_ij = F.gumbel_softmax(logits, tau=gumbel_temp, hard=False)
