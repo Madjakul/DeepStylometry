@@ -37,9 +37,9 @@ class BaseConfig(DictAccessMixin):
     def _set_execution_config(self):
         """Set the execution config based on current mode."""
         if self.mode == "train":
-            self._execution_config = TrainConfig()
+            self._execution_config = self._train
         elif self.mode == "tune":
-            self._execution_config = TuneConfig()
+            self._execution_config = self._tune
         else:
             raise ValueError(f"Unknown mode: {self.mode}")
 
@@ -77,7 +77,9 @@ class BaseConfig(DictAccessMixin):
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "BaseConfig":
         """Create configuration from dictionary, overriding defaults."""
-        config = cls()
+        # Extract mode first if it exists
+        mode = config_dict.get("mode", "train")
+        config = cls(mode=mode)
 
         for section_name, section_data in config_dict.items():
             if hasattr(config, section_name) and isinstance(section_data, dict):

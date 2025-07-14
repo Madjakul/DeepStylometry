@@ -4,7 +4,6 @@ import logging
 from functools import partial
 from typing import Any, Optional
 
-from ray import tune
 from ray.air.integrations.wandb import WandbLoggerCallback
 from ray.tune import FailureConfig
 from ray.tune.schedulers import AsyncHyperBandScheduler
@@ -12,6 +11,7 @@ from ray.tune.search.hyperopt import HyperOptSearch
 
 from deep_stylometry.utils.configs.base_config import BaseConfig
 from deep_stylometry.utils.train_utils import train_tune
+from ray import tune
 
 
 def make_param_space(o: Any) -> Optional[Any]:
@@ -63,7 +63,6 @@ def setup_tuner(
     logs_dir: str,
     use_wandb: bool = False,
     cache_dir: Optional[str] = None,
-    num_proc: Optional[int] = None,
 ):
     """Sets up the Ray Tune tuner for hyperparameter tuning. Uses
     HyperOptSearch and AsyncHyperBandScheduler. No checkpointing is done during
@@ -108,7 +107,6 @@ def setup_tuner(
     trainable_fn = partial(
         train_tune,
         cache_dir=cache_dir,
-        num_proc=num_proc,
         logs_dir=logs_dir,
     )
 
@@ -116,7 +114,7 @@ def setup_tuner(
         trainable_fn,
         {
             config.tune.device: config.tune.num_devices_per_trial,
-            "cpu": num_proc,
+            "cpu": config.tune.num_cpus_per_trial,
         },
     )
 
@@ -129,8 +127,8 @@ def setup_tuner(
     tuner = tune.Tuner(
         trainable_with_resources,
         tune_config=tune.TuneConfig(
-            metric="auroc",
-            mode="max",
+            metric=config.tune.metric,
+            mode=config.tune.mode,
             search_alg=HyperOptSearch(),
             scheduler=asha_scheduler,
             num_samples=config.tune.num_samples,
@@ -149,6 +147,7 @@ def setup_tuner(
             failure_config=FailureConfig(max_failures=0, fail_fast=True),
             stop={"completed_epoch": config.tune.max_t},
             callbacks=callbacks,
+            verbose=2,
         ),
         param_space=param_space,
     )

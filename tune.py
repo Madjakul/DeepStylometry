@@ -27,9 +27,8 @@ if __name__ == "__main__":
     tuner = tune_utils.setup_tuner(
         config=config,
         ray_storage_path=args.ray_storage_path,
-        use_wandb=config.get("use_wandb", False),
+        use_wandb=config.tune.use_wandb,
         cache_dir=args.cache_dir,
-        num_proc=config.get("num_cpus_per_trial", NUM_PROC),
         logs_dir=args.logs_dir,
     )
     results = tuner.fit()

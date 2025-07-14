@@ -1,5 +1,6 @@
 # deep_stylometry/utils/train_utils.py
 
+import logging
 import os.path as osp
 from typing import Any, Dict, Optional
 
@@ -7,8 +8,11 @@ import lightning as L
 import psutil
 import torch
 import wandb
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
@@ -162,7 +166,6 @@ def train_tune(
     config: Dict[str, Any],
     logs_dir: str,
     cache_dir: Optional[str] = None,
-    num_proc: Optional[int] = None,
 ):
     """Launch hyper-parameter tuning using Ray Tune and PyTorch Lightning.
 
@@ -184,7 +187,7 @@ def train_tune(
     dm = setup_datamodule(
         cfg,
         cache_dir=cache_dir,
-        num_proc=num_proc,
+        num_proc=cfg.tune.num_cpus_per_trial,
         tuning_mode=True,
     )
     model = DeepStylometry(cfg)
