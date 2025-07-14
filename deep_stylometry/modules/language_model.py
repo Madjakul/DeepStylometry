@@ -1,10 +1,11 @@
 # deep_stylometry/modules/language_model.py
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import torch
 import torch.nn as nn
+from jaxtyping import Float, Int
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForMaskedLM
 
 if TYPE_CHECKING:
@@ -12,36 +13,6 @@ if TYPE_CHECKING:
 
 
 class LanguageModel(nn.Module):
-    """A wrapper class for loading a language model from Hugging Face's
-    transformers library. This class can load either a decoder model (e.g.,
-    GPT-2) or an encoder model (e.g., BERT) based on the specified model name.
-    The class also provides a forward method that computes the loss and returns
-    the last hidden states of the model.
-
-    Parameters
-    ----------
-    model_name: str
-        The name of the pretrained model to load from Hugging Face's transformers
-        library.
-    is_decoder_model: bool
-        If True, load a decoder model (e.g., GPT-2). If False, load an encoder
-        model (e.g., BERT). This parameter determines the type of model to load
-        and affects the behavior of the forward method.
-
-    Attributes
-    ----------
-    model: transformers.PreTrainedModel
-        The loaded pretrained model from Hugging Face's transformers library.
-    is_decoder: bool
-        Indicates whether the loaded model is a decoder model (True) or an
-        encoder model (False).
-    hidden_size: int
-        The hidden size of the model, which is the size of the hidden states
-        produced by the model.
-    vocab_size: int
-        The vocabulary size of the model, which is the number of unique tokens
-        that the model can handle.
-    """
 
     def __init__(self, cfg: "BaseConfig"):
         super(LanguageModel, self).__init__()
@@ -69,10 +40,10 @@ class LanguageModel(nn.Module):
 
     def forward(
         self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        labels: Optional[torch.Tensor] = None,
-    ):
+        input_ids: Int[torch.Tensor, "batch seq"],
+        attention_mask: Int[torch.Tensor, "batch seq"],
+        labels: Optional[Int[torch.Tensor, "batch seq"]] = None,
+    ) -> Tuple[Float[torch.Tensor, ""], Float[torch.Tensor, "batch seq hidden"]]:
         if self.cfg.model.is_decoder_model and labels is None:
             labels = input_ids.clone()
         out = self.model(
@@ -82,6 +53,6 @@ class LanguageModel(nn.Module):
             output_hidden_states=True,
             return_dict=True,
         )
-        loss = out.loss if out.loss is not None else 0.0
+        loss = out.loss if out.loss is not None else torch.tensor(0.0)
         last_hidden_states = out.hidden_states[-1]
         return loss, last_hidden_states
