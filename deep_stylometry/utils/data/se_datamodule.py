@@ -1,4 +1,4 @@
-# deep_stylometry/utils/data/se_triplet_datamodule.py
+# deep_stylometry/utils/data/se_datamodule.py
 
 from typing import Any, Dict, List
 
@@ -6,8 +6,9 @@ import lightning as L
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 
-from deep_stylometry.utils.data.custom_data_collator import \
-    CustomDataCollatorForLanguageModeling
+from deep_stylometry.utils.data.custom_data_collator import (
+    CustomDataCollatorForLanguageModeling,
+)
 from deep_stylometry.utils.data.custom_sampler import PadLastBatchSampler
 from deep_stylometry.utils.helpers import get_tokenizer
 
@@ -58,7 +59,7 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
             pos_text = batch["Utterance 2 (U2)"]
             neg_text = batch["Utterance 1 (U1)"]
         tokenized_q = self.tokenizer(
-            batch["query_text"],
+            batch["Anchor (A)"],
             truncation=True,
             padding="max_length",
             max_length=self.max_length,

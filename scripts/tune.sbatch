@@ -11,6 +11,7 @@
 
 module purge
 
+export RAY_TMPDIR="/scratch/$USER/DeepStylometry"
 source /home/$USER/.bashrc
 conda activate deep_stylometry
 

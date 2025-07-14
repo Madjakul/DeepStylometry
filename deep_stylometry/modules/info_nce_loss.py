@@ -53,7 +53,7 @@ class InfoNCELoss(nn.Module):
 
         # Mask out the anchor–anchor scores in columns [0, ..., B-1]
         # Not in buffer because it would require a fixe batch size
-        idx = torch.arange(batch_size)
+        idx = torch.arange(batch_size, device=query_embs.device)
         all_scores[idx, idx] = self.IGNORE
 
         # Get positive columns

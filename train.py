@@ -20,7 +20,7 @@ logging_config()
 
 if __name__ == "__main__":
     args = TrainArgparse.parse_known_args()
-    cfg = BaseConfig.from_yaml(args.config_path)
+    cfg = BaseConfig(mode="train").from_yaml(args.config_path)
 
     logging.info("Preparing data module...")
     dm = train_utils.setup_datamodule(

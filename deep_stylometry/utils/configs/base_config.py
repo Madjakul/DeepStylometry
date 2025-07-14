@@ -22,11 +22,26 @@ class BaseConfig(DictAccessMixin):
     group_name: str = "train-deep-stylometry-512-se"
     do_train: bool = True
     do_test: bool = False
+    _execution_config: Optional[Union[TrainConfig, TuneConfig]] = None
 
     data: DataConfig = DataConfig()
     model: ModelConfig = ModelConfig()
     _train: TrainConfig = TrainConfig()
     _tune: TuneConfig = TuneConfig()
+
+    def __post_init__(self):
+        # Initialize execution config based on mode
+        if self._execution_config is None:
+            self._set_execution_config()
+
+    def _set_execution_config(self):
+        """Set the execution config based on current mode."""
+        if self.mode == "train":
+            self._execution_config = TrainConfig()
+        elif self.mode == "tune":
+            self._execution_config = TuneConfig()
+        else:
+            raise ValueError(f"Unknown mode: {self.mode}")
 
     @property
     def train(self) -> TrainConfig:
@@ -45,6 +60,11 @@ class BaseConfig(DictAccessMixin):
                 "Cannot access tuning configuration when mode is not 'tune'."
             )
         return self._tune
+
+    @property
+    def execution(self) -> Union[TrainConfig, TuneConfig]:
+        """Access current execution config regardless of mode."""
+        return self._execution_config
 
     @classmethod
     def from_yaml(cls, yaml_path: Union[str, Path]) -> "BaseConfig":

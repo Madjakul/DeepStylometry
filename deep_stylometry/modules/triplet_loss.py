@@ -50,7 +50,7 @@ class TripletLoss(nn.Module):
 
         # For each anchor i, select the score for positive i and negative i
         # Not in buffer because it would require a fixe batch size
-        row_indices = torch.arange(batch_size)
+        row_indices = torch.arange(batch_size, device=query_embs.device)
 
         # Positive scores are in columns [B, B+1, ..., 2B-1]
         targets_indices = row_indices + batch_size

@@ -36,6 +36,7 @@ model:
 train:
   loss: "info_nce"
   margin: null # Only if using triplet loss
+  lm_loss_weight: 0.0
   # --- optimizer ---
   lr: 4.73e-5
   betas: [0.7, 0.999]

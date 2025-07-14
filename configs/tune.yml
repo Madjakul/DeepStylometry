@@ -6,7 +6,7 @@ group_name: "tune-deepstylometry-512-se-default"
 
 data:
   ds_name: "se" # or halvest
-  batch_size: 32
+  batch_size: 16
   tokenizer_name: "FacebookAI/roberta-base"
   max_length: 512
   map_batch_size: 1000
@@ -19,8 +19,6 @@ model:
   is_decoder_model: false
   add_linear_layers: true
   dropout: 0.1
-  lm_weight: 0.0
-  contrastive_weight: 1.0
   contrastive_temp:
     type: uniform
     min: 0.01
@@ -44,6 +42,7 @@ model:
 tune:
   loss: "info_nce"
   margin: null # Only if using triplet loss
+  lm_loss_weight: 0.0
   # --- optimizer ---
   lr:
     type: loguniform
@@ -70,8 +69,8 @@ tune:
   gradient_clip_val: null
   precision: "32" # 32-true or bf16-mixed
   # --- tuner ---
-  metric: "val_auroc"
-  mode: "max"
+  metric: "val_total_loss"
+  mode: "min"
   num_samples: 30
   max_concurrent_trials: 3
   time_budget_s: 151200 # 42h (in seconds)

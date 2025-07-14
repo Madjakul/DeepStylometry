@@ -9,6 +9,9 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 @dataclass
 class TuneConfig(DictAccessMixin):
 
+    loss: Literal["info_nce", "triplet"] = "info_nce"
+    margin: Optional[float] = None  # Only used for triplet loss
+    lm_loss_weight: float = 0.0
     # --- optimizer ---
     lr: Dict = field(default_factory=dict)
     betas: Dict = field(default_factory=dict)

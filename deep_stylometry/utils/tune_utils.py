@@ -4,7 +4,6 @@ import logging
 from functools import partial
 from typing import Any, Optional
 
-from ray import tune
 from ray.air.integrations.wandb import WandbLoggerCallback
 from ray.tune import FailureConfig
 from ray.tune.schedulers import AsyncHyperBandScheduler
@@ -12,9 +11,20 @@ from ray.tune.search.hyperopt import HyperOptSearch
 
 from deep_stylometry.utils.configs.base_config import BaseConfig
 from deep_stylometry.utils.train_utils import train_tune
+from ray import tune
 
 
-def make_tuners(o: Any) -> Any:
+def make_param_space(o: Any) -> Optional[Any]:
+    """Build a nested param_space that mirrors `o`:
+
+    • If `o` is a dict with "type", return the corresponding tune.* sampler.
+    • If `o` is a dict without "type", recurse into items and keep only
+      non-None children; return that dict (or None if empty).
+    • If `o` is a list, recurse on each element; if any element yields a
+      sampler, return the list of samplers (or None if none).
+    • If `o` is a scalar (str/int/float/bool/None), wrap in tune.choice([o]).
+    """
+    # 1) Actual sampler directive?
     if isinstance(o, dict) and "type" in o:
         t = o["type"]
         if t == "loguniform":
@@ -26,12 +36,25 @@ def make_tuners(o: Any) -> Any:
         if t == "choice":
             return tune.choice(o["values"])
         raise ValueError(f"Unknown tune type {t!r}")
-    elif isinstance(o, dict):
-        return {k: make_tuners(v) for k, v in o.items()}
-    elif isinstance(o, list):
-        return [make_tuners(v) for v in o]
-    else:
-        return o
+
+    # 2) Nested dict -> recurse
+    if isinstance(o, dict):
+        out = {}
+        for k, v in o.items():
+            child = make_param_space(v)
+            if child is not None:
+                out[k] = child
+        return out or None
+
+    # 3) List -> recurse
+    if isinstance(o, list):
+        recursed = [make_param_space(v) for v in o]
+        recursed = [v for v in recursed if v is not None]
+        return recursed or None
+
+    # 4) Scalar constant -> wrap as a single‑choice sampler
+    #    (so Ray still hands it back to you in the same nested shape)
+    return tune.choice([o])
 
 
 def setup_tuner(
@@ -80,7 +103,7 @@ def setup_tuner(
             )
         )
 
-    param_space = make_tuners(config)
+    param_space = make_param_space(config.to_dict())
 
     trainable_fn = partial(
         train_tune,
@@ -94,7 +117,7 @@ def setup_tuner(
         {
             config.tune.device: config.tune.num_devices_per_trial,
             "cpu": num_proc,
-        },  # type: ignore
+        },
     )
 
     asha_scheduler = AsyncHyperBandScheduler(

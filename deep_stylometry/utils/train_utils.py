@@ -7,8 +7,11 @@ import lightning as L
 import psutil
 import torch
 import wandb
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
@@ -97,11 +100,11 @@ def setup_trainer(
         -dist:{cfg.model.distance_weightning}"""
 
     # Early stopping if configured
-    if cfg.train.early_stopping:
+    if cfg.execution.early_stopping:
         early_stop_callback = EarlyStopping(
-            monitor=cfg.train.early_stopping_metric,
-            mode=cfg.train.early_stopping_mode,
-            patience=cfg.train.early_stopping_patience,
+            monitor=cfg.execution.early_stopping_metric,
+            mode=cfg.execution.early_stopping_mode,
+            patience=cfg.execution.early_stopping_patience,
         )
         callbacks.append(early_stop_callback)
 
@@ -110,29 +113,29 @@ def setup_trainer(
         checkpoint_callback = ModelCheckpoint(
             dirpath=osp.join(checkpoint_dir, name),
             filename="{epoch}",
-            monitor=cfg.train.checkpoint_metric,
-            mode=cfg.train.checkpoint_mode,
-            save_top_k=cfg.train.save_top_k,
+            monitor=cfg.execution.checkpoint_metric,
+            mode=cfg.execution.checkpoint_mode,
+            save_top_k=cfg.execution.save_top_k,
             save_last=True,
         )
         callbacks.append(checkpoint_callback)
 
     # Configure loggers
     loggers = []
-    if cfg.train.use_wandb:
+    if cfg.execution.use_wandb:
         wandb_logger = WandbLogger(
             project=cfg.project_name,
             name=name,
-            log_model=cfg.train.log_model,
+            log_model=cfg.execution.log_model,
             group=cfg.group_name,
         )
-        watch = cfg.train.watch
+        watch = cfg.execution.watch
         if watch is not None:
             wandb_logger.watch(
                 model=model,
                 log=watch,
                 log_graph=False,
-                log_freq=cfg.train.accumulate_grad_batches * 100,
+                log_freq=cfg.execution.accumulate_grad_batches * 100,
             )
         loggers.append(wandb_logger)
 
@@ -141,19 +144,19 @@ def setup_trainer(
     loggers.append(csv_logger)
 
     trainer = L.Trainer(
-        accelerator=cfg.train.device,
-        strategy=cfg.train.strategy,
-        devices=cfg.train.num_devices,
-        max_steps=cfg.train.max_steps,
-        max_epochs=cfg.train.max_epochs,
-        val_check_interval=cfg.train.val_check_interval,
+        accelerator=cfg.execution.device,
+        strategy=cfg.execution.strategy,
+        devices=cfg.execution.num_devices,
+        max_steps=cfg.execution.max_steps,
+        max_epochs=cfg.execution.max_epochs,
+        val_check_interval=cfg.execution.val_check_interval,
         enable_checkpointing=checkpoint_dir is not None,
         logger=loggers,
         callbacks=callbacks,
-        log_every_n_steps=cfg.train.log_every_n_steps,
-        accumulate_grad_batches=cfg.train.accumulate_grad_batches,
-        gradient_clip_val=cfg.train.gradient_clip_val,
-        precision=cfg.train.precision,
+        log_every_n_steps=cfg.execution.log_every_n_steps,
+        accumulate_grad_batches=cfg.execution.accumulate_grad_batches,
+        gradient_clip_val=cfg.execution.gradient_clip_val,
+        precision=cfg.execution.precision,
     )
     return trainer
 
@@ -179,7 +182,7 @@ def train_tune(
         of CPUs.
     """
 
-    cfg = BaseConfig.from_dict(config)
+    cfg = BaseConfig(mode="tune").from_dict(config)
 
     dm = setup_datamodule(
         cfg,
@@ -212,7 +215,7 @@ def train_tune(
                 -dist:{cfg.model.distance_weightning}""",
         )
     )
-    if cfg.train.use_wandb:
+    if cfg.execution.use_wandb:
         wandb_logger = WandbLogger(
             project=cfg.project_name,
             group=cfg.group_name,
@@ -237,5 +240,5 @@ def train_tune(
     )
     trainer.fit(model=model, datamodule=dm)
 
-    if cfg.train.use_wandb:
+    if cfg.execution.use_wandb:
         wandb.finish()

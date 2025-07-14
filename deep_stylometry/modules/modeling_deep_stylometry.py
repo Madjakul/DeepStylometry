@@ -1,7 +1,7 @@
 # deep_stylometry/modules/modeling_deep_stylometry.py
 
 import logging
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import lightning as L
 import torch
@@ -29,7 +29,7 @@ class DeepStylometry(L.LightningModule):
 
         self.cfg = cfg
         self.gumbel_temp = self.cfg.model.initial_gumbel_temp
-        self.contrastive_loss = self.loss_map[cfg.train.loss](cfg)
+        self.contrastive_loss = self.loss_map[cfg.execution.loss](cfg)
 
         # Validation metrics
         self.val_auroc = MulticlassAUROC(num_classes=3 * self.cfg.data.batch_size).to(
@@ -91,12 +91,12 @@ class DeepStylometry(L.LightningModule):
             gumbel_temp=self.gumbel_temp,
         )
 
-        total_loss = (self.cfg.train.lm_loss_weight * lm_loss) + contrastive_loss
+        total_loss = (self.cfg.execution.lm_loss_weight * lm_loss) + contrastive_loss
 
         metrics = {
             "all_scores": all_scores,
             "targets": targets,
-            "lm_loss": lm_loss * self.cfg.train.lm_loss_weight,
+            "lm_loss": lm_loss * self.cfg.execution.lm_loss_weight,
             "contrastive_loss": contrastive_loss,
             "total_loss": total_loss,
         }
@@ -105,17 +105,17 @@ class DeepStylometry(L.LightningModule):
 
     def configure_optimizers(self) -> Dict[str, Any]:  # type: ignore[override]
         logging.info(
-            f"""Configuring optimizer: AdamW with lr={self.cfg.train.lr},
-             weight_decay={self.cfg.train.weight_decay}, betas={self.cfg.train.betas},
-             eps={self.cfg.train.eps}."""
+            f"""Configuring optimizer: AdamW with lr={self.cfg.execution.lr},
+             weight_decay={self.cfg.execution.weight_decay},
+             betas={self.cfg.execution.betas}, eps={self.cfg.execution.eps}."""
         )
 
         optimizer = torch.optim.AdamW(
             self.parameters(),
-            lr=self.cfg.train.lr,
-            weight_decay=self.cfg.train.weight_decay,
-            betas=self.cfg.train.betas,
-            eps=self.cfg.train.eps,
+            lr=self.cfg.execution.lr,
+            weight_decay=self.cfg.execution.weight_decay,
+            betas=self.cfg.execution.betas,
+            eps=self.cfg.execution.eps,
         )
         # Calculate steps dynamically
         total_steps = int(self.trainer.estimated_stepping_batches)
@@ -134,7 +134,7 @@ class DeepStylometry(L.LightningModule):
             optimizer,
             num_warmup_steps=warmup_steps,
             num_training_steps=total_steps,
-            num_cycles=self.cfg.train.num_cycles,
+            num_cycles=self.cfg.execution.num_cycles,
             last_epoch=-1,
         )
 
