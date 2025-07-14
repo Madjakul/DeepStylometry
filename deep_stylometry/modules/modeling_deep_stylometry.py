@@ -7,6 +7,7 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from jaxtyping import Float
 from torcheval.metrics import HitRate, MulticlassAUROC, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
@@ -50,12 +51,14 @@ class DeepStylometry(L.LightningModule):
 
         # Model
         self.lm = LanguageModel(cfg)
-        if self.add_linear_layers:
+        if self.cfg.model.add_linear_layers:
             hidden_size = self.lm.hidden_size
             self.fc1 = nn.Linear(hidden_size, hidden_size)
             self.fc2 = nn.Linear(hidden_size, hidden_size)
 
-    def _compute_losses(self, batch: Dict[str, torch.Tensor]):
+    def _compute_losses(
+        self, batch: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
         lm_loss, _, q_embs = self(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
@@ -88,23 +91,23 @@ class DeepStylometry(L.LightningModule):
             gumbel_temp=self.gumbel_temp,
         )
 
-        total_loss = (self.lm_weight * lm_loss) + contrastive_loss
+        total_loss = (self.cfg.train.lm_loss_weight * lm_loss) + contrastive_loss
 
         metrics = {
             "all_scores": all_scores,
             "targets": targets,
-            "lm_loss": lm_loss * self.lm_weight,
+            "lm_loss": lm_loss * self.cfg.train.lm_loss_weight,
             "contrastive_loss": contrastive_loss,
             "total_loss": total_loss,
         }
 
         return metrics
 
-    def configure_optimizers(self):  # type: ignore[override]
+    def configure_optimizers(self) -> Dict[str, Any]:  # type: ignore[override]
         logging.info(
-            f"""Configuring optimizer: AdamW with lr={self.lr},"""
-            f"""" weight_decay={self.weight_decay}, betas={self.betas},"""
-            f""" eps={self.eps}."""
+            f"""Configuring optimizer: AdamW with lr={self.cfg.train.lr},
+             weight_decay={self.cfg.train.weight_decay}, betas={self.cfg.train.betas},
+             eps={self.cfg.train.eps}."""
         )
 
         optimizer = torch.optim.AdamW(
@@ -144,7 +147,7 @@ class DeepStylometry(L.LightningModule):
             },
         }
 
-    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure):  # type: ignore[override]
+    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure) -> None:  # type: ignore[override]
         super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
 
         # Update Gumbel temperature after each optimizer step
@@ -166,7 +169,7 @@ class DeepStylometry(L.LightningModule):
             input_ids, attention_mask=attention_mask, labels=labels
         )
 
-        if self.linear_layers:
+        if self.cfg.model.add_linear_layers:
             embs = F.dropout(last_hidden_states, p=self.cfg.model.dropout)
             embs = F.gelu(self.fc1(embs))
             embs = F.dropout(embs, p=self.cfg.model.dropout)
@@ -176,11 +179,11 @@ class DeepStylometry(L.LightningModule):
 
         return lm_loss, last_hidden_states, projected_embs
 
-    def training_step(self, batch, batch_idx: int):
+    def training_step(self, batch, batch_idx: int) -> Float[torch.Tensor, ""]:
         metrics = self._compute_losses(batch)
 
         # Log metrics
-        if self.initial_gumbel_temp is not None:
+        if self.cfg.model.initial_gumbel_temp is not None:
             self.log(
                 "gumbel_temp",
                 self.gumbel_temp,
@@ -203,7 +206,7 @@ class DeepStylometry(L.LightningModule):
         )
         return metrics["total_loss"]
 
-    def validation_step(self, batch, batch_idx: int):
+    def validation_step(self, batch, batch_idx: int) -> None:
         metrics = self._compute_losses(batch)
 
         all_scores = metrics["all_scores"]
@@ -228,7 +231,7 @@ class DeepStylometry(L.LightningModule):
             batch_size=self.cfg.data.batch_size,
         )
 
-    def on_validation_epoch_end(self):
+    def on_validation_epoch_end(self) -> None:
         self.log("completed_epoch", self.current_epoch, prog_bar=False)
         auroc = self.val_auroc.compute().to(self.device)
         avg_hr1 = self.val_hr1.compute().mean().to(self.device)
@@ -254,7 +257,7 @@ class DeepStylometry(L.LightningModule):
         self.val_hr10.reset()
         self.val_rr.reset()
 
-    def test_step(self, batch, batch_idx: int):
+    def test_step(self, batch, batch_idx: int) -> None:
         metrics = self._compute_losses(batch)
 
         all_scores = metrics["all_scores"]
@@ -279,7 +282,7 @@ class DeepStylometry(L.LightningModule):
             batch_size=self.cfg.data.batch_size,
         )
 
-    def on_test_epoch_end(self):
+    def on_test_epoch_end(self) -> None:
         auroc = self.test_auroc.compute().to(self.device)
         avg_hr1 = self.test_hr1.compute().mean().to(self.device)
         avg_hr5 = self.test_hr5.compute().mean().to(self.device)
