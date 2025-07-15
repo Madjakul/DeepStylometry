@@ -6,8 +6,9 @@ import lightning as L
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 
-from deep_stylometry.utils.data.custom_data_collator import \
-    CustomDataCollatorForLanguageModeling
+from deep_stylometry.utils.data.custom_data_collator import (
+    CustomDataCollatorForLanguageModeling,
+)
 from deep_stylometry.utils.data.custom_sampler import PadLastBatchSampler
 from deep_stylometry.utils.helpers import get_tokenizer
 
@@ -118,7 +119,7 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
                     load_from_cache_file=self.load_from_cache_file,
                     remove_columns=columns_to_remove,
                 )
-                val_dataset = ds["test"].map(  # type: ignore
+                val_dataset = ds["validation"].map(  # type: ignore
                     self.tokenize_function,
                     batched=True,
                     batch_size=self.map_batch_size,
