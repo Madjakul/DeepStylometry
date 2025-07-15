@@ -178,7 +178,7 @@ class DeepStylometry(L.LightningModule):
                 eps=1e-5,
             )
             embs = F.dropout(embs, p=self.cfg.model.dropout, training=self.training)
-            embs = F.gelu(self.fc1(embs))
+            embs = F.relu(self.fc1(embs))
             embs = F.dropout(embs, p=self.cfg.model.dropout, training=self.training)
             projected_embs = self.fc2(embs)  # NO residual
         else:
