@@ -173,7 +173,7 @@ class DeepStylometry(L.LightningModule):
             embs = F.dropout(last_hidden_states, p=self.cfg.model.dropout)
             embs = F.gelu(self.fc1(embs))
             embs = F.dropout(embs, p=self.cfg.model.dropout)
-            projected_embs = self.fc2(embs) + last_hidden_states  # residual
+            projected_embs = self.fc2(embs)
         else:
             projected_embs = last_hidden_states
 
