@@ -170,10 +170,17 @@ class DeepStylometry(L.LightningModule):
         )
 
         if self.cfg.model.add_linear_layers:
-            embs = F.dropout(last_hidden_states, p=self.cfg.model.dropout)
+            embs = F.layer_norm(
+                last_hidden_states,
+                normalized_shape=self.lm.hidden_size,
+                weight=None,
+                bias=None,
+                eps=1e-5,
+            )
+            embs = F.dropout(embs, p=self.cfg.model.dropout, training=self.training)
             embs = F.gelu(self.fc1(embs))
-            embs = F.dropout(embs, p=self.cfg.model.dropout)
-            projected_embs = self.fc2(embs)
+            embs = F.dropout(embs, p=self.cfg.model.dropout, training=self.training)
+            projected_embs = self.fc2(embs)  # NO residual
         else:
             projected_embs = last_hidden_states
 
