@@ -81,11 +81,8 @@ class LateInteraction(nn.Module):
         # Mask the padding tokens
         logits = logits.masked_fill(~valid_mask, self.IGNORE)
 
-        if self.training and gumbel_temp is not None:
+        if gumbel_temp is not None:
             p_ij = F.gumbel_softmax(logits, tau=gumbel_temp, hard=False)
-            p_ij = torch.nan_to_num(p_ij, nan=0.0)
-        elif not self.training and gumbel_temp is not None:
-            p_ij = F.gumbel_softmax(logits, tau=gumbel_temp, hard=True)
             p_ij = torch.nan_to_num(p_ij, nan=0.0)
         else:
             p_ij = F.softmax(logits, dim=-1)
