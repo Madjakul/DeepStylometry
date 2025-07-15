@@ -13,7 +13,6 @@ class ModelConfig(DictAccessMixin):
     is_decoder_model: bool = False
     add_linear_layers: bool = True
     dropout: float = 0.1
-    contrastive_temp: Union[float, Dict] = 0.98
     pooling_method: Literal["mean", "li"] = "li"
     # --- If the pooling method is late interaction ---
     distance_weightning: Union[Literal["none", "exp", "linear"], Dict] = "none"

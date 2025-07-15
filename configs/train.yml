@@ -23,7 +23,6 @@ model:
   dropout: 0.1
   lm_weight: 0.0
   contrastive_weight: 1.0
-  contrastive_temp: 0.98
   pooling_method: "li" # li or mean
   # --- late interaction
   distance_weightning: "exp" # none, exp or linear

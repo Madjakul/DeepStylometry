@@ -40,15 +40,12 @@ class InfoNCELoss(nn.Module):
         batch_size = query_embs.size(0)
 
         # Compute the (B, 3B) similarity matrix
-        all_scores = (
-            self.pool(
-                query_embs=query_embs,  # (B, S, H)
-                key_embs=key_embs,  # (3B, S, H)
-                q_mask=q_mask,  # (B, S)
-                k_mask=k_mask,  # (3B, S)
-                gumbel_temp=gumbel_temp,
-            )
-            / self.cfg.model.contrastive_temp
+        all_scores = self.pool(
+            query_embs=query_embs,  # (B, S, H)
+            key_embs=key_embs,  # (3B, S, H)
+            q_mask=q_mask,  # (B, S)
+            k_mask=k_mask,  # (3B, S)
+            gumbel_temp=gumbel_temp,
         )
 
         # Mask out the anchor–anchor scores in columns [0, ..., B-1]
