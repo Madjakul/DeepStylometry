@@ -212,6 +212,33 @@ class DeepStylometry(L.LightningModule):
         all_scores = metrics["all_scores"]
         targets = metrics["targets"]
 
+        # --- START: PADDING LOGIC ---
+
+        # Get the expected number of classes from the metric itself
+        num_classes = self.val_auroc.num_classes  # This will be 32
+
+        # Get the shape of the current predictions
+        current_batch_size, current_num_classes = all_scores.shape
+
+        # If the current number of classes doesn't match the expected, pad it.
+        # This will only happen on the last, smaller batch.
+        if current_num_classes != num_classes:
+            # Create a new tensor with the correct shape [16, 32] and fill with a large negative value
+            padded_preds = torch.full(
+                (current_batch_size, num_classes),
+                -torch.inf,  # Use -inf to ensure these are ranked last
+                device=all_scores.device,
+                dtype=all_scores.dtype,
+            )
+
+            # Copy the actual predictions into the new padded tensor
+            padded_preds[:, :current_num_classes] = all_scores
+
+            # Use the padded tensor for the update
+            all_scores = padded_preds
+
+        # --- END: PADDING LOGIC ---
+
         self.val_auroc.update(all_scores, targets)
         self.val_hr1.update(all_scores, targets)
         self.val_hr5.update(all_scores, targets)
