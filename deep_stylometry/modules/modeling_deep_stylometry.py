@@ -11,6 +11,7 @@ from jaxtyping import Float
 from torcheval.metrics import HitRate, MulticlassAUROC, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
+from deep_stylometry.modules.hybrid_loss import HybridLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
 from deep_stylometry.modules.triplet_loss import TripletLoss
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 
 class DeepStylometry(L.LightningModule):
 
-    loss_map = {"info_nce": InfoNCELoss, "triplet": TripletLoss}
+    loss_map = {"info_nce": InfoNCELoss, "triplet": TripletLoss, "hybrid": HybridLoss}
 
     def __init__(self, cfg: "BaseConfig"):
         super().__init__()
@@ -172,7 +173,7 @@ class DeepStylometry(L.LightningModule):
         if self.cfg.model.add_linear_layers:
             embs = F.layer_norm(
                 last_hidden_states,
-                normalized_shape=self.lm.hidden_size,
+                normalized_shape=(self.lm.hidden_size,),
                 weight=None,
                 bias=None,
                 eps=1e-5,
