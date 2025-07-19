@@ -2,7 +2,7 @@
 
 mode: "tune"
 project_name: "deep-stylometry"
-group_name: "tune-deepstylometry-512-se-triplet"
+group_name: "tune-deepstylometry-512-se-margin"
 
 data:
   ds_name: "se" # or halvest
@@ -37,11 +37,11 @@ model:
   min_gumbel_temp: 0.5
 
 tune:
-  loss: "triplet"
+  loss: "margin"
   margin: # Only if using triplet loss
     type: uniform
-    min: 0.2
-    max: 0.8
+    min: 0.15
+    max: 0.85
   lm_loss_weight: 0.0
   # --- optimizer ---
   lr:

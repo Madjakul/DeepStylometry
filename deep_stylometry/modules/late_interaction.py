@@ -41,18 +41,18 @@ class LateInteraction(nn.Module):
     def forward(
         self,
         query_embs: Float[torch.Tensor, "batch seq hidden"],
-        key_embs: Float[torch.Tensor, "three_times_batch seq hidden"],
+        key_embs: Float[torch.Tensor, "two_times_batch seq hidden"],
         q_mask: Int[torch.Tensor, "batch seq"],
-        k_mask: Int[torch.Tensor, "three_times_batch seq"],
+        k_mask: Int[torch.Tensor, "two_times_batch seq"],
         gumbel_temp: Optional[float] = None,
-    ) -> Float[torch.Tensor, "batch three_times_batch"]:
+    ) -> Float[torch.Tensor, "batch two_times_batch"]:
         # Normalize embeddings to preserve cosine similarity
         query_embs = query_embs.unsqueeze(1)  # (B, 1, S, H)
         query_embs = F.normalize(query_embs, p=2, dim=-1)
         q_mask = q_mask.unsqueeze(1)  # (B, 1, S)
-        key_embs = key_embs.unsqueeze(0)  # (1, B, S, H)
+        key_embs = key_embs.unsqueeze(0)  # (1, 2B, S, H)
         key_embs = F.normalize(key_embs, p=2, dim=-1)
-        k_mask = k_mask.unsqueeze(0)  # (1, B, S)
+        k_mask = k_mask.unsqueeze(0)  # (1, 2B, S)
 
         # Compute token-level cosine similarities
         sim_matrix = torch.einsum("insh, mjth->ijst", query_embs, key_embs)
@@ -88,7 +88,7 @@ class LateInteraction(nn.Module):
             p_ij = F.softmax(logits, dim=-1)
             p_ij = torch.nan_to_num(p_ij, nan=0.0)
 
-        key_embs_squeezed = key_embs.squeeze(0)  # (B, S, H)
+        key_embs_squeezed = key_embs.squeeze(0)  # (2B, S, H)
         aggregated = torch.einsum("ijst, jth->ijsh", p_ij, key_embs_squeezed)
 
         # Compute final scores

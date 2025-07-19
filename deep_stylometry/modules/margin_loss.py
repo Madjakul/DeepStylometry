@@ -1,4 +1,4 @@
-# deep_stylometry/modules/info_nce_loss.py
+# deep_stylometry/modules/margin_loss.py
 
 from typing import TYPE_CHECKING, Optional, Tuple
 
@@ -13,13 +13,14 @@ if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
 
 
-class InfoNCELoss(nn.Module):
+class MarginLoss(nn.Module):
 
-    def __init__(self, cfg: "BaseConfig") -> None:
+    def __init__(self, cfg: "BaseConfig"):
         super().__init__()
+        assert cfg.execution.margin is not None
         self.cfg = cfg
 
-        if self.cfg.model.pooling_method == "li":
+        if cfg.model.pooling_method == "li":
             self.pool = LateInteraction(self.cfg)
         else:
             self.pool = self.mean_pooling
@@ -33,7 +34,7 @@ class InfoNCELoss(nn.Module):
         gumbel_temp: Optional[float] = None,
     ) -> Tuple[
         Float[torch.Tensor, "batch two_times_batch"],
-        Float[torch.Tensor, "batch"],
+        Int[torch.Tensor, "batch"],
         Float[torch.Tensor, ""],
     ]:
         batch_size = query_embs.size(0)
@@ -46,12 +47,24 @@ class InfoNCELoss(nn.Module):
             k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
+        all_distances = 1 - all_scores
 
         targets = torch.arange(batch_size, device=query_embs.device)
 
-        contrastive_loss = F.cross_entropy(all_scores, targets, reduction="mean")
+        poss = all_distances[targets, targets]
+        negs = all_distances[targets, targets + batch_size]
 
-        return all_scores, targets, contrastive_loss
+        # Select hard positive and hard negative pairs
+        # Negatives that are too close
+        negative_pairs = negs[negs < (poss.max() if len(poss) > 1 else negs.mean())]
+        # Positives that are too far
+        positive_pairs = poss[poss > (negs.min() if len(negs) > 1 else poss.mean())]
+
+        positive_loss = positive_pairs.pow(2).sum()
+        negative_loss = F.relu(self.cfg.execution.margin - negative_pairs).pow(2).sum()
+        loss = (positive_loss + negative_loss) / batch_size
+
+        return all_scores, targets, loss
 
     @staticmethod
     def mean_pooling(

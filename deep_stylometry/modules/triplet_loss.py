@@ -28,49 +28,43 @@ class TripletLoss(nn.Module):
     def forward(
         self,
         query_embs: Float[torch.Tensor, "batch seq hidden"],
-        key_embs: Float[torch.Tensor, "three_times_batch seq hidden"],
+        key_embs: Float[torch.Tensor, "two_times_batch seq hidden"],
         q_mask: Int[torch.Tensor, "batch seq"],
-        k_mask: Int[torch.Tensor, "three_times_batch seq"],
+        k_mask: Int[torch.Tensor, "two_times_batch seq"],
         gumbel_temp: Optional[float] = None,
     ) -> Tuple[
-        Float[torch.Tensor, "batch three_times_batch"],
+        Float[torch.Tensor, "batch two_times_batch"],
         Int[torch.Tensor, "batch"],
         Float[torch.Tensor, ""],
     ]:
         batch_size = query_embs.size(0)
 
-        # Compute the (B, 3B) similarity matrix
+        # Compute the (B, 2B) similarity matrix
         all_scores = self.pool(
             query_embs=query_embs,  # (B, S, H)
-            key_embs=key_embs,  # (3B, S, H)
+            key_embs=key_embs,  # (2B, S, H)
             q_mask=q_mask,  # (B, S)
-            k_mask=k_mask,  # (3B, S)
+            k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
 
-        # For each anchor i, select the score for positive i and negative i
-        # Not in buffer because it would require a fixe batch size
-        row_indices = torch.arange(batch_size, device=query_embs.device)
+        targets = torch.arange(batch_size, device=query_embs.device)
 
-        # Positive scores are in columns [B, B+1, ..., 2B-1]
-        targets_indices = row_indices + batch_size
-        pos_scores = all_scores[row_indices, row_indices + batch_size]
-
-        # Negative scores are in columns [2B, 2B+1, ..., 3B-1]
-        neg_scores = all_scores[row_indices, row_indices + (2 * batch_size)]
+        pos_scores = all_scores[targets, targets]
+        neg_scores = all_scores[targets, targets + batch_size]
 
         loss = F.relu(self.cfg.execution.margin - pos_scores + neg_scores).mean()
 
-        return all_scores, targets_indices, loss
+        return all_scores, targets, loss
 
     @staticmethod
     def mean_pooling(
         query_embs: Float[torch.Tensor, "batch seq hidden"],
-        key_embs: Float[torch.Tensor, "three_times_batch seq hidden"],
+        key_embs: Float[torch.Tensor, "two_times_batch seq hidden"],
         q_mask: Int[torch.Tensor, "batch seq"],
-        k_mask: Int[torch.Tensor, "three_times_batch seq"],
+        k_mask: Int[torch.Tensor, "two_times_batch seq"],
         **kwargs,
-    ) -> Float[torch.Tensor, "batch three_times_batch"]:
+    ) -> Float[torch.Tensor, "batch two_times_batch"]:
         # Mean pooling and normalization
         q_mask_sum = q_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
         query_vec = (query_embs * q_mask.unsqueeze(-1)).sum(dim=1) / q_mask_sum
@@ -80,6 +74,5 @@ class TripletLoss(nn.Module):
         key_vec = (key_embs * k_mask.unsqueeze(-1)).sum(dim=1) / k_mask_sum
         key_vec = F.normalize(key_vec, p=2, dim=-1)
 
-        # Calculate cosine similarity matrix (B, B)
         all_scores = torch.matmul(query_vec, key_vec.T)
         return all_scores
