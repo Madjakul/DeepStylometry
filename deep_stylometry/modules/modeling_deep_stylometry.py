@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Float
-from torcheval.metrics import HitRate, BinaryAUROC, ReciprocalRank
+from torcheval.metrics import BinaryAUROC, HitRate, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.hybrid_loss import HybridLoss
@@ -39,18 +39,14 @@ class DeepStylometry(L.LightningModule):
         self.contrastive_loss = self.loss_map[cfg.execution.loss](cfg)
 
         # Validation metrics
-        self.val_auroc = BinaryAUROC().to(
-            self.device
-        )
+        self.val_auroc = BinaryAUROC().to(self.device)
         self.val_hr1 = HitRate(k=1).to(self.device)
         self.val_hr5 = HitRate(k=5).to(self.device)
         self.val_hr10 = HitRate(k=10).to(self.device)
         self.val_rr = ReciprocalRank().to(self.device)
 
         # Test metrics
-        self.test_auroc = BinaryAUROC().to(
-            self.device
-        )
+        self.test_auroc = BinaryAUROC().to(self.device)
         self.test_hr1 = HitRate(k=1).to(self.device)
         self.test_hr5 = HitRate(k=5).to(self.device)
         self.test_hr10 = HitRate(k=10).to(self.device)
@@ -94,7 +90,9 @@ class DeepStylometry(L.LightningModule):
             gumbel_temp=self.gumbel_temp,
         )
 
-        total_loss = (self.cfg.execution.lm_loss_weight * lm_loss) + loss_metrics["loss"]
+        total_loss = (self.cfg.execution.lm_loss_weight * lm_loss) + loss_metrics[
+            "loss"
+        ]
 
         metrics = {
             "all_scores": loss_metrics["all_scores"],
@@ -226,7 +224,9 @@ class DeepStylometry(L.LightningModule):
         negs = metrics["negs"]
         batch_size = targets.size(0)
         binary_scores = torch.cat([poss, negs], dim=0)
-        labels = torch.cat([torch.ones(batch_size), torch.zeros(batch_size)], dim=0).long()
+        labels = torch.cat(
+            [torch.ones(batch_size), torch.zeros(batch_size)], dim=0
+        ).long()
 
         self.val_auroc.update(binary_scores, labels)
         self.val_hr1.update(all_scores, targets)
@@ -281,7 +281,9 @@ class DeepStylometry(L.LightningModule):
         negs = metrics["negs"]
         batch_size = targets.size(0)
         binary_scores = torch.cat([poss, negs], dim=0)
-        labels = torch.cat([torch.ones(batch_size), torch.zeros(batch_size)], dim=0).long()
+        labels = torch.cat(
+            [torch.ones(batch_size), torch.zeros(batch_size)], dim=0
+        ).long()
 
         self.test_auroc.update(binary_scores, labels)
         self.test_hr1.update(all_scores, targets)
