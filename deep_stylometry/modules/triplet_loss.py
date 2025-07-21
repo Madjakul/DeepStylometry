@@ -1,6 +1,6 @@
 # deep_stylometry/modules/triplet_loss.py
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -32,11 +32,7 @@ class TripletLoss(nn.Module):
         q_mask: Int[torch.Tensor, "batch seq"],
         k_mask: Int[torch.Tensor, "two_times_batch seq"],
         gumbel_temp: Optional[float] = None,
-    ) -> Tuple[
-        Float[torch.Tensor, "batch two_times_batch"],
-        Int[torch.Tensor, "batch"],
-        Float[torch.Tensor, ""],
-    ]:
+    ) -> Dict[str, torch.Tensor]:
         batch_size = query_embs.size(0)
 
         # Compute the (B, 2B) similarity matrix
@@ -49,13 +45,18 @@ class TripletLoss(nn.Module):
         )
 
         targets = torch.arange(batch_size, device=query_embs.device)
+        poss = all_scores[targets, targets]
+        negs = all_scores[targets, targets + batch_size]
 
-        pos_scores = all_scores[targets, targets]
-        neg_scores = all_scores[targets, targets + batch_size]
+        loss = F.relu(self.cfg.execution.margin - poss + negs).mean()
 
-        loss = F.relu(self.cfg.execution.margin - pos_scores + neg_scores).mean()
-
-        return all_scores, targets, loss
+        return {
+            "all_scores": all_scores,
+            "targets": targets,
+            "poss": poss,
+            "negs": negs,
+            "loss": loss,
+        }
 
     @staticmethod
     def mean_pooling(

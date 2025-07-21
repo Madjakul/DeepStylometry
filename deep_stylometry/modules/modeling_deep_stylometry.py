@@ -11,6 +11,7 @@ from jaxtyping import Float
 from torcheval.metrics import BinaryAUROC, HitRate, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
+from deep_stylometry.modules.hard_margin_loss import HardMarginLoss
 from deep_stylometry.modules.hybrid_loss import HybridLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
@@ -27,6 +28,7 @@ class DeepStylometry(L.LightningModule):
         "info_nce": InfoNCELoss,
         "triplet": TripletLoss,
         "hybrid": HybridLoss,
+        "hard_margin": HardMarginLoss,
         "margin": MarginLoss,
     }
 

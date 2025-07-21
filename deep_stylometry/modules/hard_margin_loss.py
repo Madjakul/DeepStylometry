@@ -1,4 +1,4 @@
-# deep_stylometry/modules/margin_loss.py
+# deep_stylometry/modules/hard_margin_loss.py
 
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
 
 
-class MarginLoss(nn.Module):
+class HardMarginLoss(nn.Module):
 
     def __init__(self, cfg: "BaseConfig"):
         super().__init__()
@@ -45,12 +45,18 @@ class MarginLoss(nn.Module):
         )
 
         targets = torch.arange(batch_size, device=query_embs.device)
-        poss = all_scores[targets, targets]
-        negs = all_scores[targets, targets + batch_size]
+        poss = all_distances[targets, targets]
+        negs = all_distances[targets, targets + batch_size]
 
-        positive_loss = poss.pow(2).sum()
-        negative_loss = F.relu(self.cfg.execution.margin - negs).pow(2).sum()
-        loss = 0.5 * (positive_loss + negative_loss) / batch_size
+        # Select hard positive and hard negative pairs
+        # Negatives that are too close
+        negative_pairs = negs[negs < (poss.max() if len(poss) > 1 else negs.mean())]
+        # Positives that are too far
+        positive_pairs = poss[poss > (negs.min() if len(negs) > 1 else poss.mean())]
+
+        positive_loss = positive_pairs.pow(2).sum()
+        negative_loss = F.relu(self.cfg.execution.margin - negative_pairs).pow(2).sum()
+        loss = (positive_loss + negative_loss) / batch_size
 
         return {
             "all_scores": all_scores,

@@ -1,5 +1,6 @@
 # deep_strylometry/modules/__init__.py
 
+from deep_stylometry.modules.hard_margin_loss import HardMarginLoss
 from deep_stylometry.modules.hybrid_loss import HybridLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
@@ -11,6 +12,7 @@ from deep_stylometry.modules.triplet_loss import TripletLoss
 __all__ = [
     "LanguageModel",
     "HybridLoss",
+    "HardMarginLoss",
     "MarginLoss",
     "DeepStylometry",
     "InfoNCELoss",

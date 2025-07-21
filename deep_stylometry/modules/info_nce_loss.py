@@ -1,6 +1,6 @@
 # deep_stylometry/modules/info_nce_loss.py
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -31,11 +31,7 @@ class InfoNCELoss(nn.Module):
         q_mask: Int[torch.Tensor, "batch seq"],
         k_mask: Int[torch.Tensor, "two_times_batch seq"],
         gumbel_temp: Optional[float] = None,
-    ) -> Tuple[
-        Float[torch.Tensor, "batch two_times_batch"],
-        Float[torch.Tensor, "batch"],
-        Float[torch.Tensor, ""],
-    ]:
+    ) -> Dict[str, torch.Tensor]:
         batch_size = query_embs.size(0)
 
         # Compute the (B, 2B) similarity matrix
@@ -48,10 +44,18 @@ class InfoNCELoss(nn.Module):
         )
 
         targets = torch.arange(batch_size, device=query_embs.device)
+        poss = all_scores[targets, targets]
+        negs = all_scores[targets, targets + batch_size]
 
-        contrastive_loss = F.cross_entropy(all_scores, targets, reduction="mean")
+        loss = F.cross_entropy(all_scores, targets, reduction="mean")
 
-        return all_scores, targets, contrastive_loss
+        return {
+            "all_scores": all_scores,
+            "targets": targets,
+            "poss": poss,
+            "negs": negs,
+            "loss": loss,
+        }
 
     @staticmethod
     def mean_pooling(
