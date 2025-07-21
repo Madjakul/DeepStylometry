@@ -69,8 +69,8 @@ tune:
   gradient_clip_val: null
   precision: "32" # 32-true or bf16-mixed
   # --- tuner ---
-  metric: "val_total_loss"
-  mode: "min"
+  metric: "val_auroc"
+  mode: "max"
   num_samples: 30
   max_concurrent_trials: 3
   time_budget_s: 151200 # 42h (in seconds)

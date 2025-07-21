@@ -204,14 +204,14 @@ def train_tune(
     )
     # Configure loggers
     loggers = []
-    loggers.append(
-        CSVLogger(
-            save_dir=logs_dir,
-            name=f"""tune-{cfg.model.base_model_name}-{cfg.data.ds_name}
-                -pooling:{cfg.model.pooling_method}-softmax:{cfg.model.use_softmax}
-                -dist:{cfg.model.distance_weightning}""",
-        )
-    )
+    # loggers.append(
+    #     CSVLogger(
+    #         save_dir=logs_dir,
+    #         name=f"""tune-{cfg.model.base_model_name}-{cfg.data.ds_name}
+    #             -pooling:{cfg.model.pooling_method}-softmax:{cfg.model.use_softmax}
+    #             -dist:{cfg.model.distance_weightning}""",
+    #     )
+    # )
     if cfg.execution.use_wandb:
         wandb_logger = WandbLogger(
             project=cfg.project_name,
