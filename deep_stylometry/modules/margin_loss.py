@@ -1,6 +1,6 @@
 # deep_stylometry/modules/margin_loss.py
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -32,11 +32,7 @@ class MarginLoss(nn.Module):
         q_mask: Int[torch.Tensor, "batch seq"],
         k_mask: Int[torch.Tensor, "two_times_batch seq"],
         gumbel_temp: Optional[float] = None,
-    ) -> Tuple[
-        Float[torch.Tensor, "batch two_times_batch"],
-        Int[torch.Tensor, "batch"],
-        Float[torch.Tensor, ""],
-    ]:
+    ) -> Dict[str, torch.Tensor]:
         batch_size = query_embs.size(0)
 
         # Compute the (B, 2B) similarity matrix
@@ -64,7 +60,13 @@ class MarginLoss(nn.Module):
         negative_loss = F.relu(self.cfg.execution.margin - negative_pairs).pow(2).sum()
         loss = (positive_loss + negative_loss) / batch_size
 
-        return all_scores, targets, loss
+        return {
+            "all_scores": all_scores,
+            "targets": targets,
+            "poss": poss,
+            "negs": negs,
+            "loss": loss,
+        }
 
     @staticmethod
     def mean_pooling(

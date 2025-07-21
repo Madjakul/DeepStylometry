@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Float
-from torcheval.metrics import HitRate, MulticlassAUROC, ReciprocalRank
+from torcheval.metrics import HitRate, BinaryAUROC, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.hybrid_loss import HybridLoss
@@ -39,7 +39,7 @@ class DeepStylometry(L.LightningModule):
         self.contrastive_loss = self.loss_map[cfg.execution.loss](cfg)
 
         # Validation metrics
-        self.val_auroc = MulticlassAUROC(num_classes=2 * self.cfg.data.batch_size).to(
+        self.val_auroc = BinaryAUROC().to(
             self.device
         )
         self.val_hr1 = HitRate(k=1).to(self.device)
@@ -48,7 +48,7 @@ class DeepStylometry(L.LightningModule):
         self.val_rr = ReciprocalRank().to(self.device)
 
         # Test metrics
-        self.test_auroc = MulticlassAUROC(num_classes=2 * self.cfg.data.batch_size).to(
+        self.test_auroc = BinaryAUROC().to(
             self.device
         )
         self.test_hr1 = HitRate(k=1).to(self.device)
@@ -86,7 +86,7 @@ class DeepStylometry(L.LightningModule):
             dim=0,
         )  # (2B, S)
 
-        all_scores, targets, contrastive_loss = self.contrastive_loss(
+        loss_metrics = self.contrastive_loss(
             query_embs=q_embs,
             key_embs=k_embs,
             q_mask=batch["attention_mask"],
@@ -94,13 +94,15 @@ class DeepStylometry(L.LightningModule):
             gumbel_temp=self.gumbel_temp,
         )
 
-        total_loss = (self.cfg.execution.lm_loss_weight * lm_loss) + contrastive_loss
+        total_loss = (self.cfg.execution.lm_loss_weight * lm_loss) + loss_metrics["loss"]
 
         metrics = {
-            "all_scores": all_scores,
-            "targets": targets,
+            "all_scores": loss_metrics["all_scores"],
+            "targets": loss_metrics["targets"],
+            "poss": loss_metrics["poss"],
+            "negs": loss_metrics["negs"],
+            "contrastive_loss": loss_metrics["loss"],
             "lm_loss": lm_loss * self.cfg.execution.lm_loss_weight,
-            "contrastive_loss": contrastive_loss,
             "total_loss": total_loss,
         }
 
@@ -220,25 +222,13 @@ class DeepStylometry(L.LightningModule):
         metrics = self._compute_losses(batch)
         all_scores = metrics["all_scores"]
         targets = metrics["targets"]
+        poss = metrics["poss"]
+        negs = metrics["negs"]
+        batch_size = targets.size(0)
+        binary_scores = torch.cat([poss, negs], dim=0)
+        labels = torch.cat([torch.ones(batch_size), torch.zeros(batch_size)], dim=0).long()
 
-        # Get the expected number of classes from the metric itself
-        num_classes = self.val_auroc.num_classes  # This will be 32
-        current_batch_size, current_num_classes = all_scores.shape
-
-        # If the current number of classes doesn't match the expected, pad it.
-        # This will only happen on the last, smaller batch.
-        if current_num_classes != num_classes:
-            # Create a new tensor with the correct shape [16, 32] and fill with a large negative value
-            padded_preds = torch.full(
-                (current_batch_size, num_classes),
-                -torch.inf,  # Use -inf to ensure these are ranked last
-                device=all_scores.device,
-                dtype=all_scores.dtype,
-            )
-            padded_preds[:, :current_num_classes] = all_scores
-            all_scores = padded_preds
-
-        self.val_auroc.update(all_scores, targets)
+        self.val_auroc.update(binary_scores, labels)
         self.val_hr1.update(all_scores, targets)
         self.val_hr5.update(all_scores, targets)
         self.val_hr10.update(all_scores, targets)
@@ -285,28 +275,15 @@ class DeepStylometry(L.LightningModule):
 
     def test_step(self, batch, batch_idx: int) -> None:
         metrics = self._compute_losses(batch)
-
         all_scores = metrics["all_scores"]
         targets = metrics["targets"]
+        poss = metrics["poss"]
+        negs = metrics["negs"]
+        batch_size = targets.size(0)
+        binary_scores = torch.cat([poss, negs], dim=0)
+        labels = torch.cat([torch.ones(batch_size), torch.zeros(batch_size)], dim=0).long()
 
-        # Get the expected number of classes from the metric itself
-        num_classes = self.val_auroc.num_classes  # This will be 32
-        current_batch_size, current_num_classes = all_scores.shape
-
-        # If the current number of classes doesn't match the expected, pad it.
-        # This will only happen on the last, smaller batch.
-        if current_num_classes != num_classes:
-            # Create a new tensor with the correct shape [16, 32] and fill with a large negative value
-            padded_preds = torch.full(
-                (current_batch_size, num_classes),
-                -torch.inf,  # Use -inf to ensure these are ranked last
-                device=all_scores.device,
-                dtype=all_scores.dtype,
-            )
-            padded_preds[:, :current_num_classes] = all_scores
-            all_scores = padded_preds
-
-        self.test_auroc.update(all_scores, targets)
+        self.test_auroc.update(binary_scores, labels)
         self.test_hr1.update(all_scores, targets)
         self.test_hr5.update(all_scores, targets)
         self.test_hr10.update(all_scores, targets)
