@@ -19,11 +19,17 @@ class HybridLoss(nn.Module):
         super().__init__()
         assert cfg.train.margin is not None
         self.cfg = cfg
+        self.tau = nn.Parameter(torch.log(torch.tensor(0.1)))
 
         if cfg.model.pooling_method == "li":
             self.pool = LateInteraction(self.cfg)
         else:
             self.pool = self.mean_pooling
+
+    @property
+    def temperature(self) -> Float[torch.Tensor, ""]:
+        """Exponentiate the scale to get the actual scaling factor."""
+        return torch.exp(self.tau)
 
     def forward(
         self,
@@ -43,15 +49,19 @@ class HybridLoss(nn.Module):
             k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
+        all_dists = 1 - all_scores
+        all_scores = all_scores / self.temperature
 
         targets = torch.arange(batch_size, device=query_embs.device)
         poss = all_scores[targets, targets]
+        pos_dists = all_dists[targets, targets]
         negs = all_scores[targets, targets + batch_size]
+        neg_dists = all_dists[targets, targets + batch_size]
 
         contrastive_loss = F.cross_entropy(all_scores, targets, reduction="mean")
 
-        positive_loss = poss.pow(2).sum()
-        negative_loss = F.relu(self.cfg.execution.margin - negs).pow(2).sum()
+        positive_loss = pos_dists.pow(2).sum()
+        negative_loss = F.relu(self.cfg.execution.margin - neg_dists).pow(2).sum()
         margin_loss = 0.5 * (positive_loss + negative_loss) / batch_size
 
         loss = contrastive_loss + margin_loss

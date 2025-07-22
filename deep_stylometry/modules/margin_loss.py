@@ -43,13 +43,16 @@ class MarginLoss(nn.Module):
             k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
+        all_dists = 1 - all_scores
 
         targets = torch.arange(batch_size, device=query_embs.device)
         poss = all_scores[targets, targets]
+        pos_dists = all_dists[targets, targets]
         negs = all_scores[targets, targets + batch_size]
+        neg_dists = all_dists[targets, targets + batch_size]
 
-        positive_loss = poss.pow(2).sum()
-        negative_loss = F.relu(self.cfg.execution.margin - negs).pow(2).sum()
+        positive_loss = pos_dists.pow(2).sum()
+        negative_loss = F.relu(self.cfg.execution.margin - neg_dists).pow(2).sum()
         loss = 0.5 * (positive_loss + negative_loss) / batch_size
 
         return {

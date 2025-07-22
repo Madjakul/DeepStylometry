@@ -2,7 +2,7 @@
 
 mode: "tune"
 project_name: "deep-stylometry"
-group_name: "tune-deepstylometry-512-se-margin"
+group_name: "tune-deepstylometry-512-se-softmargin"
 
 data:
   ds_name: "se" # or halvest

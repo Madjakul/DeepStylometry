@@ -17,7 +17,6 @@ class LateInteraction(nn.Module):
         super().__init__()
         self.cfg = cfg
 
-        self.logit_scale = nn.Parameter(torch.log(torch.tensor(1 / 0.07)))
         self.register_buffer("IGNORE", torch.tensor(float("-inf")))
 
         if self.cfg.model.distance_weightning != "none":
@@ -32,11 +31,6 @@ class LateInteraction(nn.Module):
         """Leaky ReLU ensures alpha >= 0 and has a non-saturating gradient for
         positive values and won't be stuck when it gets slightly below zero."""
         return F.leaky_relu(self.alpha_raw)
-
-    @property
-    def scale(self) -> Float[torch.Tensor, ""]:
-        """Exponentiate the scale to get the actual scaling factor."""
-        return torch.exp(self.logit_scale)
 
     def forward(
         self,
@@ -69,17 +63,13 @@ class LateInteraction(nn.Module):
 
         if not self.cfg.model.use_softmax:
             # Max-based interaction
-            sim_matrix_scaled = self.scale * sim_matrix
-            masked_sim = sim_matrix_scaled.masked_fill(~valid_mask, self.IGNORE)
+            masked_sim = sim_matrix.masked_fill(~valid_mask, self.IGNORE)
             max_sim_values, _ = masked_sim.max(dim=-1)  # (B, B, S)
             scores = (max_sim_values * q_mask.squeeze(1).unsqueeze(1)).sum(dim=-1)
             return scores
 
-        # Scale similarities with learnable logit scale
-        logits = self.scale * sim_matrix
-
         # Mask the padding tokens
-        logits = logits.masked_fill(~valid_mask, self.IGNORE)
+        logits = sim_matrix.masked_fill(~valid_mask, self.IGNORE)
 
         if gumbel_temp is not None:
             p_ij = F.gumbel_softmax(logits, tau=gumbel_temp, hard=False)

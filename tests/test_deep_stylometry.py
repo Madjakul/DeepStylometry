@@ -107,11 +107,13 @@ def test_compute_losses(cfg, batch):
 
     assert "all_scores" in metrics
     assert "targets" in metrics
+    assert "poss" in metrics
+    assert "negs" in metrics
     assert "lm_loss" in metrics
     assert "contrastive_loss" in metrics
     assert "total_loss" in metrics
 
-    assert metrics["all_scores"].shape == (cfg.data.batch_size, 3 * cfg.data.batch_size)
+    assert metrics["all_scores"].shape == (cfg.data.batch_size, 2 * cfg.data.batch_size)
     assert metrics["targets"].shape == (cfg.data.batch_size,)
     assert not torch.isnan(metrics["total_loss"])
     assert metrics["total_loss"] >= 0
