@@ -48,13 +48,13 @@ class InfoNCELoss(nn.Module):
             k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
-        all_scores = all_scores / self.temperature
+        all_scaled_scores = all_scores / self.temperature
 
         targets = torch.arange(batch_size, device=query_embs.device)
-        poss = all_scores[targets, targets]
-        negs = all_scores[targets, targets + batch_size]
+        poss = all_scaled_scores[targets, targets]
+        negs = all_scaled_scores[targets, targets + batch_size]
 
-        loss = F.cross_entropy(all_scores, targets, reduction="mean")
+        loss = F.cross_entropy(all_scaled_scores, targets, reduction="mean")
 
         return {
             "all_scores": all_scores,
