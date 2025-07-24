@@ -4,6 +4,7 @@ import logging
 from functools import partial
 from typing import Any, Optional
 
+from ray import tune
 from ray.air.integrations.wandb import WandbLoggerCallback
 from ray.tune import FailureConfig
 from ray.tune.schedulers import AsyncHyperBandScheduler
@@ -11,7 +12,6 @@ from ray.tune.search.hyperopt import HyperOptSearch
 
 from deep_stylometry.utils.configs.base_config import BaseConfig
 from deep_stylometry.utils.train_utils import train_tune
-from ray import tune
 
 
 def make_param_space(o: Any) -> Optional[Any]:
