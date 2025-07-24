@@ -2,14 +2,14 @@
 
 mode: "train"
 project_name: "deep-stylometry"
-group_name: "train-deepstylometry-512-se-default"
-do_train: true
-do_test: false
+group_name: "test-styleembedding-512-se-default"
+do_train: false
+do_test: true
 
 data:
   ds_name: "se" # or halvest
   batch_size: 32
-  tokenizer_name: "FacebookAI/roberta-base"
+  tokenizer_name: "AnnaWegmann/Style-Embedding"
   max_length: 512
   map_batch_size: 1000
   load_from_cache_file: true
@@ -17,24 +17,25 @@ data:
   mlm_collator: false # only if you use an encoder
 
 model:
-  base_model_name: "FacebookAI/roberta-base"
+  base_model_name: "AnnaWegmann/Style-Embedding"
   is_decoder_model: false
-  add_linear_layers: true
+  add_linear_layers: false
   dropout: 0.1
   lm_weight: 0.0
   contrastive_weight: 1.0
-  pooling_method: "li" # li or mean
+  pooling_method: "mean" # li or mean
   # --- late interaction
-  distance_weightning: "exp" # none, exp or linear
+  distance_weightning: "none" # none, exp or linear
   alpha: 0.22
   use_softmax: true
-  initial_gumbel_temp: 1.0 # null
+  initial_gumbel_temp: null # null
   auto_anneal_gumbel: true
   min_gumbel_temp: 0.5
 
 train:
-  loss: "info_nce"
-  margin: null # Only if using triplet loss
+  loss: "triplet"
+  lambda: 0.5 # only if using hybrid
+  margin: 0.5 # Only if using triplet loss
   lm_loss_weight: 0.0
   # --- optimizer ---
   lr: 4.73e-5
@@ -59,7 +60,7 @@ train:
   val_check_interval: null
   check_val_every_n_epoch: null
   log_every_n_steps: 1
-  accumulate_grad_batches: 4
+  accumulate_grad_batches: 1
   gradient_clip_val: null # null
   precision: "32" # 32-true or 16-mixed
   # --- wandb logger ---
