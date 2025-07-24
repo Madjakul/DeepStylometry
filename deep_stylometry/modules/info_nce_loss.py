@@ -51,8 +51,8 @@ class InfoNCELoss(nn.Module):
         all_scaled_scores = all_scores / self.temperature
 
         targets = torch.arange(batch_size, device=query_embs.device)
-        poss = all_scaled_scores[targets, targets]
-        negs = all_scaled_scores[targets, targets + batch_size]
+        poss = all_scores[targets, targets]
+        negs = all_scores[targets, targets + batch_size]
 
         loss = F.cross_entropy(all_scaled_scores, targets, reduction="mean")
 

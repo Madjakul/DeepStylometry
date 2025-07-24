@@ -54,9 +54,9 @@ class HybridLoss(nn.Module):
         all_scaled_scores = all_scores / self.temperature
 
         targets = torch.arange(batch_size, device=query_embs.device)
-        poss = all_scaled_scores[targets, targets]
+        poss = all_scores[targets, targets]
         pos_dists = all_dists[targets, targets]
-        negs = all_scaled_scores[targets, targets + batch_size]
+        negs = all_scores[targets, targets + batch_size]
         neg_dists = all_dists[targets, targets + batch_size]
 
         info_nce_loss = F.cross_entropy(all_scaled_scores, targets, reduction="mean")
