@@ -53,7 +53,7 @@ class MarginLoss(nn.Module):
 
         positive_loss = pos_dists.pow(2).sum()
         negative_loss = F.relu(self.cfg.execution.margin - neg_dists).pow(2).sum()
-        loss = 0.5 * (positive_loss + negative_loss) / batch_size
+        loss = 0.5 * (positive_loss + negative_loss)
 
         return {
             "all_scores": all_scores,

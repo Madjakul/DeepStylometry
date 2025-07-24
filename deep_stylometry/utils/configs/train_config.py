@@ -10,6 +10,7 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 class TrainConfig(DictAccessMixin):
 
     loss: Literal["info_nce", "triplet", "hybrid", "hard_margin", "margin"] = "info_nce"
+    lambda_: float = 0.5
     margin: Optional[float] = None  # Only used for triplet or hybrid loss
     lm_loss_weight: float = 0.0
     # --- optimizer ---

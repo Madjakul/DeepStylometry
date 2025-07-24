@@ -43,12 +43,13 @@ class TripletLoss(nn.Module):
             k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
+        all_dists = 1 - all_scores
 
         targets = torch.arange(batch_size, device=query_embs.device)
-        poss = all_scores[targets, targets]
-        negs = all_scores[targets, targets + batch_size]
+        poss = all_dists[targets, targets]
+        negs = all_dists[targets, targets + batch_size]
 
-        loss = F.relu(self.cfg.execution.margin - poss + negs).mean()
+        loss = F.relu(poss - negs + self.cfg.execution.margin).mean()
 
         return {
             "all_scores": all_scores,

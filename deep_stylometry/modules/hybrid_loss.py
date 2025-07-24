@@ -17,7 +17,8 @@ class HybridLoss(nn.Module):
 
     def __init__(self, cfg: "BaseConfig"):
         super().__init__()
-        assert cfg.train.margin is not None
+        assert cfg.execution.margin is not None
+        assert cfg.execution.lambda_ < 1.0 and cfg.execution.lambda_ > 0.0
         self.cfg = cfg
         self.tau = nn.Parameter(torch.log(torch.tensor(0.1)))
 
@@ -50,21 +51,22 @@ class HybridLoss(nn.Module):
             gumbel_temp=gumbel_temp,
         )
         all_dists = 1 - all_scores
-        all_scores = all_scores / self.temperature
+        all_scaled_scores = all_scores / self.temperature
 
         targets = torch.arange(batch_size, device=query_embs.device)
-        poss = all_scores[targets, targets]
+        poss = all_scaled_scores[targets, targets]
         pos_dists = all_dists[targets, targets]
-        negs = all_scores[targets, targets + batch_size]
+        negs = all_scaled_scores[targets, targets + batch_size]
         neg_dists = all_dists[targets, targets + batch_size]
 
-        contrastive_loss = F.cross_entropy(all_scores, targets, reduction="mean")
+        info_nce_loss = F.cross_entropy(all_scaled_scores, targets, reduction="mean")
 
-        positive_loss = pos_dists.pow(2).sum()
-        negative_loss = F.relu(self.cfg.execution.margin - neg_dists).pow(2).sum()
-        margin_loss = 0.5 * (positive_loss + negative_loss) / batch_size
+        triplet_loss = F.relu(pos_dists - neg_dists + self.cfg.execution.margin).mean()
 
-        loss = contrastive_loss + margin_loss
+        loss = (
+            self.cfg.execution.lambda_ * info_nce_loss
+            + (1 - self.cfg.execution.lambda_) * triplet_loss
+        )
 
         return {
             "all_scores": all_scores,
