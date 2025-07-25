@@ -20,17 +20,12 @@ class HybridLoss(nn.Module):
         assert cfg.execution.margin is not None
         assert cfg.execution.lambda_ < 1.0 and cfg.execution.lambda_ > 0.0
         self.cfg = cfg
-        self.tau = nn.Parameter(torch.log(torch.tensor(0.1)))
+        self.register_buffer("tau", torch.tensor(self.cfg.execution.tau))
 
         if cfg.model.pooling_method == "li":
             self.pool = LateInteraction(self.cfg)
         else:
             self.pool = self.mean_pooling
-
-    @property
-    def temperature(self) -> Float[torch.Tensor, ""]:
-        """Exponentiate the scale to get the actual scaling factor."""
-        return torch.exp(self.tau)
 
     def forward(
         self,
@@ -51,7 +46,7 @@ class HybridLoss(nn.Module):
             gumbel_temp=gumbel_temp,
         )
         all_dists = 1 - all_scores
-        all_scaled_scores = all_scores / self.temperature
+        all_scaled_scores = all_scores / self.tau
 
         targets = torch.arange(batch_size, device=query_embs.device)
         poss = all_scores[targets, targets]
@@ -64,8 +59,8 @@ class HybridLoss(nn.Module):
         triplet_loss = F.relu(pos_dists - neg_dists + self.cfg.execution.margin).mean()
 
         loss = (
-            self.cfg.execution.lambda_ * info_nce_loss
-            + (1 - self.cfg.execution.lambda_) * triplet_loss
+            self.cfg.execution.lambda_ * triplet_loss
+            + (1 - self.cfg.execution.lambda_) * info_nce_loss
         )
 
         return {

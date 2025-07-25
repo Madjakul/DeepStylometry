@@ -18,17 +18,12 @@ class InfoNCELoss(nn.Module):
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
         self.cfg = cfg
-        self.tau = nn.Parameter(torch.log(torch.tensor(0.1)))
+        self.register_buffer("tau", torch.tensor(self.cfg.execution.tau))
 
         if self.cfg.model.pooling_method == "li":
             self.pool = LateInteraction(self.cfg)
         else:
             self.pool = self.mean_pooling
-
-    @property
-    def temperature(self) -> Float[torch.Tensor, ""]:
-        """Exponentiate the scale to get the actual scaling factor."""
-        return torch.exp(self.tau)
 
     def forward(
         self,
@@ -48,7 +43,7 @@ class InfoNCELoss(nn.Module):
             k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
-        all_scaled_scores = all_scores / self.temperature
+        all_scaled_scores = all_scores / self.tau
 
         targets = torch.arange(batch_size, device=query_embs.device)
         poss = all_scores[targets, targets]

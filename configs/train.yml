@@ -34,6 +34,7 @@ model:
 
 train:
   loss: "triplet"
+  tau: 0.5
   lambda: 0.5 # only if using hybrid
   margin: 0.5 # Only if using triplet loss
   lm_loss_weight: 0.0
