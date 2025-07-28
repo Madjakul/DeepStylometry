@@ -20,13 +20,6 @@ class TrainConfig(DictAccessMixin):
     eps: float = 1e-9
     weight_decay: float = 0.09
     num_cycles: float = 0.5
-    # --- early stopping ---
-    early_stopping: bool = False
-    early_stopping_metric: Optional[
-        Literal["val_total_loss", "val_auroc", "val_hr1", "val_mrr"]
-    ] = None
-    early_stopping_mode: Optional[Literal["min", "max"]] = None
-    early_stopping_patience: int = 3
     # --- checkpointing ---
     checkpoint_metric: Literal["val_total_loss", "val_auroc", "val_hr1", "val_mrr"] = (
         "val_total_loss"

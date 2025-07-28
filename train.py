@@ -41,7 +41,6 @@ if __name__ == "__main__":
         logging.info("--- Fine-tuning ---")
         model = DeepStylometry(cfg)
 
-        # Create the trainer (with checkpointing, wandb, etc.)
         trainer = train_utils.setup_trainer(
             cfg=cfg,
             model=model,
@@ -55,11 +54,7 @@ if __name__ == "__main__":
     # Testing
     if cfg.do_test:
         logging.info("--- Testing ---")
-
-        # If we just trained a DeepStylometry model, reuse it.
-        # Otherwise, if no model exists yet, we need to load or instantiate for testing.
         if trainer is None:
-            # Must have provided a checkpoint_path when testing from scratch
             if args.checkpoint_path is not None:
                 logging.info("Loading DeepStylometry model from checkpoint.")
                 model = DeepStylometry.load_from_checkpoint(args.checkpoint_path)

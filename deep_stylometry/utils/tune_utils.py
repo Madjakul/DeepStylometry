@@ -4,7 +4,6 @@ import logging
 from functools import partial
 from typing import Any, Optional
 
-from ray import tune
 from ray.air.integrations.wandb import WandbLoggerCallback
 from ray.tune import FailureConfig
 from ray.tune.schedulers import AsyncHyperBandScheduler
@@ -12,6 +11,7 @@ from ray.tune.search.hyperopt import HyperOptSearch
 
 from deep_stylometry.utils.configs.base_config import BaseConfig
 from deep_stylometry.utils.train_utils import train_tune
+from ray import tune
 
 
 def make_param_space(o: Any) -> Optional[Any]:
@@ -24,7 +24,6 @@ def make_param_space(o: Any) -> Optional[Any]:
       sampler, return the list of samplers (or None if none).
     • If `o` is a scalar (str/int/float/bool/None), wrap in tune.choice([o]).
     """
-    # 1) Actual sampler directive?
     if isinstance(o, dict) and "type" in o:
         t = o["type"]
         if t == "loguniform":
@@ -37,7 +36,7 @@ def make_param_space(o: Any) -> Optional[Any]:
             return tune.choice(o["values"])
         raise ValueError(f"Unknown tune type {t!r}")
 
-    # 2) Nested dict -> recurse
+    # Nested dict -> recurse
     if isinstance(o, dict):
         out = {}
         for k, v in o.items():
@@ -46,14 +45,13 @@ def make_param_space(o: Any) -> Optional[Any]:
                 out[k] = child
         return out or None
 
-    # 3) List -> recurse
+    # List -> recurse
     if isinstance(o, list):
         recursed = [make_param_space(v) for v in o]
         recursed = [v for v in recursed if v is not None]
         return recursed or None
 
-    # 4) Scalar constant -> wrap as a single‑choice sampler
-    #    (so Ray still hands it back to you in the same nested shape)
+    # Scalar constant -> wrap as a single‑choice sampler
     return tune.choice([o])
 
 
@@ -61,7 +59,6 @@ def setup_tuner(
     config: BaseConfig,
     ray_storage_path: str,
     logs_dir: str,
-    use_wandb: bool = False,
     cache_dir: Optional[str] = None,
 ):
     """Sets up the Ray Tune tuner for hyperparameter tuning. Uses
@@ -88,20 +85,6 @@ def setup_tuner(
         The Ray Tune Tuner object configured for hyperparameter tuning.
     """
     callbacks = []
-    # if use_wandb:
-    #     logging.info("Using Weights & Biases for logging")
-    #     callbacks.append(
-    #         WandbLoggerCallback(
-    #             project=config.project_name,
-    #             name=f"""tune-{config.model.base_model_name}-{config.data.ds_name}
-    #             -pooling:{config.model.pooling_method}-softmax:{config.model.use_softmax}
-    #             -dist:{config.model.distance_weightning}""",
-    #             group=config.group_name,
-    #             log_config=True,
-    #             log_checkpoints=False,
-    #         )
-    #     )
-
     param_space = make_param_space(config.to_dict())
 
     trainable_fn = partial(

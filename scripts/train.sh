@@ -15,7 +15,6 @@ LOGS_DIR=$PROJECT_ROOT/logs
 CHECKPOINT_DIR=$PROJECT_ROOT/tmp/checkpoints/
 # CHECKPOINT_PATH=$CHECKPOINT_DIR/train-roberta-adamw-512-se-li-gumbel-dist-autoexp-v2/epoch=3-val_auroc=0.8056.ckpt
 NUM_PROC=10
-#
 
 # **************************************************************************************
 

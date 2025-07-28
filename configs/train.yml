@@ -44,11 +44,6 @@ train:
   eps: 1.0e-9
   weight_decay: 0.09
   num_cycles: 0.5
-  # --- early stopping ---
-  early_stopping: false
-  # early_stopping_metric: "val_total_loss"
-  # early_stopping_mode: "min"
-  # early_stopping_patience: 3
   # --- checkpointing
   checkpoint_metric: "val_auroc" # only if a checkpoint directory was provided
   checkpoint_mode: "max"

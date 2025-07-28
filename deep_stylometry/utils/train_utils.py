@@ -7,15 +7,17 @@ from typing import Any, Dict, Optional
 import lightning as L
 import psutil
 import torch
-import wandb
-from lightning.pytorch.callbacks import (EarlyStopping, LearningRateMonitor,
-                                         ModelCheckpoint)
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
 from deep_stylometry.modules.modeling_deep_stylometry import DeepStylometry
 from deep_stylometry.utils.configs.base_config import BaseConfig
-from deep_stylometry.utils.data.halvest_data import HALvestDataModule
+from deep_stylometry.utils.data.halvest_datamodule import HALvestDataModule
 from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDataModule
 
 NUM_PROC = psutil.cpu_count(logical=False)
@@ -97,15 +99,6 @@ def setup_trainer(
         -pooling:{cfg.model.pooling_method}-softmax:{cfg.model.use_softmax}
         -dist:{cfg.model.distance_weightning}"""
 
-    # Early stopping if configured
-    if cfg.execution.early_stopping:
-        early_stop_callback = EarlyStopping(
-            monitor=cfg.execution.early_stopping_metric,
-            mode=cfg.execution.early_stopping_mode,
-            patience=cfg.execution.early_stopping_patience,
-        )
-        callbacks.append(early_stop_callback)
-
     # Model checkpoint callback if checkpoint_dir is provided
     if checkpoint_dir is not None:
         checkpoint_callback = ModelCheckpoint(
@@ -161,7 +154,6 @@ def setup_trainer(
 
 def train_tune(
     config: Dict[str, Any],
-    logs_dir: str,
     cache_dir: Optional[str] = None,
 ):
     """Launch hyper-parameter tuning using Ray Tune and PyTorch Lightning.
@@ -202,16 +194,8 @@ def train_tune(
             save_checkpoints=False,
         )
     )
-    # Configure loggers
     loggers = []
-    # loggers.append(
-    #     CSVLogger(
-    #         save_dir=logs_dir,
-    #         name=f"""tune-{cfg.model.base_model_name}-{cfg.data.ds_name}
-    #             -pooling:{cfg.model.pooling_method}-softmax:{cfg.model.use_softmax}
-    #             -dist:{cfg.model.distance_weightning}""",
-    #     )
-    # )
+
     if cfg.execution.use_wandb:
         wandb_logger = WandbLogger(
             project=cfg.project_name,
@@ -236,6 +220,3 @@ def train_tune(
         precision=cfg.tune.precision,
     )
     trainer.fit(model=model, datamodule=dm)
-
-    # if cfg.execution.use_wandb:
-    #     wandb.finish()

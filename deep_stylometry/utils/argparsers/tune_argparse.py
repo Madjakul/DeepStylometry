@@ -16,7 +16,7 @@ class TuneArgparse:
             Parsed arguments.
         """
         parser = argparse.ArgumentParser(
-            description="Argument parser for hyper-parameter tuning."
+            description="Arguments used for hyper-parameter tuning."
         )
         parser.add_argument(
             "--config_path",
@@ -46,7 +46,7 @@ class TuneArgparse:
             "--cache_dir",
             type=str,
             default=None,
-            help="Path to the cache directory.",
+            help="Path to the cache directory for HuggingFace.",
         )
         args, _ = parser.parse_known_args()
         return args

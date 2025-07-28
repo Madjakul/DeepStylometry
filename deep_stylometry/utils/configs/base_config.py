@@ -30,7 +30,6 @@ class BaseConfig(DictAccessMixin):
     _tune: TuneConfig = TuneConfig()
 
     def __post_init__(self):
-        # Initialize execution config based on mode
         if self._execution_config is None:
             self._set_execution_config()
 
