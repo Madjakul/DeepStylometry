@@ -16,7 +16,7 @@ class TuneArgparse:
             Parsed arguments.
         """
         parser = argparse.ArgumentParser(
-            description="Argument parser for hyper-parameter tuning."
+            description="Arguments used for hyper-parameter tuning."
         )
         parser.add_argument(
             "--config_path",
@@ -31,6 +31,12 @@ class TuneArgparse:
             help="Directory where Ray will save the logs and experiments results.",
         )
         parser.add_argument(
+            "--logs_dir",
+            type=str,
+            required=True,
+            help="Directory where the logs will be saved.",
+        )
+        parser.add_argument(
             "--num_proc",
             type=int,
             default=None,
@@ -40,7 +46,7 @@ class TuneArgparse:
             "--cache_dir",
             type=str,
             default=None,
-            help="Path to the cache directory.",
+            help="Path to the cache directory for HuggingFace.",
         )
         args, _ = parser.parse_known_args()
         return args

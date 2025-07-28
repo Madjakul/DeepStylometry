@@ -1,306 +1,242 @@
 # deep_stylometry/modules/modeling_deep_stylometry.py
 
 import logging
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics.classification import (
-    BinaryAUROC,
-    BinaryF1Score,
-    BinaryPrecision,
-    BinaryRecall,
-)
+from jaxtyping import Float
+from torcheval.metrics import BinaryAUROC, HitRate, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
+from deep_stylometry.modules.hard_margin_loss import HardMarginLoss
+from deep_stylometry.modules.hybrid_loss import HybridLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
-from deep_stylometry.optimizers import SOAP, SophiaG
+from deep_stylometry.modules.margin_loss import MarginLoss
+from deep_stylometry.modules.triplet_loss import TripletLoss
+
+if TYPE_CHECKING:
+    from deep_stylometry.utils.configs import BaseConfig
 
 
 class DeepStylometry(L.LightningModule):
-    """DeepStylometry model for stylometry tasks. This model combines a
-    language model with a contrastive loss function to learn representations of
-    text data. The model can be trained using different optimizers and supports
-    various hyperparameters for fine-tuning.
-
-    The language model can be either a decoder model (e.g., GPT-2) or an
-    encoder model (e.g., BERT) based on the specified model name. The
-    contrastive loss is computed using InfoNCE, where the distance between
-    query and key sentences is computed using cosine similarity over the average
-    embeddings of the sentences or using a modified late interaction approach.
-    The importance of the language model loss and contrastive loss can be
-    controlled using the `lm_weight` and `contrastive_weight` hyperparameters.
-
-    By default, the scheduler uses a cosine annealing schedule with warmup steps.
+    """DeepStylometry is a PyTorch Lightning module that implements a deep
+    stylometry model for text representation learning. It combines a language
+    model with a contrastive loss function to learn embeddings that capture
+    stylistic features of text. The model supports various loss functions,
+    including InfoNCE, triplet loss, hybrid loss, hard margin loss, and margin
+    loss.
 
     Parameters
     ----------
-    optim_name: str
-        The name of the optimizer to use. Options are "adamw", "soap", or "sophia".
-    base_model_name: str
-        The name of the pretrained model to load from Hugging Face's transformers
-        library.
-    batch_size: int
-        The batch size for training and evaluation.
-    seq_len: int
-        The maximum sequence length of the input sentences.
-    is_decoder_model: bool
-        If True, load a decoder model (e.g., GPT-2). If False, load an encoder
-        model (e.g., BERT). This parameter determines the type of model to load
-        and affects the behavior of the forward method.
-    lr: float
-        The learning rate for the optimizer.
-    dropout: float
-        The dropout rate for the model.
-    weight_decay: float
-        The weight decay for the optimizer.
-    lm_weight: float
-        The weight for the language model loss. Default is 1.0.
-    contrastive_weight: float
-        The weight for the contrastive loss. Default is 1.0.
-    contrastive_temp: float
-        The temperature parameter for the contrastive loss. Default is 7e-2.
-    do_late_interaction: bool
-        If True, use late interaction to compute the similarity scores.
-    use_max: bool
-        If True, use maximum cosine similarity for late interaction. If False, use Gumbel softmax.
-    initial_gumbel_temp: float
-        The initial temperature for the Gumbel softmax, if `use_max` is False. Default is 1.0.
-        auto_anneal_gumbel: bool
-        If True, automatically anneal the Gumbel temperature linearly alongside the optimizer
-        steps during training. Default is True.
-    gumbel_linear_delta: float
-        The linear delta for the Gumbel temperature. If `auto_anneal_gumbel` is True, this
-        parameter is ignored. Default is 1e-3.
-    min_gumbel_temp: float
-        The minimum Gumbel temperature. Default is 1e-6.
-        do_distance: bool
-        If True, use distance-based weighting for late interaction.
-    exp_decay: bool
-        If True, use exponential decay for the distance weights. Only if
-        `do_distance` is True.
-    alpha: float
-        The alpha parameter for the exponential decay function. Only if
-        `do_distance` is True.
-    project_up: Optional[bool]
-        If True, project the embeddings up to a higher dimension before
-        computing the contrastive loss. If False, project down to the same
-        dimension. If None, use the default projection (up to 4x the hidden
-        size).
+    cfg : BaseConfig
+        Configuration object containing model and execution parameters, including
+        the loss function to be used, learning rate, weight decay, and other training
+        arguments.
 
     Attributes
     ----------
-    lm: LanguageModel
-        The language model used for the task.
-    is_decoder_model: bool
-        Indicates whether the loaded model is a decoder model (True) or an
-        encoder model (False).
-    lm_weight: float
-        The weight for the language model loss.
-    contrastive_weight: float
-        The weight for the contrastive loss.
-    initial_gumbel_temp: float
-        The initial temperature for the Gumbel softmax.
-    gumbel_temp: float
-        The current Gumbel temperature.
-    gumbel_linear_delta: Optional[float]
-        The linear delta for the Gumbel temperature.
-    optim_name: str
-        The name of the optimizer to use.
-    batch_size: int
-        The batch size for training and evaluation.
-    min_gumbel_temp: float
-        The minimum Gumbel temperature.
-    auto_anneal_gumbel: bool
-        If True, automatically anneal the Gumbel temperature linearly alongside
-        the optimizer steps during training.
-    dropout: float
-        The dropout rate for the model.
-    lr: float
-        The learning rate for the optimizer.
-    val_auroc: BinaryAUROC
-        The AUROC metric for validation.
-    val_f1: BinaryF1Score
-        The F1 score metric for validation.
-    val_precision: BinaryPrecision
-        The precision metric for validation.
-    val_recall: BinaryRecall
-        The recall metric for validation.
-    test_auroc: BinaryAUROC
-        The AUROC metric for testing.
-    test_f1: BinaryF1Score
-        The F1 score metric for testing.
-    test_precision: BinaryPrecision
-        The precision metric for testing.
-    test_recall: BinaryRecall
-        The recall metric for testing.
-    contrastive_loss: InfoNCELoss
-        The contrastive loss function used for training.
-    fc1: nn.Linear
-        The first linear layer for projecting the embeddings.
-    fc2: nn.Linear
-        The second linear layer for projecting the embeddings.
-    optim_map: Dict[str, Type[torch.optim.Optimizer]]
-        A mapping of optimizer names to their corresponding PyTorch
-        optimizer classes.
+    cfg : BaseConfig
+        Configuration object with model and execution parameters.
+    gumbel_temp : float
+        Initial Gumbel temperature for the contrastive loss, used to control the
+        sharpness of the softmax distribution.
+    contrastive_loss : nn.Module
+        The contrastive loss function used for training the model. It can be one of
+        InfoNCELoss, TripletLoss, HybridLoss, HardMarginLoss, or MarginLoss,
+        depending on the configuration.
+    val_auroc : BinaryAUROC
+        AUROC metric for validation, used to evaluate the model's performance on
+        distinguishing between positive and negative samples.
+    val_hr1 : HitRate
+        Hit rate at k=1 for validation, measuring the proportion of times the
+        correct positive sample is ranked first among the negative samples.
+    val_hr5 : HitRate
+        Hit rate at k=5 for validation, measuring the proportion of times the
+        correct positive sample is ranked within the top 5 among the negative samples.
+    val_hr10 : HitRate
+        Hit rate at k=10 for validation, measuring the proportion of times the
+        correct positive sample is ranked within the top 10 among the negative samples.
+    val_rr : ReciprocalRank
+        Reciprocal rank for validation, measuring the average rank of the correct
+        positive sample across all validation batches.
+    test_auroc : BinaryAUROC
+        AUROC metric for testing, used to evaluate the model's performance on
+        distinguishing between positive and negative samples in the test set.
+    test_hr1 : HitRate
+        Hit rate at k=1 for testing, measuring the proportion of times the
+        correct positive sample is ranked first among the negative samples in the test
+        set.
+    test_hr5 : HitRate
+        Hit rate at k=5 for testing, measuring the proportion of times the
+        correct positive sample is ranked within the top 5 among the negative samples
+        in the test set.
+    test_hr10 : HitRate
+        Hit rate at k=10 for testing, measuring the proportion of times the
+        correct positive sample is ranked within the top 10 among the negative samples
+        in the test set.
+    test_rr : ReciprocalRank
+        Reciprocal rank for testing, measuring the average rank of the correct
+        positive sample across all test batches.
+    lm : LanguageModel
+        The language model used for generating text embeddings. It can be a pre-trained
+        transformer model or a custom model defined in the configuration.
+    fc1 : nn.Linear
+        Optional linear layer for projecting the embeddings to a different space,
+        used if `add_linear_layers` is set to True in the configuration.
+    fc2 : nn.Linear
+        Optional linear layer for further projecting the embeddings, used if
+        `add_linear_layers` is set to True in the configuration.
+    loss_map : Dict[str, nn.Module]
+        A mapping of loss function names to their corresponding classes. This allows
+        for easy selection of the loss function based on the configuration.
     """
 
-    optim_map = {
-        "adamw": torch.optim.AdamW,
-        "soap": SOAP,
-        "sophia": SophiaG,
+    loss_map = {
+        "info_nce": InfoNCELoss,
+        "triplet": TripletLoss,
+        "hybrid": HybridLoss,
+        "hard_margin": HardMarginLoss,
+        "margin": MarginLoss,
     }
 
-    def __init__(
-        self,
-        optim_name: str,
-        base_model_name: str,
-        batch_size: int,
-        seq_len: int,
-        is_decoder_model: bool,
-        lr: float = 2e-5,
-        dropout: float = 0.1,
-        weight_decay: float = 1e-2,
-        lm_weight: float = 1.0,
-        contrastive_weight: float = 1.0,
-        contrastive_temp: float = 7e-2,
-        do_late_interaction: bool = True,
-        use_max: bool = False,
-        initial_gumbel_temp: float = 1.0,
-        auto_anneal_gumbel: bool = True,
-        gumbel_linear_delta: float = 1e-3,
-        min_gumbel_temp: float = 1e-6,
-        do_distance: bool = True,
-        exp_decay: bool = True,
-        alpha: float = 1.0,
-        project_up: Optional[bool] = None,
-    ):
+    def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
-        self.save_hyperparameters()  # Save hyperparameters
-        self.weight_decay = weight_decay
-        self.lm = LanguageModel(base_model_name, is_decoder_model)
-        self.is_decoder_model = is_decoder_model
-        self.lm_weight = lm_weight
-        self.contrastive_weight = contrastive_weight
-        self.initial_gumbel_temp = initial_gumbel_temp
-        self.gumbel_temp = initial_gumbel_temp
-        self.gumbel_linear_delta = gumbel_linear_delta
-        self.optim_name = optim_name
-        self.batch_size = batch_size
-        self.min_gumbel_temp = min_gumbel_temp
-        self.auto_anneal_gumbel = auto_anneal_gumbel
-        self.dropout = dropout
-        self.lr = lr
-        # Validation metrics
-        self.val_auroc = BinaryAUROC(thresholds=None)
-        self.val_f1 = BinaryF1Score()
-        self.val_precision = BinaryPrecision()
-        self.val_recall = BinaryRecall()
-        # Test metrics
-        self.test_auroc = BinaryAUROC(thresholds=None)
-        self.test_f1 = BinaryF1Score()
-        self.test_precision = BinaryPrecision()
-        self.test_recall = BinaryRecall()
-        if contrastive_weight > 0:
-            self.contrastive_loss = InfoNCELoss(
-                do_late_interaction=do_late_interaction,
-                do_distance=do_distance,
-                exp_decay=exp_decay,
-                alpha=alpha,
-                temperature=contrastive_temp,
-                seq_len=seq_len,
-                use_max=use_max,
-            )
-            hidden_size = self.lm.hidden_size
-            if project_up is True:
-                self.fc1 = nn.Linear(hidden_size, hidden_size * 4)
-                self.fc2 = nn.Linear(hidden_size * 4, hidden_size * 4)
-            elif project_up is False:
-                self.fc1 = nn.Linear(hidden_size, hidden_size)
-                self.fc2 = nn.Linear(hidden_size, hidden_size)
-            else:  # Default projection if project_up is None but contrastive_weight > 0
-                self.fc1 = nn.Linear(hidden_size, hidden_size * 4)
-                self.fc2 = nn.Linear(hidden_size * 4, hidden_size)
+        self.save_hyperparameters()
 
-    def _compute_losses(self, batch: Dict[str, torch.Tensor]):
+        self.cfg = cfg
+        self.gumbel_temp = self.cfg.model.initial_gumbel_temp
+        self.contrastive_loss = self.loss_map[cfg.execution.loss](cfg)
+
+        # Validation metrics
+        self.val_auroc = BinaryAUROC().to(self.device)
+        self.val_hr1 = HitRate(k=1).to(self.device)
+        self.val_hr5 = HitRate(k=5).to(self.device)
+        self.val_hr10 = HitRate(k=10).to(self.device)
+        self.val_rr = ReciprocalRank().to(self.device)
+
+        # Test metrics
+        self.test_auroc = BinaryAUROC().to(self.device)
+        self.test_hr1 = HitRate(k=1).to(self.device)
+        self.test_hr5 = HitRate(k=5).to(self.device)
+        self.test_hr10 = HitRate(k=10).to(self.device)
+        self.test_rr = ReciprocalRank().to(self.device)
+
+        # Model
+        self.lm = LanguageModel(cfg)
+        if self.cfg.model.add_linear_layers:
+            hidden_size = self.lm.hidden_size
+            self.fc1 = nn.Linear(hidden_size, hidden_size)
+            self.fc2 = nn.Linear(hidden_size, hidden_size)
+
+    def _compute_losses(
+        self, batch: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """Compute the losses for a batch of data. This method computes the
+        language model loss and the contrastive loss using the embeddings
+        generated by the language model. It also handles the positive and
+        negative samples for contrastive learning.
+
+        Parameters
+        ----------
+        batch : Dict[str, torch.Tensor]
+            A dictionary containing the input tensors for the model, including
+            `input_ids`, `attention_mask`, `pos_input_ids`, `pos_attention_mask`,
+            `neg_input_ids`, and `neg_attention_mask`. The `labels` key is optional
+            and only exists if the MLM collator is used.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            A dictionary containing the computed losses and metrics:
+            - `lm_loss`: The language model loss.
+            - `contrastive_loss`: The contrastive loss.
+            - `total_loss`: The total loss, combining the language model loss and
+              the contrastive loss.
+            - `all_scores`: The similarity scores for all query-key pairs.
+            - `targets`: The target indices for the positive samples.
+            - `poss`: The positive scores for the positive samples.
+            - `negs`: The negative scores for the negative samples.
+        """
         lm_loss, _, q_embs = self(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-            labels=batch.get("labels", None),
+            labels=batch.get("labels", None),  # only exists if MLM collator is used
         )
-        _, _, k_embs = self(
-            input_ids=batch["k_input_ids"],
-            attention_mask=batch["k_attention_mask"],
+        _, _, pos_embs = self(
+            input_ids=batch["pos_input_ids"],
+            attention_mask=batch["pos_attention_mask"],
+        )
+        _, _, neg_embs = self(
+            input_ids=batch["neg_input_ids"],
+            attention_mask=batch["neg_attention_mask"],
         )
 
-        contrastive_loss = 0.0
-        pos_query_scores = None
-        pos_query_targets = None
-        if self.contrastive_weight > 0:
-            pos_query_scores, pos_query_targets, contrastive_loss = (
-                self.contrastive_loss(
-                    q_embs,
-                    k_embs,
-                    batch["author_label"],
-                    batch["attention_mask"],  # Use original attention masks
-                    batch["k_attention_mask"],
-                    gumbel_temp=self.gumbel_temp,
-                )
-            )
+        k_embs = torch.cat([pos_embs, neg_embs], dim=0)  # (2B, S, H)
+        k_mask = torch.cat(
+            [batch["pos_attention_mask"], batch["neg_attention_mask"]],
+            dim=0,
+        )  # (2B, S)
 
-        total_loss = (self.lm_weight * lm_loss) + (
-            self.contrastive_weight * contrastive_loss
+        loss_metrics = self.contrastive_loss(
+            query_embs=q_embs,
+            key_embs=k_embs,
+            q_mask=batch["attention_mask"],
+            k_mask=k_mask,
+            gumbel_temp=self.gumbel_temp,
         )
+
+        total_loss = (self.cfg.execution.lm_loss_weight * lm_loss) + loss_metrics[
+            "loss"
+        ]
 
         metrics = {
-            "pos_query_scores": pos_query_scores,
-            "pos_query_targets": pos_query_targets,
-            "lm_loss": lm_loss * self.lm_weight,
-            "contrastive_loss": contrastive_loss * self.contrastive_weight,
+            "all_scores": loss_metrics["all_scores"],
+            "targets": loss_metrics["targets"],
+            "poss": loss_metrics["poss"],
+            "negs": loss_metrics["negs"],
+            "contrastive_loss": loss_metrics["loss"],
+            "lm_loss": lm_loss * self.cfg.execution.lm_loss_weight,
             "total_loss": total_loss,
         }
 
         return metrics
 
-    def configure_optimizers(self):  # type: ignore[override]
-        """Initializes the optimizer and learning rate scheduler. The default
-        scheduler is a cosine annealing schedule with warmup steps. The
-        optimizer is selected based on the `optim_name` parameter, which can be
-        "adamw", "soap", or "sophia".
-
-        Also initializes the Gumbel temperature if `auto_anneal_gumbel` is True.
-        The Gumbel temperature is linearly annealed during training.
-
-        Returns
-        -------
-        dict
-            A dictionary containing the optimizer and learning rate scheduler.
-            The optimizer is selected based on the `optim_name` parameter, and
-            the scheduler is a cosine annealing schedule with warmup steps.
-        """
+    def configure_optimizers(self) -> Dict[str, Any]:  # type: ignore[override]
         logging.info(
-            f"Configuring optimizer: {self.optim_name} with lr={self.lr}, weight_decay={self.weight_decay}"
+            f"""Configuring optimizer: AdamW with lr={self.cfg.execution.lr},
+             weight_decay={self.cfg.execution.weight_decay},
+             betas={self.cfg.execution.betas}, eps={self.cfg.execution.eps}."""
         )
 
-        optimizer = self.optim_map[self.optim_name](
-            self.parameters(), lr=self.lr, weight_decay=self.weight_decay
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.cfg.execution.lr,  # type: ignore
+            weight_decay=self.cfg.execution.weight_decay,  # type: ignore
+            betas=self.cfg.execution.betas,  # type: ignore
+            eps=self.cfg.execution.eps,  # type: ignore
         )
         # Calculate steps dynamically
         total_steps = int(self.trainer.estimated_stepping_batches)
-        warmup_steps = max(1, int(0.05 * total_steps))
+        warmup_steps = max(1, int(0.1 * total_steps))
 
-        if self.auto_anneal_gumbel:
-            total_temp_range = self.initial_gumbel_temp - self.min_gumbel_temp
+        if (
+            self.cfg.model.auto_anneal_gumbel
+            and self.cfg.model.initial_gumbel_temp is not None
+        ):
+            total_temp_range = (  # type: ignore
+                self.cfg.model.initial_gumbel_temp - self.cfg.model.min_gumbel_temp
+            )
             self.gumbel_linear_delta = total_temp_range / total_steps
 
         scheduler = get_cosine_schedule_with_warmup(
             optimizer,
             num_warmup_steps=warmup_steps,
             num_training_steps=total_steps,
-            num_cycles=0.5,  # 0.5 cosine cycle → single smooth decay
+            num_cycles=self.cfg.execution.num_cycles,
             last_epoch=-1,
         )
 
@@ -313,28 +249,24 @@ class DeepStylometry(L.LightningModule):
             },
         }
 
-    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure):  # type: ignore[override]
-        """Ovverride the optimizer_step method to include custom logic for
-        updating the Gumbel temperature. This method is called after each
-        optimizer step during training.
+    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure) -> None:  # type: ignore[override]
+        """Override the optimizer_step method to include Gumbel temperature
+        annealing.
 
-        Parameters
-        ----------
-        epoch: int
-            The current epoch number.
-        batch_idx: int
-            The index of the current batch.
-        optimizer: torch.optim.Optimizer
-            The optimizer used for training.
-        optimizer_closure: Callable
-            A closure that computes the loss and gradients for the optimizer.
+        This method is called after each optimizer step to update the
+        Gumbel temperature if auto-annealing is enabled. The temperature
+        is decreased linearly based on the configured delta until it
+        reaches the minimum temperature specified in the configuration.
         """
         super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
 
         # Update Gumbel temperature after each optimizer step
-        if self.auto_anneal_gumbel:
-            new_temp = self.gumbel_temp - self.gumbel_linear_delta
-            self.gumbel_temp = max(new_temp, self.min_gumbel_temp)
+        if (
+            self.cfg.model.auto_anneal_gumbel
+            and self.cfg.model.initial_gumbel_temp is not None
+        ):
+            new_temp = self.gumbel_temp - self.gumbel_linear_delta  # type: ignore
+            self.gumbel_temp = max(new_temp, self.cfg.model.min_gumbel_temp)
             self.log("gumbel_temp", self.gumbel_temp, prog_bar=True)
 
     def forward(
@@ -343,72 +275,40 @@ class DeepStylometry(L.LightningModule):
         attention_mask: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
     ):
-        """Compute the loss and return the last hidden states of the model.
-
-        Parameters
-        ----------
-        input_ids: torch.Tensor
-            The input tensor containing the token IDs.
-        attention_mask: torch.Tensor
-            A mask indicating which tokens should be attended to (1) and which
-            should not (0).
-        labels: Optional[torch.Tensor]
-            The labels for the input data. If None and the model is a decoder,
-            the input_ids will be used as labels.
-
-        Returns
-        -------
-        lm_loss: torch.Tensor
-            The computed loss for the input data.
-        last_hidden_states: torch.Tensor
-            The last hidden states of the model, which are the output embeddings
-            for the input data.
-        projected_embs: torch.Tensor
-            The projected embeddings of the model, which are the output
-            embeddings for the input data after applying the linear layers.
-        """
         lm_loss, last_hidden_states = self.lm(
             input_ids, attention_mask=attention_mask, labels=labels
         )
 
-        if self.contrastive_weight > 0:
-            embs = F.dropout(last_hidden_states, p=self.dropout, training=self.training)
-            embs = F.gelu(self.fc1(embs))
-            embs = F.dropout(embs, p=self.dropout, training=self.training)
+        if self.cfg.model.add_linear_layers:
+            embs = F.layer_norm(
+                last_hidden_states,
+                normalized_shape=(self.lm.hidden_size,),
+                weight=None,
+                bias=None,
+                eps=1e-5,
+            )
+            embs = F.dropout(embs, p=self.cfg.model.dropout, training=self.training)
+            embs = F.relu(self.fc1(embs))
+            embs = F.dropout(embs, p=self.cfg.model.dropout, training=self.training)
             projected_embs = self.fc2(embs)
         else:
             projected_embs = last_hidden_states
 
         return lm_loss, last_hidden_states, projected_embs
 
-    def training_step(self, batch, batch_idx: int):
-        """Compute the total loss for the training step.
-
-        Parameters
-        ----------
-        batch: Dict[str, torch.Tensor]
-            The input batch containing the input IDs, attention masks, and
-            labels for the training step.
-        batch_idx: int
-            The index of the current batch.
-
-        Returns
-        -------
-        total_loss: torch.Tensor
-            The total loss for the training step, which is a combination of the
-            language model loss and the contrastive loss.
-        """
+    def training_step(self, batch, batch_idx: int) -> Float[torch.Tensor, ""]:
         metrics = self._compute_losses(batch)
 
         # Log metrics
-        self.log(
-            "gumbel_temp",
-            self.gumbel_temp,
-            prog_bar=False,
-            on_step=True,
-            on_epoch=False,
-            batch_size=self.batch_size,
-        )
+        if self.cfg.model.initial_gumbel_temp is not None:
+            self.log(
+                "gumbel_temp",
+                self.gumbel_temp,  # type: ignore
+                prog_bar=False,
+                on_step=True,
+                on_epoch=False,
+                batch_size=self.cfg.data.batch_size,
+            )
         self.log_dict(
             {
                 "train_total_loss": metrics["total_loss"],
@@ -419,44 +319,27 @@ class DeepStylometry(L.LightningModule):
             on_step=True,
             on_epoch=True,
             sync_dist=True,
-            batch_size=self.batch_size,
+            batch_size=self.cfg.data.batch_size,
         )
         return metrics["total_loss"]
 
-    def validation_step(self, batch, batch_idx: int):
-        """Compute the total loss for the validation step, as well as the
-        auroc, f1, precision, and recall metrics.
-
-        Parameters
-        ----------
-        batch: Dict[str, torch.Tensor]
-            The input batch containing the input IDs, attention masks, and
-            labels for the validation step.
-        batch_idx: int
-            The index of the current batch.
-        """
+    def validation_step(self, batch, batch_idx: int) -> None:
         metrics = self._compute_losses(batch)
+        all_scores = metrics["all_scores"]
+        targets = metrics["targets"]
+        poss = metrics["poss"]
+        negs = metrics["negs"]
+        batch_size = targets.size(0)
+        binary_scores = torch.cat([poss, negs], dim=0)
+        labels = torch.cat(
+            [torch.ones(batch_size), torch.zeros(batch_size)], dim=0
+        ).long()
 
-        if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
-            pos_query_scores = metrics["pos_query_scores"]
-            pos_query_targets = metrics["pos_query_targets"]
-
-            # Generate binary labels (1 for correct key, 0 otherwise)
-            binary_labels = torch.zeros_like(pos_query_scores, dtype=torch.long)
-            rows = torch.arange(
-                pos_query_scores.size(0), device=pos_query_scores.device
-            )
-            binary_labels[rows, pos_query_targets] = 1
-
-            # Flatten scores and labels
-            flat_scores = pos_query_scores.flatten()
-            flat_labels = binary_labels.flatten()
-
-            # Update metrics
-            self.val_auroc(flat_scores, flat_labels)
-            self.val_f1(flat_scores, flat_labels)
-            self.val_precision(flat_scores, flat_labels)
-            self.val_recall(flat_scores, flat_labels)
+        self.val_auroc.update(binary_scores, labels)
+        self.val_hr1.update(all_scores, targets)
+        self.val_hr5.update(all_scores, targets)
+        self.val_hr10.update(all_scores, targets)
+        self.val_rr.update(all_scores, targets)
 
         self.log_dict(
             {
@@ -468,60 +351,52 @@ class DeepStylometry(L.LightningModule):
             on_step=False,
             on_epoch=True,
             sync_dist=True,
-            batch_size=self.batch_size,
+            batch_size=self.cfg.data.batch_size,
         )
 
-    def on_validation_epoch_end(self):
-        """Aggregate and log the validation metrics at the end of the
-        validation epoch."""
+    def on_validation_epoch_end(self) -> None:
+        self.log("completed_epoch", self.current_epoch, prog_bar=False)
+        auroc = self.val_auroc.compute().to(self.device)
+        avg_hr1 = self.val_hr1.compute().mean().to(self.device)
+        avg_hr5 = self.val_hr5.compute().mean().to(self.device)
+        avg_hr10 = self.val_hr10.compute().mean().to(self.device)
+        mrr = self.val_rr.compute().mean().to(self.device)
         self.log_dict(
             {
-                "val_auroc": self.val_auroc.compute(),
-                "val_f1": self.val_f1.compute(),
-                "val_precision": self.val_precision.compute(),
-                "val_recall": self.val_recall.compute(),
+                "val_auroc": auroc,
+                "val_hr1": avg_hr1,
+                "val_hr5": avg_hr5,
+                "val_hr10": avg_hr10,
+                "val_mrr": mrr,
             },
-            prog_bar=True,
+            prog_bar=False,
+            on_step=False,
+            on_epoch=True,
             sync_dist=True,
         )
         self.val_auroc.reset()
-        self.val_f1.reset()
-        self.val_precision.reset()
-        self.val_recall.reset()
+        self.val_hr1.reset()
+        self.val_hr5.reset()
+        self.val_hr10.reset()
+        self.val_rr.reset()
 
-    def test_step(self, batch, batch_idx: int):
-        """Compute the total loss for the test step, as well as the auroc, f1,
-        precision, and recall metrics.
-
-        Parameters
-        ----------
-        batch: Dict[str, torch.Tensor]
-            The input batch containing the input IDs, attention masks, and
-            labels for the test step.
-        batch_idx: int
-            The index of the current batch.
-        """
+    def test_step(self, batch, batch_idx: int) -> None:
         metrics = self._compute_losses(batch)
-        if self.contrastive_weight > 0 and metrics["pos_query_scores"] is not None:
-            pos_query_scores = metrics["pos_query_scores"]
-            pos_query_targets = metrics["pos_query_targets"]
+        all_scores = metrics["all_scores"]
+        targets = metrics["targets"]
+        poss = metrics["poss"]
+        negs = metrics["negs"]
+        batch_size = targets.size(0)
+        binary_scores = torch.cat([poss, negs], dim=0)
+        labels = torch.cat(
+            [torch.ones(batch_size), torch.zeros(batch_size)], dim=0
+        ).long()
 
-            # Generate binary labels (1 for correct key, 0 otherwise)
-            binary_labels = torch.zeros_like(pos_query_scores, dtype=torch.long)
-            rows = torch.arange(
-                pos_query_scores.size(0), device=pos_query_scores.device
-            )
-            binary_labels[rows, pos_query_targets] = 1
-
-            # Flatten scores and labels
-            flat_scores = pos_query_scores.flatten()
-            flat_labels = binary_labels.flatten()
-
-            # Update metrics
-            self.test_auroc(flat_scores, flat_labels)
-            self.test_f1(flat_scores, flat_labels)
-            self.test_precision(flat_scores, flat_labels)
-            self.test_recall(flat_scores, flat_labels)
+        self.test_auroc.update(binary_scores, labels)
+        self.test_hr1.update(all_scores, targets)
+        self.test_hr5.update(all_scores, targets)
+        self.test_hr10.update(all_scores, targets)
+        self.test_rr.update(all_scores, targets)
 
         self.log_dict(
             {
@@ -533,21 +408,25 @@ class DeepStylometry(L.LightningModule):
             on_step=False,
             on_epoch=True,
             sync_dist=True,
-            batch_size=self.batch_size,
+            batch_size=self.cfg.data.batch_size,
         )
 
-    def on_test_epoch_end(self):
-        """Aggregate and log the test metrics at the end of the test epoch."""
+    def on_test_epoch_end(self) -> None:
+        auroc = self.test_auroc.compute().to(self.device)
+        avg_hr1 = self.test_hr1.compute().mean().to(self.device)
+        avg_hr5 = self.test_hr5.compute().mean().to(self.device)
+        avg_hr10 = self.test_hr10.compute().mean().to(self.device)
+        mrr = self.test_rr.compute().mean().to(self.device)
         self.log_dict(
             {
-                "test_auroc": self.test_auroc.compute(),
-                "test_f1": self.test_f1.compute(),
-                "test_precision": self.test_precision.compute(),
-                "test_recall": self.test_recall.compute(),
+                "test_auroc": auroc,
+                "test_hr1": avg_hr1,
+                "test_hr5": avg_hr5,
+                "test_hr10": avg_hr10,
+                "test_mrr": mrr,
             },
-            prog_bar=True,
+            prog_bar=False,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
         )
-        self.test_auroc.reset()
-        self.test_f1.reset()
-        self.test_precision.reset()
-        self.test_recall.reset()

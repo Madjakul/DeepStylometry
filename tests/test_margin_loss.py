@@ -1,9 +1,9 @@
-# tests/test_info_nce_loss.py
+# tests/test_margin_loss.py
 
 import pytest
 import torch
 
-from deep_stylometry.modules.info_nce_loss import InfoNCELoss
+from deep_stylometry.modules.margin_loss import MarginLoss
 from deep_stylometry.utils.configs import BaseConfig
 
 
@@ -34,7 +34,8 @@ def test_li_forward(q_embs, k_embs, q_mask, k_mask):
     cfg.model.pooling_method = "li"
     cfg.model.use_softmax = False
     cfg.model.distance_weightning = "none"
-    loss_fn = InfoNCELoss(cfg)
+    cfg.train.margin = 0.5
+    loss_fn = MarginLoss(cfg)
 
     loss_metrics = loss_fn(q_embs, k_embs, q_mask, k_mask)
 
@@ -52,8 +53,9 @@ def test_li_exp_decay_forward(q_embs, k_embs, q_mask, k_mask):
     cfg.model.use_softmax = False
     cfg.model.distance_weightning = "exp"
     cfg.model.alpha = 0.1
+    cfg.train.margin = 0.5
     cfg.data.max_length = 128
-    loss_fn = InfoNCELoss(cfg)
+    loss_fn = MarginLoss(cfg)
     loss_metrics = loss_fn(q_embs, k_embs, q_mask, k_mask)
     assert not torch.isnan(loss_metrics["loss"]), "InfoNCE loss is NaN"
     assert loss_metrics["loss"] >= 0
@@ -69,8 +71,9 @@ def test_li_linear_decay_forward(q_embs, k_embs, q_mask, k_mask):
     cfg.model.use_softmax = False
     cfg.model.distance_weightning = "linear"
     cfg.model.alpha = 0.1
+    cfg.train.margin = 0.5
     cfg.data.max_length = 128
-    loss_fn = InfoNCELoss(cfg)
+    loss_fn = MarginLoss(cfg)
     loss_metrics = loss_fn(q_embs, k_embs, q_mask, k_mask)
     assert not torch.isnan(loss_metrics["loss"]), "InfoNCE loss is NaN"
     assert loss_metrics["loss"] >= 0
@@ -85,7 +88,8 @@ def test_li_softmax_forward(q_embs, k_embs, q_mask, k_mask):
     cfg.model.pooling_method = "li"
     cfg.model.use_softmax = True
     cfg.model.distance_weightning = "none"
-    loss_fn = InfoNCELoss(cfg)
+    cfg.train.margin = 0.5
+    loss_fn = MarginLoss(cfg)
     loss_metrics = loss_fn(q_embs, k_embs, q_mask, k_mask)
     assert not torch.isnan(loss_metrics["loss"]), "InfoNCE loss is NaN"
     assert loss_metrics["loss"] >= 0
@@ -101,7 +105,8 @@ def test_li_gumbel_softmax_forward(q_embs, k_embs, q_mask, k_mask):
     cfg.model.use_softmax = True
     cfg.model.distance_weightning = "none"
     cfg.model.initial_gumbel_temp = 0.5
-    loss_fn = InfoNCELoss(cfg)
+    cfg.train.margin = 0.5
+    loss_fn = MarginLoss(cfg)
     loss_metrics = loss_fn(q_embs, k_embs, q_mask, k_mask)
     assert not torch.isnan(loss_metrics["loss"]), "InfoNCE loss is NaN"
     assert loss_metrics["loss"] >= 0
@@ -114,7 +119,8 @@ def test_li_gumbel_softmax_forward(q_embs, k_embs, q_mask, k_mask):
 def test_mean_pooling_forward(q_embs, k_embs, q_mask, k_mask):
     cfg = BaseConfig()
     cfg.model.pooling_method = "mean"
-    loss_fn = InfoNCELoss(cfg)
+    cfg.train.margin = 0.5
+    loss_fn = MarginLoss(cfg)
     loss_metrics = loss_fn(q_embs, k_embs, q_mask, k_mask)
     assert not torch.isnan(loss_metrics["loss"]), "InfoNCE loss is NaN"
     assert loss_metrics["loss"] >= 0

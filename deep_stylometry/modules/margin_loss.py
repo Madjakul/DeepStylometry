@@ -1,4 +1,4 @@
-# deep_stylometry/modules/info_nce_loss.py
+# deep_stylometry/modules/margin_loss.py
 
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -13,16 +13,17 @@ if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
 
 
-class InfoNCELoss(nn.Module):
-    """InfoNCE Loss for deep stylometry models. This loss function computes the
-    InfoNCE loss for a batch of query and key embeddings using in-batch
-    negatives along with hard negatives.
+class MarginLoss(nn.Module):
+    """Margin Loss for deep stylometry models. This loss function computes the
+    margin-based loss for a batch of query and key embeddings. It does not uses
+    in-batch negatives, but rather focuses on the margin between positive and
+    negative pairs.
 
     Parameters
     ----------
     cfg : BaseConfig
         Configuration object containing model and execution parameters, including the
-        temperature parameter tau.
+        margin.
 
     Attributes
     ----------
@@ -31,16 +32,14 @@ class InfoNCELoss(nn.Module):
     pool : nn.Module
         Pooling method used to compute similarity scores between query and key
         embeddings. Can be LateInteraction or mean pooling based on the configuration.
-    tau : torch.Tensor
-        Temperature parameter for scaling the similarity scores.
     """
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
+        assert cfg.execution.margin is not None
         self.cfg = cfg
-        self.register_buffer("tau", torch.tensor(self.cfg.execution.tau))
 
-        if self.cfg.model.pooling_method == "li":
+        if cfg.model.pooling_method == "li":
             self.pool = LateInteraction(self.cfg)
         else:
             self.pool = self.mean_pooling
@@ -63,13 +62,17 @@ class InfoNCELoss(nn.Module):
             k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
-        all_scaled_scores = all_scores / self.tau  # type: ignore
+        all_dists = 1 - all_scores
 
         targets = torch.arange(batch_size, device=query_embs.device)
         poss = all_scores[targets, targets]
+        pos_dists = all_dists[targets, targets]
         negs = all_scores[targets, targets + batch_size]
+        neg_dists = all_dists[targets, targets + batch_size]
 
-        loss = F.cross_entropy(all_scaled_scores, targets, reduction="mean")
+        positive_loss = pos_dists.pow(2).sum()
+        negative_loss = F.relu(self.cfg.execution.margin - neg_dists).pow(2).sum()  # type: ignore
+        loss = 0.5 * (positive_loss + negative_loss)
 
         return {
             "all_scores": all_scores,

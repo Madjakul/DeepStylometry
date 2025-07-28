@@ -1,178 +1,112 @@
 # deep_stylometry/modules/late_interaction.py
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from jaxtyping import Float, Int
+
+if TYPE_CHECKING:
+    from deep_stylometry.utils.configs import BaseConfig
 
 
 class LateInteraction(nn.Module):
-    r"""Late interaction module for computing similarity scores between query
-    and key embeddings. This module can use either distance-based weighting or
-    cosine similarity for computing the similarity scores. The module also
-    supports Gumbel softmax for sampling from the similarity scores.
+    """Custom late interaction module for deep stylometry models. This module
+    computes the similarity scores between query and key embeddings using
+    cosine similarity, applies distance weighting if specified, and aggregates
+    the results to produce final scores. The module supports both max-based
+    interaction and softmax-based interaction based on the configuration.
 
     Parameters
     ----------
-    do_distance: bool
-        If True, use distance-based weighting for late interaction.
-    exp_decay: bool
-        If True, use exponential decay for the distance weights:
-        $w = exp(-\alpha \cdot d)$, where $d$ is the distance between token positions.
-        If False, use the formula $w = 1 / (1 + \alpha \cdot d)$.
-    seq_len: int
-        The maximum sequence length of the input sentences.
-    alpha: float
-        The alpha parameter for the distance weighting function.
-    use_max: bool
-        If True, use maximum cosine similarity for late interaction. If False, use Gumbel softmax.
+    cfg : BaseConfig
+        Configuration object containing model parameters, including distance weighting
+        and alpha values.
 
     Attributes
     ----------
-    alpha: float
-        The alpha parameter for the distance weighting function, constrained to be positive.
-    distance: torch.Tensor
-        The distance matrix for computing distance-based weights.
-    logit_scale: torch.nn.Parameter
-        The learnable parameter for scaling the logits.
-    exp_decay: bool
-        If True, use exponential decay for the distance weights.
-    do_distance: bool
-        If True, use distance-based weighting for late interaction.
-    use_max: bool
-        If True, use maximum cosine similarity for late interaction. If False, use Gumbel softmax.
+    cfg : BaseConfig
+        Configuration object with model parameters.
+    IGNORE : torch.Tensor
+        A tensor used to mask invalid interactions, initialized to negative infinity.
+    alpha_raw : nn.Parameter
+        A learnable parameter representing the alpha value for distance weighting.
+    distance : torch.Tensor
+        A precomputed distance matrix used for distance weighting, registered as a
+        buffer.
     """
 
-    def __init__(
-        self,
-        do_distance: bool,
-        exp_decay: bool,
-        seq_len: int,
-        alpha: float = 1.0,
-        use_max: bool = False,
-    ):
+    def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
-        self.do_distance = do_distance
-        self.use_max = use_max
-        if self.do_distance:
-            self.distance: torch.Tensor
-            self.alpha_raw = nn.Parameter(torch.tensor(alpha))
-            positions = torch.arange(seq_len)
+        self.cfg = cfg
+
+        self.register_buffer("IGNORE", torch.tensor(float("-inf")))
+
+        if self.cfg.model.distance_weightning != "none":
+            self.alpha_raw = nn.Parameter(torch.tensor(self.cfg.model.alpha))
+            positions = torch.arange(self.cfg.data.max_length)
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
             self.register_buffer("distance", distance)
-        self.exp_decay = exp_decay
-        self.logit_scale = nn.Parameter(torch.log(torch.tensor(1.0)))
 
     @property
-    def alpha(self):
-        """Softplus ensures alpha > 0."""
-        return F.softplus(self.alpha_raw)
+    def alpha(self) -> Float[torch.Tensor, ""]:
+        """Leaky ReLU ensures alpha >= 0 and has a non-saturating gradient for
+        positive values and won't be stuck when it gets slightly below zero."""
+        return F.leaky_relu(self.alpha_raw)
 
     def forward(
         self,
-        query_embs: torch.Tensor,
-        key_embs: torch.Tensor,
-        q_mask: torch.Tensor,
-        k_mask: torch.Tensor,
+        query_embs: Float[torch.Tensor, "batch seq hidden"],
+        key_embs: Float[torch.Tensor, "two_times_batch seq hidden"],
+        q_mask: Int[torch.Tensor, "batch seq"],
+        k_mask: Int[torch.Tensor, "two_times_batch seq"],
         gumbel_temp: Optional[float] = None,
-    ):
-        """Compute similarity scores between query and key embeddings using
-        late interaction.
-
-        Parameters
-        ----------
-        query_embs: torch.Tensor
-            The query embeddings of shape (B, S, H), where B is the batch size,
-            S is the sequence length, and H is the hidden size.
-        key_embs: torch.Tensor
-            The key embeddings of shape (B, S, H).
-        q_mask: torch.Tensor
-            The attention mask for the query embeddings of shape (B, S).
-        k_mask: torch.Tensor
-            The attention mask for the key embeddings of shape (B, S).
-        gumbel_temp: Optional[float]
-            The temperature for Gumbel softmax. If None, use softmax.
-
-        Returns
-        -------
-        scores: torch.Tensor
-            The computed similarity scores of shape (B, B) for each query-key pair.
-        """
-        # Normalize embeddings to preserve cosine similarity
+    ) -> Float[torch.Tensor, "batch two_times_batch"]:
         query_embs = query_embs.unsqueeze(1)  # (B, 1, S, H)
         query_embs = F.normalize(query_embs, p=2, dim=-1)
         q_mask = q_mask.unsqueeze(1)  # (B, 1, S)
-        key_embs = key_embs.unsqueeze(0)  # (1, B, S, H)
+        key_embs = key_embs.unsqueeze(0)  # (1, 2B, S, H)
         key_embs = F.normalize(key_embs, p=2, dim=-1)
-        k_mask = k_mask.unsqueeze(0)  # (1, B, S)
+        k_mask = k_mask.unsqueeze(0)  # (1, 2B, S)
 
         # Compute token-level cosine similarities
         sim_matrix = torch.einsum("insh, mjth->ijst", query_embs, key_embs)
 
-        if self.do_distance:
-            if self.exp_decay:
-                w = torch.exp(-self.alpha * self.distance)
-            else:
-                w = 1.0 / (1.0 + self.alpha * self.distance)
-            sim_matrix = sim_matrix * w.to(sim_matrix.device)
+        if self.cfg.model.distance_weightning == "exp":
+            w = torch.exp(-self.alpha * self.distance)  # type: ignore
+            sim_matrix = sim_matrix * w  # .to(sim_matrix.device)
+        elif self.cfg.model.distance_weightning == "linear":
+            w = 1.0 / (1.0 + self.alpha * self.distance)  # type: ignore
+            sim_matrix = sim_matrix * w
 
         # Compute valid mask for token pairs
         valid_mask = torch.einsum("ixs, xjt->ijst", q_mask, k_mask).bool()
 
-        if self.use_max:  # Max-based interaction
-            masked_sim = sim_matrix.masked_fill(~valid_mask, -float("inf"))
+        if not self.cfg.model.use_softmax:
+            # Max-based interaction
+            masked_sim = sim_matrix.masked_fill(~valid_mask, self.IGNORE)  # type: ignore
             max_sim_values, _ = masked_sim.max(dim=-1)  # (B, B, S)
             scores = (max_sim_values * q_mask.squeeze(1).unsqueeze(1)).sum(dim=-1)
-            scores = scores / q_mask.squeeze(1).sum(dim=-1, keepdim=True).clamp(min=1)
             return scores
 
-        # Scale similarities with learnable logit scale
-        scale = torch.exp(self.logit_scale)
-        logits = scale * sim_matrix
-        logits = logits.masked_fill(
-            ~valid_mask, -float("inf")
-        )  # Mask invalid positions
-
-        all_inf_slices = torch.all(logits == -float("inf"), dim=-1, keepdim=True)
-
-        # For softmax calculation, replace all-inf slices with zeros. Softmax of zeros is uniform.
-        # This prevents NaN from softmax itself.
-        safe_logits_for_softmax = torch.where(
-            all_inf_slices.expand_as(logits), torch.zeros_like(logits), logits
-        )
+        # Mask the padding tokens
+        logits = sim_matrix.masked_fill(~valid_mask, self.IGNORE)  # type: ignore
 
         if gumbel_temp is not None:
-            soft_p_ij = F.gumbel_softmax(
-                safe_logits_for_softmax, tau=gumbel_temp, hard=False, dim=-1
-            )
-            if self.training:
-                # use straight-through estimator during training
-                # early training logits are more uniform
-                hard_p_ij_temp = F.one_hot(
-                    safe_logits_for_softmax.argmax(dim=-1), num_classes=logits.size(-1)
-                ).float()
-                p_ij_candidate = hard_p_ij_temp + (soft_p_ij - soft_p_ij.detach())
-            else:
-                # use softmax during evaluation
-                p_ij_candidate = soft_p_ij
+            p_ij = F.gumbel_softmax(logits, tau=gumbel_temp, hard=False)
+            p_ij = torch.nan_to_num(p_ij, nan=0.0)
         else:
-            p_ij_candidate = F.softmax(safe_logits_for_softmax, dim=-1)
+            p_ij = F.softmax(logits, dim=-1)
+            p_ij = torch.nan_to_num(p_ij, nan=0.0)
 
-        p_ij = torch.where(
-            all_inf_slices.expand_as(p_ij_candidate),
-            torch.zeros_like(p_ij_candidate),
-            p_ij_candidate,
-        )  # Aggregate key embeddings using attention weights
-        key_embs_squeezed = key_embs.squeeze(0)  # (B, S, H)
-        aggregated = torch.einsum("ijst,jth->ijsh", p_ij, key_embs_squeezed)
+        key_embs_squeezed = key_embs.squeeze(0)  # (2B, S, H)
+        aggregated = torch.einsum("ijst, jth->ijsh", p_ij, key_embs_squeezed)
 
         # Compute final scores
         query_embs_expanded = query_embs.squeeze(1)  # (B, S, H)
         scores = (query_embs_expanded.unsqueeze(1) * aggregated).sum(dim=-1)
         scores = scores * q_mask.squeeze(1).unsqueeze(1)
-        scores = scores.sum(dim=-1) / q_mask.squeeze(1).sum(dim=-1, keepdim=True).clamp(
-            min=1
-        )
+        scores = scores.sum(dim=-1)
 
         return scores

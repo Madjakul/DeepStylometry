@@ -1,140 +1,124 @@
 # deep_stylometry/utils/tune_utils.py
 
-import logging
 from functools import partial
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from ray import tune
-from ray.air.integrations.wandb import WandbLoggerCallback
 from ray.tune import FailureConfig
 from ray.tune.schedulers import AsyncHyperBandScheduler
 from ray.tune.search.hyperopt import HyperOptSearch
 
+from deep_stylometry.utils.configs.base_config import BaseConfig
 from deep_stylometry.utils.train_utils import train_tune
 
 
-def build_search_space(config: Dict[str, Any]):
-    """Builds the search space for hyperparameter tuning.
+def make_param_space(o: Any) -> Optional[Any]:
+    """Build a nested param_space that mirrors `o`:
 
     Parameters
     ----------
-    config: Dict[str, Any]
-        Configuration dictionary containing the hyperparameters and their specifications.
+    o : Any
+        The object to convert into a Ray Tune parameter space.
 
-    Returns
-    -------
-    search_space: Dict[str, Any]
-        A dictionary representing the search space for hyperparameter tuning.
+    Attributes
+    ----------
+    Any
+        - If `o` is a dict with "type", return the corresponding tune.* sampler.
+        - If `o` is a dict without "type", recurse into items and keep only
+          non-None children; return that dict (or None if empty).
+        - If `o` is a list, recurse on each element; if any element yields a
+          sampler, return the list of samplers (or None if none).
+        - If `o` is a scalar (str/int/float/bool/None), wrap in tune.choice([o]).
     """
-    search_space = {}
-    type_map = {
-        "loguniform": tune.loguniform,
-        "uniform": tune.uniform,
-        "choice": tune.choice,
-        "quniform": tune.quniform,
-    }
-    for param, spec in config.items():
-        if not isinstance(spec, dict):
-            continue
-        if spec["type"] not in ("choice", "quniform"):
-            search_space[param] = type_map[spec["type"]](
-                spec["min"],
-                spec["max"],
-            )
-        elif spec["type"] == "quniform":
-            search_space[param] = type_map[spec["type"]](
-                spec["min"],
-                spec["max"],
-                spec["q"],
-            )
-        elif spec["type"] == "choice":
-            search_space[param] = type_map[spec["type"]](spec["values"])
-    return search_space
+    if isinstance(o, dict) and "type" in o:
+        t = o["type"]
+        if t == "loguniform":
+            return tune.loguniform(o["min"], o["max"])
+        if t == "uniform":
+            return tune.uniform(o["min"], o["max"])
+        if t == "quniform":
+            return tune.quniform(o["min"], o["max"], o["q"])
+        if t == "choice":
+            return tune.choice(o["values"])
+        raise ValueError(f"Unknown tune type {t!r}")
+
+    # Nested dict -> recurse
+    if isinstance(o, dict):
+        out = {}
+        for k, v in o.items():
+            child = make_param_space(v)
+            if child is not None:
+                out[k] = child
+        return out or None
+
+    # List -> recurse
+    if isinstance(o, list):
+        recursed = [make_param_space(v) for v in o]
+        recursed = [v for v in recursed if v is not None]
+        return recursed or None
+
+    # Scalar constant -> wrap as a single‑choice sampler
+    return tune.choice([o])
 
 
 def setup_tuner(
-    config: Dict[str, Any],
+    config: BaseConfig,
     ray_storage_path: str,
-    use_wandb: bool = False,
     cache_dir: Optional[str] = None,
-    num_proc: Optional[int] = None,
-):
-    """Sets up the Ray Tune tuner for hyperparameter tuning. Uses
-    HyperOptSearch and AsyncHyperBandScheduler. No checkpointing is done during
-    tuning. The goal is to maximize the validation AUROC score before the time
-    budget is reached.
+) -> tune.Tuner:
+    """Set up the Ray Tune tuner for hyper-parameter tuning.
 
     Parameters
     ----------
-    config: Dict[str, Any]
-        Configuration dictionary containing the hyperparameters and their specifications.
+    config: BaseConfig
+        Configuration object containing the tuning parameters.
     ray_storage_path: str
-        Directory where Ray will save the logs and experiments results.
-    use_wandb: bool
-        Whether to use Weights & Biases for logging.
+        Directory where Ray will save the logs and experiment results.
     cache_dir: Optional[str]
-        Path to the cache directory.
-    num_proc: Optional[int]
-        Number of processes to use. Default is the number of CPUs minus one.
+        Directory to cache the dataset. If None, defaults to the current working
+        directory.
 
     Returns
     -------
     tuner: tune.Tuner
-        The Ray Tune Tuner object configured for hyperparameter tuning.
+        The configured Ray Tune tuner ready for hyper-parameter tuning.
     """
     callbacks = []
-    if use_wandb:
-        logging.info("Using Weights & Biases for logging")
-        callbacks.append(
-            WandbLoggerCallback(
-                project=config["project_name"],
-                name=config["experiment_name"],
-                group="tune",
-                log_config=True,
-                log_checkpoints=False,
-            )
-        )
-
-    search_space = build_search_space(config)
+    param_space = make_param_space(config.to_dict())
 
     trainable_fn = partial(
         train_tune,
-        base_config=config,
         cache_dir=cache_dir,
-        num_proc=num_proc,
     )
 
     trainable_with_resources = tune.with_resources(
         trainable_fn,
         {
-            config.get("device", "cpu"): config.get("num_devices_per_trial", 1),
-            "cpu": num_proc,
-        },  # type: ignore
+            config.tune.device: config.tune.num_devices_per_trial,
+            "cpu": config.tune.num_cpus_per_trial,
+        },
     )
 
     asha_scheduler = AsyncHyperBandScheduler(
-        time_attr="timesteps_total",  # This corresponds to PTL epochs reported by TuneReportCallback
-        # metric="auroc",
-        # mode="max",
-        max_t=2500,  # Max PTL epochs a trial can run before ASHA might stop it (or it hits max_steps)
-        grace_period=1250,  # Min PTL epochs before ASHA can stop a trial
-        reduction_factor=2,
+        time_attr="completed_epoch",
+        max_t=config.tune.max_t,
+        grace_period=config.tune.grace_period,
     )
 
     tuner = tune.Tuner(
         trainable_with_resources,
         tune_config=tune.TuneConfig(
-            metric="auroc",
-            mode="max",
+            metric=config.tune.metric,
+            mode=config.tune.mode,
             search_alg=HyperOptSearch(),
             scheduler=asha_scheduler,
-            num_samples=config["num_samples"],
-            max_concurrent_trials=config["max_concurrent_trials"],
-            time_budget_s=config["time_budget_s"],
+            num_samples=config.tune.num_samples,
+            max_concurrent_trials=config.tune.max_concurrent_trials,
+            time_budget_s=config.tune.time_budget_s,
             reuse_actors=False,
         ),
         run_config=tune.RunConfig(
-            name=config["experiment_name"],
+            name=config.group_name,
             checkpoint_config=tune.CheckpointConfig(
                 num_to_keep=1,
                 checkpoint_at_end=False,
@@ -142,9 +126,10 @@ def setup_tuner(
             ),
             storage_path=ray_storage_path,
             failure_config=FailureConfig(max_failures=0, fail_fast=True),
-            stop={"timesteps_total": 2500},
+            stop={"completed_epoch": config.tune.max_t},
             callbacks=callbacks,
+            verbose=2,
         ),
-        param_space=search_space,
+        param_space=param_space,
     )
     return tuner

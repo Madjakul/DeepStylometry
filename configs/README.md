@@ -1,3 +1,10 @@
+## Configs
+
+### Tune configs
+
+Tune configuration for the triplet loss
+
+```yml
 # tune.yml
 
 mode: "tune"
@@ -80,3 +87,4 @@ tune:
   grace_period: 2
   # --- wandb logger ---
   use_wandb: true
+```
