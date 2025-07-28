@@ -28,7 +28,6 @@ if __name__ == "__main__":
         config=config,
         ray_storage_path=args.ray_storage_path,
         cache_dir=args.cache_dir,
-        logs_dir=args.logs_dir,
     )
     results = tuner.fit()
     logging.info("--- Tuning finished ---")
