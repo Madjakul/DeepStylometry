@@ -23,25 +23,30 @@ def setup_datamodule(
     cache_dir: Optional[str] = None,
     num_proc: Optional[int] = None,
     tuning_mode: bool = False,
-):
+) -> L.LightningDataModule:
     """Use the config to set up the correct datamodule.
 
     Parameters
     ----------
-    config: Dict[str, Any]
-        Configuration dictionary containing the dataset name and other parameters.
+    cfg: BaseConfig
+        Configuration object containing the dataset and model parameters.
     cache_dir: Optional[str]
-        Directory to cache the dataset.
+        Directory to cache the dataset. If None, defaults to the current working
+        directory.
     num_proc: Optional[int]
-        Number of processes to use for data loading. If None, defaults to the number
-        of CPUs.
+        Number of processes to use for data loading. If None, defaults to the number of
+        CPUs.
+    tuning_mode: bool
+        Whether the datamodule is being set up for hyper-parameter tuning. If True,
+        the datamodule will be configured to not load the dataset from cache and
+        will not use the map batch size.
 
     Returns
     -------
     dm: L.LightningDataModule
-        The data module for the specified dataset.
+        The LightningDataModule instance configured according to the provided
+        configuration.
     """
-    num_proc = num_proc if num_proc is not None else NUM_PROC
     dm_map = {"se": StyleEmbeddingDataModule, "halvest": HALvestDataModule}
 
     dm = dm_map[cfg.data.ds_name](
@@ -64,24 +69,25 @@ def setup_trainer(
     model: torch.nn.Module,
     logs_dir: str,
     checkpoint_dir: Optional[str] = None,
-):
+) -> L.Trainer:
     """Setup the Lightning trainer with the specified configuration.
 
     Parameters
     ----------
-    config: Dict[str, Any]
-        Configuration dictionary containing the training parameters.
+    cfg: BaseConfig
+        Configuration object containing the training parameters.
+    model: torch.nn.Module
+        The model to be trained.
     logs_dir: str
-        Directory to save logs.
-    use_wandb: bool
-        Whether to use Weights and Biases for logging.
+        Directory where the logs will be saved.
     checkpoint_dir: Optional[str]
-        Directory to save model checkpoints. If None, no checkpoints will be saved.
+        Directory where the model checkpoints will be saved. If None, no checkpoints
+        will be saved.
 
     Returns
     -------
     trainer: L.Trainer
-        The Lightning trainer instance with the specified configuration.
+        The configured Lightning trainer instance.
     """
     # Set up callbacks
     callbacks = []
@@ -150,20 +156,16 @@ def setup_trainer(
 def train_tune(
     config: Dict[str, Any],
     cache_dir: Optional[str] = None,
-):
+) -> None:
     """Launch hyper-parameter tuning using Ray Tune and PyTorch Lightning.
 
     Parameters
     ----------
     config: Dict[str, Any]
-        Configuration dictionary containing the tuning parameters.
-    base_config: Dict[str, Any]
-        Base configuration dictionary containing the model and training parameters.
+        Configuration dictionary containing the hyper-parameters for tuning.
     cache_dir: Optional[str]
-        Directory to cache the dataset.
-    num_proc: Optional[int]
-        Number of processes to use for data loading. If None, defaults to the number
-        of CPUs.
+        Directory to cache the dataset. If None, defaults to the current working
+        directory.
     """
 
     cfg = BaseConfig(mode="tune").from_dict(config)

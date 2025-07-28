@@ -8,7 +8,6 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 
 @dataclass
 class TuneConfig(DictAccessMixin):
-
     loss: Literal["info_nce", "triplet", "hybrid", "hard_margin", "margin"] = "info_nce"
     tau: Dict = field(default_factory=dict)  # Only with info_nce or hybrid loss
     lambda_: Dict = field(default_factory=dict)  # Only with hybrid loss

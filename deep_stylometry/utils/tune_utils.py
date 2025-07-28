@@ -15,12 +15,20 @@ from ray import tune
 def make_param_space(o: Any) -> Optional[Any]:
     """Build a nested param_space that mirrors `o`:
 
-    - If `o` is a dict with "type", return the corresponding tune.* sampler.
-    - If `o` is a dict without "type", recurse into items and keep only
-      non-None children; return that dict (or None if empty).
-    - If `o` is a list, recurse on each element; if any element yields a
-      sampler, return the list of samplers (or None if none).
-    - If `o` is a scalar (str/int/float/bool/None), wrap in tune.choice([o]).
+    Parameters
+    ----------
+    o : Any
+        The object to convert into a Ray Tune parameter space.
+
+    Attributes
+    ----------
+    Any
+        - If `o` is a dict with "type", return the corresponding tune.* sampler.
+        - If `o` is a dict without "type", recurse into items and keep only
+          non-None children; return that dict (or None if empty).
+        - If `o` is a list, recurse on each element; if any element yields a
+          sampler, return the list of samplers (or None if none).
+        - If `o` is a scalar (str/int/float/bool/None), wrap in tune.choice([o]).
     """
     if isinstance(o, dict) and "type" in o:
         t = o["type"]
@@ -57,7 +65,24 @@ def setup_tuner(
     config: BaseConfig,
     ray_storage_path: str,
     cache_dir: Optional[str] = None,
-):
+) -> tune.Tuner:
+    """Set up the Ray Tune tuner for hyper-parameter tuning.
+
+    Parameters
+    ----------
+    config: BaseConfig
+        Configuration object containing the tuning parameters.
+    ray_storage_path: str
+        Directory where Ray will save the logs and experiment results.
+    cache_dir: Optional[str]
+        Directory to cache the dataset. If None, defaults to the current working
+        directory.
+
+    Returns
+    -------
+    tuner: tune.Tuner
+        The configured Ray Tune tuner ready for hyper-parameter tuning.
+    """
     callbacks = []
     param_space = make_param_space(config.to_dict())
 

@@ -8,7 +8,7 @@ LOG = "logs/" + NOW.strftime("%Y-%m-%d") + ".log"
 FORMAT = "[%(asctime)s] %(levelname)s:" + " %(filename)s:%(lineno)s -" + " %(message)s"
 
 
-def logging_config():
+def logging_config() -> None:
     """Configures of the `logging` module: creates a `log` file with the
     current date.
 

@@ -8,7 +8,6 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 
 @dataclass
 class TrainConfig(DictAccessMixin):
-
     loss: Literal["info_nce", "triplet", "hybrid", "hard_margin", "margin"] = "info_nce"
     tau: float = 0.07
     lambda_: float = 0.5

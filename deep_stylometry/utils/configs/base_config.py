@@ -17,7 +17,6 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 @dataclass
 class BaseConfig(DictAccessMixin):
     mode: Literal["train", "tune"] = "train"
-
     project_name: str = "deep-stylometry"
     group_name: str = "train-deep-stylometry-512-se"
     do_train: bool = True
@@ -29,7 +28,7 @@ class BaseConfig(DictAccessMixin):
     _train: TrainConfig = TrainConfig()
     _tune: TuneConfig = TuneConfig()
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self._execution_config is None:
             self._set_execution_config()
 
@@ -75,7 +74,13 @@ class BaseConfig(DictAccessMixin):
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "BaseConfig":
-        """Create configuration from dictionary, overriding defaults."""
+        """Create configuration from dictionary, overriding defaults.
+
+        Parameters
+        ----------
+        config_dict: Dict[str, Any]
+            Dictionary containing configuration parameters.
+        """
         # Extract mode first if it exists
         mode = config_dict.get("mode", "train")
         config = cls(mode=mode)

@@ -28,7 +28,8 @@ class CustomDataCollatorForLanguageModeling(DataCollatorForLanguageModeling):
     return_tensors: str
         The type of tensors to return. Default is "pt" (PyTorch).
     generator: torch.Generator, optional
-        A random number generator to use for sampling. If None, a new generator will be created.
+        A random number generator to use for sampling. If None, a new generator will
+        be created.
 
     Attributes
     ----------

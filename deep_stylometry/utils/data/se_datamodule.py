@@ -13,6 +13,33 @@ from deep_stylometry.utils.helpers import get_tokenizer
 
 
 class StyleEmbeddingDataModule(L.LightningDataModule):
+    """Data module for the [Style Embedding dataset](https://huggingface.co/AnnaWegmann/Style-Embedding).
+    This dataset contains text triplets with an Anchor A, and two utterances U1 and U2.
+    The label indicates whether U1 or U2 are from the same author as A.
+    This data module turns the triplet into a query and two keys, positive and hard
+    negative.
+
+    Parameters
+    ----------
+    batch_size: int
+        The batch size for training and validation.
+    num_proc: int
+        The number of processes to use for data loading.
+    tokenizer_name: str
+        The name of the tokenizer to use for tokenizing the text.
+    max_length: int
+        The maximum length of the tokenized sequences.
+    map_batch_size: int
+        The batch size to use when mapping the dataset.
+    load_from_cache_file: bool
+        Whether to load the dataset from cache if available.
+    cache_dir: str
+        The directory where the dataset cache is stored.
+    ds_name: str, optional
+        The name of the dataset to load. Default is "AnnaWegmann/StyleEmbeddingData".
+    mlm_collator: bool, optional
+        Whether to use a data collator for masked language modeling. Default is False.
+    """
 
     test_dataset = None
 
@@ -28,7 +55,7 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
         ds_name: str = "AnnaWegmann/StyleEmbeddingData",
         mlm_collator: bool = False,
         **kwargs: Any,
-    ):
+    ) -> None:
         super().__init__()
         self.ds_name = ds_name
         self.batch_size = batch_size
@@ -47,7 +74,7 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
             self.mlm_collator = None
         self.tuning_mode = kwargs.get("tuning_mode", False)
 
-    def prepare_data(self):
+    def prepare_data(self) -> None:
         load_dataset(self.ds_name, cache_dir=self.cache_dir)
 
     def tokenize_function(self, batch: Dict[str, List[Any]]):
@@ -92,7 +119,7 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
             "neg_attention_mask": tokenized_neg["attention_mask"],
         }
 
-    def setup(self, stage: str):
+    def setup(self, stage: str) -> None:
         ds = load_dataset(self.ds_name, cache_dir=self.cache_dir)
         columns_to_remove = ds["train"].column_names  # type: ignore
 
@@ -148,7 +175,7 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
             )
             self.test_dataset = test_dataset.with_format("torch")
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader:
         return DataLoader(
             self.train_dataset,  # type: ignore
             batch_size=self.batch_size,
@@ -157,7 +184,7 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
             shuffle=True,
         )
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
         return DataLoader(
             self.val_dataset,  # type: ignore
             batch_size=self.batch_size,
@@ -166,7 +193,7 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
             shuffle=True if self.tuning_mode else False,
         )
 
-    def test_dataloader(self):
+    def test_dataloader(self) -> DataLoader:
         return DataLoader(
             self.test_dataset,  # type: ignore
             batch_size=self.batch_size,
