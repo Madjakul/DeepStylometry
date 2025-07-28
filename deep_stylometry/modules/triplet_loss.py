@@ -14,8 +14,27 @@ if TYPE_CHECKING:
 
 
 class TripletLoss(nn.Module):
+    """Triplet Loss for deep stylometry models. This loss function computes the
+    triplet loss for a batch of query, positive, and negative key embeddings.
+    It uses the margin to ensure that the positive pair is closer than the
+    negative pair by a margin.
 
-    def __init__(self, cfg: "BaseConfig"):
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Configuration object containing model and execution parameters, including the
+        margin.
+
+    Attributes
+    ----------
+    cfg : BaseConfig
+        Configuration object with execution parameters.
+    pool : nn.Module
+        Pooling method used to compute similarity scores between query and key
+        embeddings. Can be LateInteraction or mean pooling based on the configuration.
+    """
+
+    def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
         assert cfg.execution.margin is not None
         self.cfg = cfg

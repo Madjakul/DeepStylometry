@@ -14,6 +14,26 @@ if TYPE_CHECKING:
 
 
 class HybridLoss(nn.Module):
+    """Hybrid Loss for deep stylometry models. This loss function combines
+    InfoNCE and triplet loss to optimize the model's performance on both
+    similarity and margin-based similarity tasks.
+
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Configuration object containing model and execution parameters, including the
+        margin.
+
+    Attributes
+    ----------
+    cfg : BaseConfig
+        Configuration object with execution parameters.
+    pool : nn.Module
+        Pooling method used to compute similarity scores between query and key
+        embeddings. Can be LateInteraction or mean pooling based on the configuration.
+    tau : torch.Tensor
+        Temperature parameter for scaling the similarity scores.
+    """
 
     def __init__(self, cfg: "BaseConfig"):
         super().__init__()

@@ -12,6 +12,30 @@ if TYPE_CHECKING:
 
 
 class LateInteraction(nn.Module):
+    """Custom late interaction module for deep stylometry models. This module
+    computes the similarity scores between query and key embeddings using
+    cosine similarity, applies distance weighting if specified, and aggregates
+    the results to produce final scores. The module supports both max-based
+    interaction and softmax-based interaction based on the configuration.
+
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Configuration object containing model parameters, including distance weighting
+        and alpha values.
+
+    Attributes
+    ----------
+    cfg : BaseConfig
+        Configuration object with model parameters.
+    IGNORE : torch.Tensor
+        A tensor used to mask invalid interactions, initialized to negative infinity.
+    alpha_raw : nn.Parameter
+        A learnable parameter representing the alpha value for distance weighting.
+    distance : torch.Tensor
+        A precomputed distance matrix used for distance weighting, registered as a
+        buffer.
+    """
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()

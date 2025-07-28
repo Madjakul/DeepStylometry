@@ -13,8 +13,30 @@ if TYPE_CHECKING:
 
 
 class LanguageModel(nn.Module):
+    """LanguageModel is a PyTorch module that wraps a pretrained language model
+    from the Hugging Face Transformers library. It supports both encoder and
+    decoder models, depending on the configuration provided.
 
-    def __init__(self, cfg: "BaseConfig"):
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Configuration object containing model parameters, including the base model name
+        and whether it is a decoder model.
+
+    Attributes
+    ----------
+    cfg : BaseConfig
+        Configuration object with model parameters.
+    model : nn.Module
+        The underlying language model, either an AutoModelForCausalLM or
+        AutoModelForMaskedLM, depending on the configuration.
+    hidden_size : int
+        The size of the hidden layers in the model.
+    vocab_size : int
+        The size of the vocabulary used by the model.
+    """
+
+    def __init__(self, cfg: "BaseConfig") -> None:
         super(LanguageModel, self).__init__()
         self.cfg = cfg
 

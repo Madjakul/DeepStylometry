@@ -14,6 +14,26 @@ if TYPE_CHECKING:
 
 
 class InfoNCELoss(nn.Module):
+    """InfoNCE Loss for deep stylometry models. This loss function computes the
+    InfoNCE loss for a batch of query and key embeddings using in-batch
+    negatives along with hard negatives.
+
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Configuration object containing model and execution parameters, including the
+        temperature parameter tau.
+
+    Attributes
+    ----------
+    cfg : BaseConfig
+        Configuration object with execution parameters.
+    pool : nn.Module
+        Pooling method used to compute similarity scores between query and key
+        embeddings. Can be LateInteraction or mean pooling based on the configuration.
+    tau : torch.Tensor
+        Temperature parameter for scaling the similarity scores.
+    """
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
