@@ -1,10 +1,8 @@
 # deep_stylometry/utils/tune_utils.py
 
-import logging
 from functools import partial
 from typing import Any, Optional
 
-from ray.air.integrations.wandb import WandbLoggerCallback
 from ray.tune import FailureConfig
 from ray.tune.schedulers import AsyncHyperBandScheduler
 from ray.tune.search.hyperopt import HyperOptSearch
@@ -17,12 +15,12 @@ from ray import tune
 def make_param_space(o: Any) -> Optional[Any]:
     """Build a nested param_space that mirrors `o`:
 
-    • If `o` is a dict with "type", return the corresponding tune.* sampler.
-    • If `o` is a dict without "type", recurse into items and keep only
+    - If `o` is a dict with "type", return the corresponding tune.* sampler.
+    - If `o` is a dict without "type", recurse into items and keep only
       non-None children; return that dict (or None if empty).
-    • If `o` is a list, recurse on each element; if any element yields a
+    - If `o` is a list, recurse on each element; if any element yields a
       sampler, return the list of samplers (or None if none).
-    • If `o` is a scalar (str/int/float/bool/None), wrap in tune.choice([o]).
+    - If `o` is a scalar (str/int/float/bool/None), wrap in tune.choice([o]).
     """
     if isinstance(o, dict) and "type" in o:
         t = o["type"]
@@ -58,39 +56,14 @@ def make_param_space(o: Any) -> Optional[Any]:
 def setup_tuner(
     config: BaseConfig,
     ray_storage_path: str,
-    logs_dir: str,
     cache_dir: Optional[str] = None,
 ):
-    """Sets up the Ray Tune tuner for hyperparameter tuning. Uses
-    HyperOptSearch and AsyncHyperBandScheduler. No checkpointing is done during
-    tuning. The goal is to maximize the validation AUROC score before the time
-    budget is reached.
-
-    Parameters
-    ----------
-    config: BaseConfig
-        Configuration dictionary containing the hyperparameters and their specifications.
-    ray_storage_path: str
-        Directory where Ray will save the logs and experiments results.
-    use_wandb: bool
-        Whether to use Weights & Biases for logging.
-    cache_dir: Optional[str]
-        Path to the cache directory.
-    num_proc: Optional[int]
-        Number of processes to use. Default is the number of CPUs minus one.
-
-    Returns
-    -------
-    tuner: tune.Tuner
-        The Ray Tune Tuner object configured for hyperparameter tuning.
-    """
     callbacks = []
     param_space = make_param_space(config.to_dict())
 
     trainable_fn = partial(
         train_tune,
         cache_dir=cache_dir,
-        logs_dir=logs_dir,
     )
 
     trainable_with_resources = tune.with_resources(

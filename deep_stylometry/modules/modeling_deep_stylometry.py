@@ -117,10 +117,10 @@ class DeepStylometry(L.LightningModule):
 
         optimizer = torch.optim.AdamW(
             self.parameters(),
-            lr=self.cfg.execution.lr,
-            weight_decay=self.cfg.execution.weight_decay,
-            betas=self.cfg.execution.betas,
-            eps=self.cfg.execution.eps,
+            lr=self.cfg.execution.lr,  # type: ignore
+            weight_decay=self.cfg.execution.weight_decay,  # type: ignore
+            betas=self.cfg.execution.betas,  # type: ignore
+            eps=self.cfg.execution.eps,  # type: ignore
         )
         # Calculate steps dynamically
         total_steps = int(self.trainer.estimated_stepping_batches)
@@ -130,7 +130,7 @@ class DeepStylometry(L.LightningModule):
             self.cfg.model.auto_anneal_gumbel
             and self.cfg.model.initial_gumbel_temp is not None
         ):
-            total_temp_range = (
+            total_temp_range = (  # type: ignore
                 self.cfg.model.initial_gumbel_temp - self.cfg.model.min_gumbel_temp
             )
             self.gumbel_linear_delta = total_temp_range / total_steps
@@ -160,7 +160,7 @@ class DeepStylometry(L.LightningModule):
             self.cfg.model.auto_anneal_gumbel
             and self.cfg.model.initial_gumbel_temp is not None
         ):
-            new_temp = self.gumbel_temp - self.gumbel_linear_delta
+            new_temp = self.gumbel_temp - self.gumbel_linear_delta  # type: ignore
             self.gumbel_temp = max(new_temp, self.cfg.model.min_gumbel_temp)
             self.log("gumbel_temp", self.gumbel_temp, prog_bar=True)
 
@@ -198,7 +198,7 @@ class DeepStylometry(L.LightningModule):
         if self.cfg.model.initial_gumbel_temp is not None:
             self.log(
                 "gumbel_temp",
-                self.gumbel_temp,
+                self.gumbel_temp,  # type: ignore
                 prog_bar=False,
                 on_step=True,
                 on_epoch=False,

@@ -51,7 +51,7 @@ class TripletLoss(nn.Module):
         negs = all_scores[targets, targets + batch_size]
         neg_dists = all_dists[targets, targets + batch_size]
 
-        loss = F.relu(pos_dists - neg_dists + self.cfg.execution.margin).mean()
+        loss = F.relu(pos_dists - neg_dists + self.cfg.execution.margin).mean()  # type: ignore
 
         return {
             "all_scores": all_scores,

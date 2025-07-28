@@ -63,7 +63,7 @@ class BaseConfig(DictAccessMixin):
     @property
     def execution(self) -> Union[TrainConfig, TuneConfig]:
         """Access current execution config regardless of mode."""
-        return self._execution_config
+        return self._execution_config  # type: ignore
 
     @classmethod
     def from_yaml(cls, yaml_path: Union[str, Path]) -> "BaseConfig":

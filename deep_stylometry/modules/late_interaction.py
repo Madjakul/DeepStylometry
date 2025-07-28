@@ -20,7 +20,6 @@ class LateInteraction(nn.Module):
         self.register_buffer("IGNORE", torch.tensor(float("-inf")))
 
         if self.cfg.model.distance_weightning != "none":
-            # self.distance: torch.Tensor
             self.alpha_raw = nn.Parameter(torch.tensor(self.cfg.model.alpha))
             positions = torch.arange(self.cfg.data.max_length)
             distance = (positions.unsqueeze(1) - positions.unsqueeze(0)).abs().float()
@@ -40,7 +39,6 @@ class LateInteraction(nn.Module):
         k_mask: Int[torch.Tensor, "two_times_batch seq"],
         gumbel_temp: Optional[float] = None,
     ) -> Float[torch.Tensor, "batch two_times_batch"]:
-        # Normalize embeddings to preserve cosine similarity
         query_embs = query_embs.unsqueeze(1)  # (B, 1, S, H)
         query_embs = F.normalize(query_embs, p=2, dim=-1)
         q_mask = q_mask.unsqueeze(1)  # (B, 1, S)
@@ -52,24 +50,24 @@ class LateInteraction(nn.Module):
         sim_matrix = torch.einsum("insh, mjth->ijst", query_embs, key_embs)
 
         if self.cfg.model.distance_weightning == "exp":
-            w = torch.exp(-self.alpha * self.distance)
+            w = torch.exp(-self.alpha * self.distance)  # type: ignore
             sim_matrix = sim_matrix * w  # .to(sim_matrix.device)
         elif self.cfg.model.distance_weightning == "linear":
-            w = 1.0 / (1.0 + self.alpha * self.distance)
-            sim_matrix = sim_matrix * w  # .to(sim_matrix.device)
+            w = 1.0 / (1.0 + self.alpha * self.distance)  # type: ignore
+            sim_matrix = sim_matrix * w
 
         # Compute valid mask for token pairs
         valid_mask = torch.einsum("ixs, xjt->ijst", q_mask, k_mask).bool()
 
         if not self.cfg.model.use_softmax:
             # Max-based interaction
-            masked_sim = sim_matrix.masked_fill(~valid_mask, self.IGNORE)
+            masked_sim = sim_matrix.masked_fill(~valid_mask, self.IGNORE)  # type: ignore
             max_sim_values, _ = masked_sim.max(dim=-1)  # (B, B, S)
             scores = (max_sim_values * q_mask.squeeze(1).unsqueeze(1)).sum(dim=-1)
             return scores
 
         # Mask the padding tokens
-        logits = sim_matrix.masked_fill(~valid_mask, self.IGNORE)
+        logits = sim_matrix.masked_fill(~valid_mask, self.IGNORE)  # type: ignore
 
         if gumbel_temp is not None:
             p_ij = F.gumbel_softmax(logits, tau=gumbel_temp, hard=False)

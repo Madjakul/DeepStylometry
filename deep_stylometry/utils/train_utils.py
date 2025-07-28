@@ -1,17 +1,12 @@
 # deep_stylometry/utils/train_utils.py
 
-import logging
 import os.path as osp
 from typing import Any, Dict, Optional
 
 import lightning as L
 import psutil
 import torch
-from lightning.pytorch.callbacks import (
-    EarlyStopping,
-    LearningRateMonitor,
-    ModelCheckpoint,
-)
+from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
@@ -104,9 +99,9 @@ def setup_trainer(
         checkpoint_callback = ModelCheckpoint(
             dirpath=osp.join(checkpoint_dir, name),
             filename="{epoch}",
-            monitor=cfg.execution.checkpoint_metric,
-            mode=cfg.execution.checkpoint_mode,
-            save_top_k=cfg.execution.save_top_k,
+            monitor=cfg.execution.checkpoint_metric,  # type: ignore
+            mode=cfg.execution.checkpoint_mode,  # type: ignore
+            save_top_k=cfg.execution.save_top_k,  # type: ignore
             save_last=True,
         )
         callbacks.append(checkpoint_callback)
@@ -117,10 +112,10 @@ def setup_trainer(
         wandb_logger = WandbLogger(
             project=cfg.project_name,
             name=name,
-            log_model=cfg.execution.log_model,
+            log_model=cfg.execution.log_model,  # type: ignore
             group=cfg.group_name,
         )
-        watch = cfg.execution.watch
+        watch = cfg.execution.watch  # type: ignore
         if watch is not None:
             wandb_logger.watch(
                 model=model,
@@ -136,11 +131,11 @@ def setup_trainer(
 
     trainer = L.Trainer(
         accelerator=cfg.execution.device,
-        strategy=cfg.execution.strategy,
-        devices=cfg.execution.num_devices,
+        strategy=cfg.execution.strategy,  # type: ignore
+        devices=cfg.execution.num_devices,  # type: ignore
         max_steps=cfg.execution.max_steps,
         max_epochs=cfg.execution.max_epochs,
-        val_check_interval=cfg.execution.val_check_interval,
+        val_check_interval=cfg.execution.val_check_interval,  # type: ignore
         enable_checkpointing=checkpoint_dir is not None,
         logger=loggers,
         callbacks=callbacks,

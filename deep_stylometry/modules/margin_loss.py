@@ -52,7 +52,7 @@ class MarginLoss(nn.Module):
         neg_dists = all_dists[targets, targets + batch_size]
 
         positive_loss = pos_dists.pow(2).sum()
-        negative_loss = F.relu(self.cfg.execution.margin - neg_dists).pow(2).sum()
+        negative_loss = F.relu(self.cfg.execution.margin - neg_dists).pow(2).sum()  # type: ignore
         loss = 0.5 * (positive_loss + negative_loss)
 
         return {

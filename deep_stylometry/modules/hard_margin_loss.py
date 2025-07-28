@@ -51,18 +51,15 @@ class HardMarginLoss(nn.Module):
         negs = all_scores[targets, targets + batch_size]
         neg_dists = all_dists[targets, targets + batch_size]
 
-        # Select hard positive and hard negative pairs
-        # Negatives that are too close
         negative_pairs = neg_dists[
             neg_dists < (pos_dists.max() if len(pos_dists) > 1 else neg_dists.mean())
         ]
-        # Positives that are too far
         positive_pairs = pos_dists[
             pos_dists > (neg_dists.min() if len(neg_dists) > 1 else pos_dists.mean())
         ]
 
         positive_loss = positive_pairs.pow(2).sum()
-        negative_loss = F.relu(self.cfg.execution.margin - negative_pairs).pow(2).sum()
+        negative_loss = F.relu(self.cfg.execution.margin - negative_pairs).pow(2).sum()  # type: ignore
         loss = (positive_loss + negative_loss) / batch_size
 
         return {

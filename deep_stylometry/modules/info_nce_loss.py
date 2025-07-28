@@ -43,7 +43,7 @@ class InfoNCELoss(nn.Module):
             k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
-        all_scaled_scores = all_scores / self.tau
+        all_scaled_scores = all_scores / self.tau  # type: ignore
 
         targets = torch.arange(batch_size, device=query_embs.device)
         poss = all_scores[targets, targets]

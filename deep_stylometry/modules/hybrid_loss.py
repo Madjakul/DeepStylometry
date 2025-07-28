@@ -18,7 +18,7 @@ class HybridLoss(nn.Module):
     def __init__(self, cfg: "BaseConfig"):
         super().__init__()
         assert cfg.execution.margin is not None
-        assert cfg.execution.lambda_ < 1.0 and cfg.execution.lambda_ > 0.0
+        assert cfg.execution.lambda_ < 1.0 and cfg.execution.lambda_ > 0.0  # type: ignore
         self.cfg = cfg
         self.register_buffer("tau", torch.tensor(self.cfg.execution.tau))
 
@@ -46,7 +46,7 @@ class HybridLoss(nn.Module):
             gumbel_temp=gumbel_temp,
         )
         all_dists = 1 - all_scores
-        all_scaled_scores = all_scores / self.tau
+        all_scaled_scores = all_scores / self.tau  # type: ignore
 
         targets = torch.arange(batch_size, device=query_embs.device)
         poss = all_scores[targets, targets]
@@ -56,11 +56,11 @@ class HybridLoss(nn.Module):
 
         info_nce_loss = F.cross_entropy(all_scaled_scores, targets, reduction="mean")
 
-        triplet_loss = F.relu(pos_dists - neg_dists + self.cfg.execution.margin).mean()
+        triplet_loss = F.relu(pos_dists - neg_dists + self.cfg.execution.margin).mean()  # type: ignore
 
         loss = (
-            self.cfg.execution.lambda_ * triplet_loss
-            + (1 - self.cfg.execution.lambda_) * info_nce_loss
+            self.cfg.execution.lambda_ * triplet_loss  # type: ignore
+            + (1 - self.cfg.execution.lambda_) * info_nce_loss  # type: ignore
         )
 
         return {
