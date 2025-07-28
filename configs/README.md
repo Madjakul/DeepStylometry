@@ -1,215 +1,90 @@
-Train config with no weightning
+## Configs
+
+### Tune configs
+
+Tune configuration for the triplet loss
 
 ```yml
-# train.yml
+# tune.yml
 
+mode: "tune"
 project_name: "deep-stylometry"
-group_name: "train-deepstylometry-512-se-default"
-do_train: true
-do_test: false
+group_name: "tune-deepstylometry-512-se-triplet"
 
-# === datamodule ===
-ds_name: "se" # or halvest
-batch_size: 32
-tokenizer_name: "FacebookAI/roberta-base"
-max_length: 512
-map_batch_size: 1000
-load_from_cache_file: true
-# config_name: null
-mlm_collator: false # only if you use an encoder
+data:
+  ds_name: "se" # or halvest
+  batch_size: 32
+  tokenizer_name: "FacebookAI/roberta-base"
+  max_length: 512
+  map_batch_size: 1000
+  load_from_cache_file: true
+  # config_name: null
+  mlm_collator: false # only if you use an encoder
 
-# === model ===
-architecture: "deep-stylometry"
-base_model_name: "FacebookAI/roberta-base"
-is_decoder_model: false
-dropout: 0.1
-lm_weight: 0.0
-contrastive_weight: 1.0
-contrastive_temp: 0.91
-pooling_method: "li" # li or mean
-# --- trainer
-lr: 2.65e-5
-betas: [0.8, 0.999]
-eps: 1.0e-7
-weight_decay: 0.02
-num_cycles: 0.5
-# --- late interaction
-distance_weightning: "none" # none, exp or linear
-initial_gumbel_temp: 1.0 # null
-auto_anneal_gumbel: true
-min_gumbel_temp: 0.5
-use_max: false
-alpha: 0.59
+model:
+  base_model_name: "FacebookAI/roberta-base"
+  is_decoder_model: false
+  add_linear_layers: true
+  dropout:
+    type: uniform
+    min: 0.1
+    max: 0.3
+  pooling_method: "mean" # li or mean
+  # --- late interaction
+  distance_weightning: none
+  alpha:
+    type: loguniform
+    min: 0.1
+    max: 1.0
+  use_softmax: true
+  initial_gumbel_temp: 1.0
+  auto_anneal_gumbel: true
+  min_gumbel_temp: 0.5
 
-# === wandb logger ===
-use_wandb: true
-log_model: true
-watch: "all" # all, gradients, parameters or null
-
-# === trainer ===
-device: "gpu"
-num_devices: 3
-strategy: "ddp_find_unused_parameters_true" # "ddp"
-# --- early stopping
-early_stopping: false
-# early_stopping_metric: "val_total_loss"
-# early_stopping_mode: "min"
-# early_stopping_patience: 3
-# --- checkpointing
-checkpoint_metric: "val_auroc" # only if a checkpoint directory was provided
-checkpoint_mode: "max"
-save_top_k: 4
-# --- other
-max_epochs: 4 # max_steps: 7000
-val_check_interval: null
-check_val_every_n_epoch: null
-log_every_n_steps: 1
-test_every_n_epochs: 1
-accumulate_grad_batches: 4
-gradient_clip_val: null # null
-precision: "32" # 32-true or bf16-mixed
-```
-
-Train config with exponential decay.
-
-```yml
-# train.yml
-
-project_name: "deep-stylometry"
-group_name: "train-deepstylometry-512-se-default"
-do_train: true
-do_test: false
-
-# === datamodule ===
-ds_name: "se" # or halvest
-batch_size: 32
-tokenizer_name: "FacebookAI/roberta-base"
-max_length: 512
-map_batch_size: 1000
-load_from_cache_file: true
-# config_name: null
-mlm_collator: false # only if you use an encoder
-
-# === model ===
-architecture: "deep-stylometry"
-base_model_name: "FacebookAI/roberta-base"
-is_decoder_model: false
-dropout: 0.1
-lm_weight: 0.0
-contrastive_weight: 1.0
-contrastive_temp: 0.98
-pooling_method: "li" # li or mean
-# --- trainer
-lr: 4.73e-5
-betas: [0.7, 0.999]
-eps: 1.0e-9
-weight_decay: 0.09
-num_cycles: 0.5
-# --- late interaction
-distance_weightning: "exp" # none, exp or linear
-initial_gumbel_temp: 1.0 # null
-auto_anneal_gumbel: true
-min_gumbel_temp: 0.5
-use_max: false
-alpha: 0.22
-
-# === wandb logger ===
-use_wandb: true
-log_model: true
-watch: "all" # all, gradients, parameters or null
-
-# === trainer ===
-device: "gpu"
-num_devices: 3
-strategy: "ddp_find_unused_parameters_true" # "ddp"
-# --- early stopping
-early_stopping: false
-# early_stopping_metric: "val_total_loss"
-# early_stopping_mode: "min"
-# early_stopping_patience: 3
-# --- checkpointing
-checkpoint_metric: "val_auroc" # only if a checkpoint directory was provided
-checkpoint_mode: "max"
-save_top_k: 4
-# --- other
-max_epochs: 4 # max_steps: 7000
-val_check_interval: null
-check_val_every_n_epoch: null
-log_every_n_steps: 1
-test_every_n_epochs: 1
-accumulate_grad_batches: 4
-gradient_clip_val: null # null
-precision: "32" # 32-true or bf16-mixed
-```
-
-Train config linear decay
-
-```yml
-# train.yml
-
-project_name: "deep-stylometry"
-group_name: "train-deepstylometry-512-se-default"
-do_train: true
-do_test: false
-
-# === datamodule ===
-ds_name: "se" # or halvest
-batch_size: 32
-tokenizer_name: "FacebookAI/roberta-base"
-max_length: 512
-map_batch_size: 1000
-load_from_cache_file: true
-# config_name: null
-mlm_collator: false # only if you use an encoder
-
-# === model ===
-architecture: "deep-stylometry"
-base_model_name: "FacebookAI/roberta-base"
-is_decoder_model: false
-dropout: 0.1
-lm_weight: 0.0
-contrastive_weight: 1.0
-contrastive_temp: 0.91
-pooling_method: "li" # li or mean
-# --- trainer
-lr: 7.03e-5
-betas: [0.8, 0.999]
-eps: 1.0e-8
-weight_decay: 0.066
-num_cycles: 0.5
-# --- late interaction
-distance_weightning: "linear" # none, exp or linear
-initial_gumbel_temp: 1.0 # null
-auto_anneal_gumbel: true
-min_gumbel_temp: 0.5
-use_max: false
-alpha: 0.98
-
-# === wandb logger ===
-use_wandb: true
-log_model: true
-watch: "all" # all, gradients, parameters or null
-
-# === trainer ===
-device: "gpu"
-num_devices: 3
-strategy: "ddp_find_unused_parameters_true" # "ddp"
-# --- early stopping
-early_stopping: false
-# early_stopping_metric: "val_total_loss"
-# early_stopping_mode: "min"
-# early_stopping_patience: 3
-# --- checkpointing
-checkpoint_metric: "val_auroc" # only if a checkpoint directory was provided
-checkpoint_mode: "max"
-save_top_k: 4
-# --- other
-max_epochs: 4 # max_steps: 7000
-val_check_interval: null
-check_val_every_n_epoch: null
-log_every_n_steps: 1
-test_every_n_epochs: 1
-accumulate_grad_batches: 4
-gradient_clip_val: null # null
-precision: "32" # 32-true or bf16-mixed
+tune:
+  loss: "triplet"
+  # tau:
+  #   type: choice
+  #   values: [0.05, 0.07, 0.1, 0.15, 0.2]
+  # lambda_: 0.9 # Only if using hybrid loss
+  margin: # Only if using triplet loss
+    type: uniform
+    min: 0.2
+    max: 1.5
+  lm_loss_weight: 0.0
+  # --- optimizer ---
+  lr:
+    type: loguniform
+    min: 7.0e-6
+    max: 7.0e-5
+  betas:
+    type: choice
+    values: [[0.9, 0.999], [0.8, 0.999], [0.7, 0.999]]
+  eps:
+    type: choice
+    values: [1.0e-7, 1.0e-8, 1.0e-9]
+  weight_decay:
+    type: loguniform
+    min: 0.01
+    max: 0.2
+  num_cycles: 0.5
+  # --- trainer ---
+  device: "gpu"
+  num_devices_per_trial: 1
+  num_cpus_per_trial: 10
+  max_epochs: 4
+  log_every_n_steps: 1
+  accumulate_grad_batches: 1
+  gradient_clip_val: null
+  precision: "32" # 32-true or bf16-mixed
+  # --- tuner ---
+  metric: "val_auroc"
+  mode: "max"
+  num_samples: 30
+  max_concurrent_trials: 3
+  time_budget_s: 151200 # 42h (in seconds)
+  max_t: 4
+  grace_period: 2
+  # --- wandb logger ---
+  use_wandb: true
 ```
