@@ -6,9 +6,9 @@ import lightning as L
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 
-from deep_stylometry.utils.data.custom_data_collator import \
-    CustomDataCollatorForLanguageModeling
-from deep_stylometry.utils.data.custom_sampler import PadLastBatchSampler
+from deep_stylometry.utils.data.custom_data_collator import (
+    CustomDataCollatorForLanguageModeling,
+)
 from deep_stylometry.utils.helpers import get_tokenizer
 
 
@@ -147,11 +147,6 @@ class HALvestDataModule(L.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_proc,
             collate_fn=self.mlm_collator if self.tuning_mode else None,
-            sampler=(
-                None
-                if self.tuning_mode
-                else PadLastBatchSampler(len(self.val_dataset), self.batch_size)
-            ),
             shuffle=True if self.tuning_mode else False,
         )
 
@@ -160,6 +155,5 @@ class HALvestDataModule(L.LightningDataModule):
             self.test_dataset,  # type: ignore
             batch_size=self.batch_size,
             num_workers=self.num_proc,
-            sampler=PadLastBatchSampler(len(self.test_dataset), self.batch_size),
             shuffle=False,
         )

@@ -6,9 +6,9 @@ import lightning as L
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 
-from deep_stylometry.utils.data.custom_data_collator import \
-    CustomDataCollatorForLanguageModeling
-from deep_stylometry.utils.data.custom_sampler import PadLastBatchSampler
+from deep_stylometry.utils.data.custom_data_collator import (
+    CustomDataCollatorForLanguageModeling,
+)
 from deep_stylometry.utils.helpers import get_tokenizer
 
 
@@ -51,12 +51,20 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
         load_dataset(self.ds_name, cache_dir=self.cache_dir)
 
     def tokenize_function(self, batch: Dict[str, List[Any]]):
-        if batch["Same Author Label"] == 1:
-            pos_text = batch["Utterance 1 (U1)"]
-            neg_text = batch["Utterance 2 (U2)"]
-        else:
-            pos_text = batch["Utterance 2 (U2)"]
-            neg_text = batch["Utterance 1 (U1)"]
+        pos_texts = []
+        neg_texts = []
+        for label, u1, u2 in zip(
+            batch["Same Author Label"],
+            batch["Utterance 1 (U1)"],
+            batch["Utterance 2 (U2)"],
+        ):
+            if label == 1:
+                pos_texts.append(u1)
+                neg_texts.append(u2)
+            else:
+                pos_texts.append(u2)
+                neg_texts.append(u1)
+
         tokenized_q = self.tokenizer(
             batch["Anchor (A)"],
             truncation=True,
@@ -64,13 +72,13 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
             max_length=self.max_length,
         )
         tokenized_pos = self.tokenizer(
-            pos_text,
+            pos_texts,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
         )
         tokenized_neg = self.tokenizer(
-            neg_text,
+            neg_texts,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
@@ -155,11 +163,6 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_proc,
             collate_fn=self.mlm_collator if self.tuning_mode else None,
-            sampler=(
-                None
-                if self.tuning_mode
-                else PadLastBatchSampler(len(self.val_dataset), self.batch_size)
-            ),
             shuffle=True if self.tuning_mode else False,
         )
 
@@ -168,6 +171,5 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
             self.test_dataset,  # type: ignore
             batch_size=self.batch_size,
             num_workers=self.num_proc,
-            sampler=PadLastBatchSampler(len(self.test_dataset), self.batch_size),  # type: ignore
             shuffle=False,
         )
