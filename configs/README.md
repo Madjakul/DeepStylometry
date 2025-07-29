@@ -88,3 +88,74 @@ tune:
   # --- wandb logger ---
   use_wandb: true
 ```
+
+### Train configs
+
+Train configs for triplet loss
+
+```yml
+# train.yml
+
+mode: "train"
+project_name: "deep-stylometry"
+group_name: "train-deepstylometry-512-se-default"
+do_train: true
+do_test: false
+
+data:
+  ds_name: "se" # or halvest
+  batch_size: 32
+  tokenizer_name: "FacebookAI/roberta-base"
+  max_length: 512
+  map_batch_size: 1000
+  load_from_cache_file: true
+  config_name: null
+  mlm_collator: false # only if you use an encoder
+
+model:
+  base_model_name: "FacebookAI/roberta-base"
+  is_decoder_model: false
+  add_linear_layers: true
+  dropout: 0.3
+  pooling_method: "mean" # li or mean
+  # --- late interaction
+  distance_weightning: "none" # none, exp or linear
+  alpha: 0.28
+  use_softmax: true
+  initial_gumbel_temp: null # null
+  auto_anneal_gumbel: true
+  min_gumbel_temp: 0.5
+
+train:
+  loss: "triplet"
+  tau: 0.5
+  lambda_: 0.5 # only if using hybrid
+  margin: 0.32 # Only if using triplet loss
+  lm_loss_weight: 0.0
+  # --- optimizer ---
+  lr: 1.25e-5
+  betas: [0.9, 0.999]
+  eps: 1.0e-9
+  weight_decay: 0.11
+  num_cycles: 0.5
+  # --- checkpointing
+  checkpoint_metric: "val_auroc" # only if a checkpoint directory was provided
+  checkpoint_mode: "max"
+  save_top_k: 4
+  # --- trainer ---
+  device: "gpu"
+  num_devices: 3
+  strategy: "ddp_find_unused_parameters_true" # "ddp"
+  process_group_backend: "gloo" # gloo, nccl, mpi
+  max_epochs: 4 # max_steps: 7000
+  val_check_interval: null
+  check_val_every_n_epoch: null
+  log_every_n_steps: 1
+  accumulate_grad_batches: 1
+  gradient_clip_val: null # null
+  precision: "32" # 32-true or 16-mixed
+  # --- wandb logger ---
+  use_wandb: true
+  log_model: true
+  watch: "all" # all, gradients, parameters or null
+```
