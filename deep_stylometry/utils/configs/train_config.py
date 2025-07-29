@@ -29,6 +29,7 @@ class TrainConfig(DictAccessMixin):
     device: str = "gpu"
     num_devices: int = 3
     strategy: str = "ddp_find_unused_parameters_true"
+    process_group_backend: Literal["nccl", "gloo", "mpi"] = "gloo"
     max_steps: int = -1
     max_epochs: int = 4
     val_check_interval: Optional[float] = None

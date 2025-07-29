@@ -102,6 +102,16 @@ class DeepStylometry(L.LightningModule):
         "hard_margin": HardMarginLoss,
         "margin": MarginLoss,
     }
+    val_auroc: BinaryAUROC
+    val_hr1: HitRate
+    val_hr5: HitRate
+    val_hr10: HitRate
+    val_rr: ReciprocalRank
+    test_auroc: BinaryAUROC
+    test_hr1: HitRate
+    test_hr5: HitRate
+    test_hr10: HitRate
+    test_rr: ReciprocalRank
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
@@ -110,20 +120,6 @@ class DeepStylometry(L.LightningModule):
         self.cfg = cfg
         self.gumbel_temp = self.cfg.model.initial_gumbel_temp
         self.contrastive_loss = self.loss_map[cfg.execution.loss](cfg)
-
-        # Validation metrics
-        self.val_auroc = BinaryAUROC().to(self.device)
-        self.val_hr1 = HitRate(k=1).to(self.device)
-        self.val_hr5 = HitRate(k=5).to(self.device)
-        self.val_hr10 = HitRate(k=10).to(self.device)
-        self.val_rr = ReciprocalRank().to(self.device)
-
-        # Test metrics
-        self.test_auroc = BinaryAUROC().to(self.device)
-        self.test_hr1 = HitRate(k=1).to(self.device)
-        self.test_hr5 = HitRate(k=5).to(self.device)
-        self.test_hr10 = HitRate(k=10).to(self.device)
-        self.test_rr = ReciprocalRank().to(self.device)
 
         # Model
         self.lm = LanguageModel(cfg)
@@ -323,6 +319,14 @@ class DeepStylometry(L.LightningModule):
         )
         return metrics["total_loss"]
 
+    def on_validation_start(self):
+        """Move validation metrics to correct device before validation."""
+        self.val_auroc = BinaryAUROC(device=self.device)
+        self.val_hr1 = HitRate(k=1, device=self.device)
+        self.val_hr5 = HitRate(k=5, device=self.device)
+        self.val_hr10 = HitRate(k=10, device=self.device)
+        self.val_rr = ReciprocalRank(device=self.device)
+
     def validation_step(self, batch, batch_idx: int) -> None:
         metrics = self._compute_losses(batch)
         all_scores = metrics["all_scores"]
@@ -356,11 +360,11 @@ class DeepStylometry(L.LightningModule):
 
     def on_validation_epoch_end(self) -> None:
         self.log("completed_epoch", self.current_epoch, prog_bar=False)
-        auroc = self.val_auroc.compute().to(self.device)
-        avg_hr1 = self.val_hr1.compute().mean().to(self.device)
-        avg_hr5 = self.val_hr5.compute().mean().to(self.device)
-        avg_hr10 = self.val_hr10.compute().mean().to(self.device)
-        mrr = self.val_rr.compute().mean().to(self.device)
+        auroc = self.val_auroc.compute()
+        avg_hr1 = self.val_hr1.compute().mean()
+        avg_hr5 = self.val_hr5.compute().mean()
+        avg_hr10 = self.val_hr10.compute().mean()
+        mrr = self.val_rr.compute().mean()
         self.log_dict(
             {
                 "val_auroc": auroc,
@@ -379,6 +383,14 @@ class DeepStylometry(L.LightningModule):
         self.val_hr5.reset()
         self.val_hr10.reset()
         self.val_rr.reset()
+
+    def on_test_start(self) -> None:
+        # this.current_device is now available
+        self.test_auroc = BinaryAUROC(device=self.device)
+        self.test_hr1 = HitRate(k=1, device=self.device)
+        self.test_hr5 = HitRate(k=5, device=self.device)
+        self.test_hr10 = HitRate(k=10, device=self.device)
+        self.test_rr = ReciprocalRank(device=self.device)
 
     def test_step(self, batch, batch_idx: int) -> None:
         metrics = self._compute_losses(batch)
@@ -412,11 +424,11 @@ class DeepStylometry(L.LightningModule):
         )
 
     def on_test_epoch_end(self) -> None:
-        auroc = self.test_auroc.compute().to(self.device)
-        avg_hr1 = self.test_hr1.compute().mean().to(self.device)
-        avg_hr5 = self.test_hr5.compute().mean().to(self.device)
-        avg_hr10 = self.test_hr10.compute().mean().to(self.device)
-        mrr = self.test_rr.compute().mean().to(self.device)
+        auroc = self.test_auroc.compute()
+        avg_hr1 = self.test_hr1.compute().mean()
+        avg_hr5 = self.test_hr5.compute().mean()
+        avg_hr10 = self.test_hr10.compute().mean()
+        mrr = self.test_rr.compute().mean()
         self.log_dict(
             {
                 "test_auroc": auroc,

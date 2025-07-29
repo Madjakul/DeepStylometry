@@ -21,8 +21,6 @@ model:
   is_decoder_model: false
   add_linear_layers: false
   dropout: 0.1
-  lm_weight: 0.0
-  contrastive_weight: 1.0
   pooling_method: "mean" # li or mean
   # --- late interaction
   distance_weightning: "none" # none, exp or linear
@@ -35,7 +33,7 @@ model:
 train:
   loss: "triplet"
   tau: 0.5
-  lambda: 0.5 # only if using hybrid
+  lambda_: 0.5 # only if using hybrid
   margin: 0.5 # Only if using triplet loss
   lm_loss_weight: 0.0
   # --- optimizer ---
@@ -52,6 +50,7 @@ train:
   device: "gpu"
   num_devices: 3
   strategy: "ddp_find_unused_parameters_true" # "ddp"
+  process_group_backend: "gloo" # gloo, nccl, mpi
   max_epochs: 2 # max_steps: 7000
   val_check_interval: null
   check_val_every_n_epoch: null
