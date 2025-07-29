@@ -77,7 +77,10 @@ class StyleEmbeddingDataModule(L.LightningDataModule):
         load_dataset(self.ds_name, cache_dir=self.cache_dir)
 
     def tokenize_function(self, batch: Dict[str, List[Any]]):
-        anchors = [str(anchor) if not isinstance(anchor, str) else anchor for anchor in batch["Anchor (A)"]]
+        anchors = [
+            str(anchor) if not isinstance(anchor, str) else anchor
+            for anchor in batch["Anchor (A)"]
+        ]
         pos_texts = []
         neg_texts = []
         for label, u1, u2 in zip(
