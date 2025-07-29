@@ -7,6 +7,7 @@ import lightning as L
 import psutil
 import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+from lightning.pytorch.strategies import DDPStrategy
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
@@ -135,9 +136,20 @@ def setup_trainer(
     csv_logger = CSVLogger(save_dir=logs_dir, name=name)
     loggers.append(csv_logger)
 
+    if cfg.mode == "train":
+        if cfg.execution.strategy.startswith("ddp"): # type: ignore
+            strategy = DDPStrategy(
+                find_unused_parameters=cfg.execution.strategy.endswith( # type: ignore
+                "find_unused_parameters_true"
+                ),
+                process_group_backend=cfg.execution.process_group_backend, # type: ignore
+            )
+        else:
+            strategy = cfg.execution.strategy # type: ignore
+
     trainer = L.Trainer(
         accelerator=cfg.execution.device,
-        strategy=cfg.execution.strategy,  # type: ignore
+        strategy=strategy,  # type: ignore
         devices=cfg.execution.num_devices,  # type: ignore
         max_steps=cfg.execution.max_steps,
         max_epochs=cfg.execution.max_epochs,
