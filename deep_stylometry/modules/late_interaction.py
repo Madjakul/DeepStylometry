@@ -87,7 +87,9 @@ class LateInteraction(nn.Module):
             # Max-based interaction
             masked_sim = sim_matrix.masked_fill(~valid_mask, self.IGNORE)  # type: ignore
             max_sim_values, _ = masked_sim.max(dim=-1)  # (B, B, S)
-            scores = (max_sim_values * q_mask.squeeze(1).unsqueeze(1)).sum(dim=-1)
+            is_padding_mask = q_mask == 0
+            masked_max_sim = max_sim_values.masked_fill(is_padding_mask, 0.0)
+            scores = masked_max_sim.sum(dim=-1)
             return scores
 
         # Mask the padding tokens
