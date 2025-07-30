@@ -1,6 +1,6 @@
 #!/bin/sh
 
-#SBATCH --job-name=deep_strylometry_train                # Job name
+#SBATCH --job-name=deep_strylometry_test                # Job name
 #SBATCH --nodes=1                                       # Run all processes on a single node
 #SBATCH --ntasks=1                                      # Run a single task
 #SBATCH --partition=almanach                            # GPU parition

@@ -1,15 +1,15 @@
 # train.yml
 
-mode: "train"
+mode: "train" # do not modify
 project_name: "deep-stylometry"
-group_name: "test-deepstylometry-512-se-default"
+group_name: "test-styleembedding-512-se-default"
 do_train: false
 do_test: true
 
 data:
   ds_name: "se" # or halvest
   batch_size: 32
-  tokenizer_name: "FacebookAI/roberta-base"
+  tokenizer_name: "AnnaWegmann/Style-Embedding"
   max_length: 512
   map_batch_size: 1000
   load_from_cache_file: true
@@ -17,9 +17,9 @@ data:
   mlm_collator: false # only if you use an encoder
 
 model:
-  base_model_name: "FacebookAI/roberta-base"
+  base_model_name: "AnnaWegmann/Style-Embedding"
   is_decoder_model: false
-  add_linear_layers: true
+  add_linear_layers: false
   dropout: 0.3
   pooling_method: "mean" # li or mean
   # --- late interaction
