@@ -97,9 +97,11 @@ def setup_trainer(
     lr_monitor = LearningRateMonitor(logging_interval="step")
     callbacks.append(lr_monitor)
 
-    name = f"""{cfg.model.base_model_name}-{cfg.data.ds_name}
-        -pooling:{cfg.model.pooling_method}-softmax:{cfg.model.use_softmax}
-        -dist:{cfg.model.distance_weightning}"""
+    name = (
+        f"{cfg.model.base_model_name}-{cfg.data.ds_name}"
+        f" -pooling:{cfg.model.pooling_method}-softmax:{cfg.model.use_softmax}"
+        f" -dist:{cfg.model.distance_weightning}"
+    ).replace("/", "-")
 
     # Model checkpoint callback if checkpoint_dir is provided
     if checkpoint_dir is not None:

@@ -2,9 +2,9 @@
 
 mode: "train"
 project_name: "deep-stylometry"
-group_name: "train-deepstylometry-512-se-default"
-do_train: true
-do_test: false
+group_name: "test-deepstylometry-512-se-default"
+do_train: false
+do_test: true
 
 data:
   ds_name: "se" # or halvest
@@ -48,12 +48,12 @@ train:
   save_top_k: 4
   # --- trainer ---
   device: "gpu"
-  num_devices: 3
+  num_devices: 1
   strategy: "ddp_find_unused_parameters_true" # "ddp"
   process_group_backend: "gloo" # gloo, nccl, mpi
   max_epochs: 4 # max_steps: 7000
   val_check_interval: null
-  check_val_every_n_epoch: null
+  check_val_every_n_epoch: 1
   log_every_n_steps: 1
   accumulate_grad_batches: 1
   gradient_clip_val: null # null
