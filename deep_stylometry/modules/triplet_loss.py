@@ -73,7 +73,10 @@ class TripletLoss(nn.Module):
         neg_dists = all_dists[targets, targets + batch_size]
 
         base_margin = self.cfg.execution.margin
-        dynamic_margin = base_margin / q_mask_sum.float()  # shape: (B,)
+        if self.cfg.model.pooling_method == "li":
+            dynamic_margin = base_margin / q_mask_sum.float()  # shape: (B,)
+        else:
+            dynamic_margin = base_margin
         loss = F.relu(pos_dists - neg_dists + dynamic_margin).mean()  # type: ignore
 
         return {
