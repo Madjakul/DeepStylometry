@@ -8,7 +8,7 @@ do_test: false
 
 data:
   ds_name: "se" # or halvest
-  batch_size: 32
+  batch_size: 24
   tokenizer_name: "FacebookAI/roberta-base"
   max_length: 512
   map_batch_size: 1000

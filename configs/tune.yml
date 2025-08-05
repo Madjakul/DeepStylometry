@@ -2,7 +2,7 @@
 
 mode: "tune"
 project_name: "deep-stylometry"
-group_name: "tune-deepstylometry-512-se-triplet"
+group_name: "tune-deepstylometry-512-se-hybrid"
 
 data:
   ds_name: "se" # or halvest
@@ -35,15 +35,20 @@ model:
   min_gumbel_temp: 0.5
 
 tune:
-  loss: "triplet"
-  # tau:
-  #   type: choice
-  #   values: [0.05, 0.07, 0.1, 0.15, 0.2]
-  # lambda_: 0.9 # Only if using hybrid loss
-  margin: # Only if using triplet loss
+  loss: "hybrid"
+  tau:
+    0.1 # Only if you use info-nce loss or hybrid
+    # type: choice
+    # values: [0.05, 0.07, 0.1, 0.15, 0.2]
+  lambda_: # Only if using hybrid loss
     type: uniform
-    min: 0.2
-    max: 1.5
+    min: 0.51
+    max: 0.99
+  margin:
+    0.32 # Only if using triplet loss
+    # type: uniform
+    # min: 0.2
+    # max: 1.5
   lm_loss_weight: 0.0
   # --- optimizer ---
   lr:
@@ -65,18 +70,18 @@ tune:
   device: "gpu"
   num_devices_per_trial: 1
   num_cpus_per_trial: 10
-  max_epochs: 4
+  max_epochs: 3
   log_every_n_steps: 1
   accumulate_grad_batches: 1
   gradient_clip_val: null
   precision: "32" # 32-true or bf16-mixed
   # --- tuner ---
-  metric: "val_auroc"
+  metric: "val_mrr"
   mode: "max"
   num_samples: 30
   max_concurrent_trials: 3
   time_budget_s: 151200 # 42h (in seconds)
-  max_t: 4
+  max_t: 3
   grace_period: 2
   # --- wandb logger ---
   use_wandb: true

@@ -13,7 +13,7 @@ LOGS_DIR=$PROJECT_ROOT/logs
 
 # CACHE_DIR=$DATA_ROOT/responses/
 CHECKPOINT_DIR=$PROJECT_ROOT/tmp/checkpoints/
-# CHECKPOINT_PATH=$CHECKPOINT_DIR/FacebookAI-roberta-base-se-pooling:mean-softmax:True-dist:none/epoch=1.ckpt
+# CHECKPOINT_PATH=$CHECKPOINT_DIR/FacebookAI-roberta-base-se-pooling:li-softmax:True-gumbel:1-dist:none/epoch=1.ckpt
 NUM_PROC=10
 
 # **************************************************************************************

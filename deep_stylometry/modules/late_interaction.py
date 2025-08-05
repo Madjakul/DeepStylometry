@@ -89,7 +89,7 @@ class LateInteraction(nn.Module):
             max_sim_values, _ = masked_sim.max(dim=-1)  # (B, B, S)
             is_padding_mask = q_mask == 0
             masked_max_sim = max_sim_values.masked_fill(is_padding_mask, 0.0)
-            scores = masked_max_sim.sum(dim=-1)
+            scores = masked_max_sim.mean(dim=-1)
             return scores
 
         # Mask the padding tokens
@@ -109,6 +109,6 @@ class LateInteraction(nn.Module):
         query_embs_expanded = query_embs.squeeze(1)  # (B, S, H)
         scores = (query_embs_expanded.unsqueeze(1) * aggregated).sum(dim=-1)
         scores = scores * q_mask.squeeze(1).unsqueeze(1)
-        scores = scores.sum(dim=-1)
+        scores = scores.mean(dim=-1)
 
         return scores

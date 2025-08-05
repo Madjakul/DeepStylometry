@@ -62,7 +62,9 @@ class TripletLoss(nn.Module):
             k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
+        assert torch.all(all_scores >= -1.0) and torch.all(all_scores <= 1.0)
         all_dists = 1 - all_scores
+        q_mask_sum = q_mask.sum(dim=1)
 
         targets = torch.arange(batch_size, device=query_embs.device)
         poss = all_scores[targets, targets]
@@ -70,7 +72,9 @@ class TripletLoss(nn.Module):
         negs = all_scores[targets, targets + batch_size]
         neg_dists = all_dists[targets, targets + batch_size]
 
-        loss = F.relu(pos_dists - neg_dists + self.cfg.execution.margin).mean()  # type: ignore
+        base_margin = self.cfg.execution.margin
+        dynamic_margin = base_margin / q_mask_sum.float()  # shape: (B,)
+        loss = F.relu(pos_dists - neg_dists + dynamic_margin).mean()  # type: ignore
 
         return {
             "all_scores": all_scores,
