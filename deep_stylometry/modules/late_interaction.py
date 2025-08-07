@@ -83,13 +83,16 @@ class LateInteraction(nn.Module):
         # Compute valid mask for token pairs
         valid_mask = torch.einsum("ixs, xjt->ijst", q_mask, k_mask).bool()
 
+        length = q_mask.sum(dim=-1).clamp(min=1)  # (B,)
+
         if not self.cfg.model.use_softmax:
             # Max-based interaction
             masked_sim = sim_matrix.masked_fill(~valid_mask, self.IGNORE)  # type: ignore
             max_sim_values, _ = masked_sim.max(dim=-1)  # (B, B, S)
             is_padding_mask = q_mask == 0
             masked_max_sim = max_sim_values.masked_fill(is_padding_mask, 0.0)
-            scores = masked_max_sim.mean(dim=-1)
+            scores = masked_max_sim.sum(dim=-1) / length  # (B, 2B)
+            scores = scores.clamp(-1.0, 1.0)  # because of fp32 rounding
             return scores
 
         # Mask the padding tokens
@@ -109,6 +112,8 @@ class LateInteraction(nn.Module):
         query_embs_expanded = query_embs.squeeze(1)  # (B, S, H)
         scores = (query_embs_expanded.unsqueeze(1) * aggregated).sum(dim=-1)
         scores = scores * q_mask.squeeze(1).unsqueeze(1)
-        scores = scores.mean(dim=-1)
-
+        scores = scores.sum(dim=-1) / length  # (B, 2B)
+        pair_has_any = valid_mask.any(dim=-1).any(dim=-1)  # (B, 2B)
+        scores = scores.masked_fill(~pair_has_any, -1.0)
+        scores = scores.clamp(-1.0, 1.0)  # because of fp32 rounding
         return scores

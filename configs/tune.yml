@@ -2,11 +2,11 @@
 
 mode: "tune"
 project_name: "deep-stylometry"
-group_name: "tune-deepstylometry-512-se-hybrid"
+group_name: "tune-deepstylometry-512-se-triplet-li"
 
 data:
   ds_name: "se" # or halvest
-  batch_size: 32
+  batch_size: 24
   tokenizer_name: "FacebookAI/roberta-base"
   max_length: 512
   map_batch_size: 1000
@@ -18,37 +18,35 @@ model:
   base_model_name: "FacebookAI/roberta-base"
   is_decoder_model: false
   add_linear_layers: true
-  dropout:
-    type: uniform
-    min: 0.1
-    max: 0.3
-  pooling_method: "mean" # li or mean
+  dropout: 0.3
+  pooling_method: "li" # li or mean
   # --- late interaction
   distance_weightning: none
   alpha:
-    type: loguniform
-    min: 0.1
-    max: 1.0
-  use_softmax: true
-  initial_gumbel_temp: 1.0
-  auto_anneal_gumbel: true
+    0.1
+    # type: loguniform
+    # min: 0.1
+    # max: 1.0
+  use_softmax: false
+  initial_gumbel_temp: null
+  auto_anneal_gumbel: false
   min_gumbel_temp: 0.5
 
 tune:
-  loss: "hybrid"
+  loss: "triplet"
   tau:
     0.1 # Only if you use info-nce loss or hybrid
     # type: choice
     # values: [0.05, 0.07, 0.1, 0.15, 0.2]
-  lambda_: # Only if using hybrid loss
-    type: uniform
-    min: 0.51
-    max: 0.99
-  margin:
-    0.32 # Only if using triplet loss
+  lambda_:
+    0.5 # Only if using hybrid loss
     # type: uniform
-    # min: 0.2
-    # max: 1.5
+    # min: 0.51
+    # max: 0.99
+  margin: # Only if using triplet loss
+    type: uniform
+    min: 0.5
+    max: 3.0
   lm_loss_weight: 0.0
   # --- optimizer ---
   lr:
@@ -76,7 +74,7 @@ tune:
   gradient_clip_val: null
   precision: "32" # 32-true or bf16-mixed
   # --- tuner ---
-  metric: "val_mrr"
+  metric: "val_auroc"
   mode: "max"
   num_samples: 30
   max_concurrent_trials: 3

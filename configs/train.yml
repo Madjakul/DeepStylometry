@@ -2,13 +2,13 @@
 
 mode: "train"
 project_name: "deep-stylometry"
-group_name: "train-deepstylometry-512-se-default"
-do_train: true
-do_test: false
+group_name: "test-deepstylometry-512-se-infonce"
+do_train: false
+do_test: true
 
 data:
   ds_name: "se" # or halvest
-  batch_size: 24
+  batch_size: 32
   tokenizer_name: "FacebookAI/roberta-base"
   max_length: 512
   map_batch_size: 1000

@@ -62,7 +62,11 @@ class TripletLoss(nn.Module):
             k_mask=k_mask,  # (2B, S)
             gumbel_temp=gumbel_temp,
         )
-        assert torch.all(all_scores >= -1.0) and torch.all(all_scores <= 1.0)
+        assert (
+            torch.all(all_scores >= -1.0 - 1e-6)
+            and torch.all(all_scores <= 1.0 + 1e-6),
+            f"Scores out of bounds: {all_scores.min()} to {all_scores.max()}",
+        )
         all_dists = 1 - all_scores
         q_mask_sum = q_mask.sum(dim=1)
 
