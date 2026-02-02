@@ -8,31 +8,13 @@ import torch.nn.functional as F
 from jaxtyping import Float, Int
 
 from deep_stylometry.modules.late_interaction import LateInteraction
+from deep_stylometry.modules.mean_interaction import MeanInteraction
 
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
 
 
 class TripletLoss(nn.Module):
-    """Triplet Loss for deep stylometry models. This loss function computes the
-    triplet loss for a batch of query, positive, and negative key embeddings.
-    It uses the margin to ensure that the positive pair is closer than the
-    negative pair by a margin.
-
-    Parameters
-    ----------
-    cfg : BaseConfig
-        Configuration object containing model and execution parameters, including the
-        margin.
-
-    Attributes
-    ----------
-    cfg : BaseConfig
-        Configuration object with execution parameters.
-    pool : nn.Module
-        Pooling method used to compute similarity scores between query and key
-        embeddings. Can be LateInteraction or mean pooling based on the configuration.
-    """
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
@@ -42,7 +24,7 @@ class TripletLoss(nn.Module):
         if cfg.model.pooling_method == "li":
             self.pool = LateInteraction(self.cfg)
         else:
-            self.pool = self.mean_pooling
+            self.pool = MeanInteraction()
 
     def forward(
         self,
@@ -90,23 +72,3 @@ class TripletLoss(nn.Module):
             "negs": negs,
             "loss": loss,
         }
-
-    @staticmethod
-    def mean_pooling(
-        query_embs: Float[torch.Tensor, "batch seq hidden"],
-        key_embs: Float[torch.Tensor, "two_times_batch seq hidden"],
-        q_mask: Int[torch.Tensor, "batch seq"],
-        k_mask: Int[torch.Tensor, "two_times_batch seq"],
-        **kwargs,
-    ) -> Float[torch.Tensor, "batch two_times_batch"]:
-        # Mean pooling and normalization
-        q_mask_sum = q_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
-        query_vec = (query_embs * q_mask.unsqueeze(-1)).sum(dim=1) / q_mask_sum
-        query_vec = F.normalize(query_vec, p=2, dim=-1)
-
-        k_mask_sum = k_mask.sum(dim=1, keepdim=True).clamp(min=1e-9)
-        key_vec = (key_embs * k_mask.unsqueeze(-1)).sum(dim=1) / k_mask_sum
-        key_vec = F.normalize(key_vec, p=2, dim=-1)
-
-        all_scores = torch.matmul(query_vec, key_vec.T)
-        return all_scores
