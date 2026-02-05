@@ -1,14 +1,12 @@
 # deep_stylometry/modules/modeling_deep_stylometry.py
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict
 
 import lightning as L
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from jaxtyping import Float
-from torcheval.metrics import BinaryAUROC, HitRate, ReciprocalRank
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -25,112 +23,46 @@ class DeepStylometry(L.LightningModule):
         "info_nce": InfoNCELoss,
         "triplet": TripletLoss,
     }
-    val_auroc: BinaryAUROC
-    val_hr1: HitRate
-    val_hr5: HitRate
-    val_hr10: HitRate
-    val_rr: ReciprocalRank
-    test_auroc: BinaryAUROC
-    test_hr1: HitRate
-    test_hr5: HitRate
-    test_hr10: HitRate
-    test_rr: ReciprocalRank
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
-        self.save_hyperparameters()
-
+        self.save_hyperparameters(ignore=["cfg"])
         self.cfg = cfg
-        self.gumbel_temp = self.cfg.model.initial_gumbel_temp
         self.contrastive_loss = self.loss_map[cfg.execution.loss](cfg)
+
+        assert cfg.model.expansion_ratio > 0, "expansion_ratio must be > 0"
 
         # Model
         self.lm = LanguageModel(cfg)
-        if self.cfg.model.add_linear_layers:
-            hidden_size = self.lm.hidden_size
-            self.fc1 = nn.Linear(hidden_size, hidden_size)
-            self.fc2 = nn.Linear(hidden_size, hidden_size)
-
-    def _compute_losses(
-        self, batch: Dict[str, torch.Tensor]
-    ) -> Dict[str, torch.Tensor]:
-
-        lm_loss, _, q_embs = self(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"],
-            labels=batch.get("labels", None),  # only exists if MLM collator is used
+        hidden_size = self.lm.hidden_size
+        self.model = nn.Sequential(
+            self.lm,
+            nn.Dropout(cfg.model.dropout),
+            nn.Linear(hidden_size, hidden_size * cfg.model.expansion_ratio),
+            nn.ReLU(),
+            nn.Linear(hidden_size * cfg.model.expansion_ratio, hidden_size),
         )
-        _, _, pos_embs = self(
-            input_ids=batch["pos_input_ids"],
-            attention_mask=batch["pos_attention_mask"],
-        )
-        _, _, neg_embs = self(
-            input_ids=batch["neg_input_ids"],
-            attention_mask=batch["neg_attention_mask"],
-        )
-
-        k_embs = torch.cat([pos_embs, neg_embs], dim=0)  # (2B, S, H)
-        k_mask = torch.cat(
-            [batch["pos_attention_mask"], batch["neg_attention_mask"]],
-            dim=0,
-        )  # (2B, S)
-
-        loss_metrics = self.contrastive_loss(
-            query_embs=q_embs,
-            key_embs=k_embs,
-            q_mask=batch["attention_mask"],
-            k_mask=k_mask,
-            gumbel_temp=self.gumbel_temp,
-        )
-
-        total_loss = (self.cfg.execution.lm_loss_weight * lm_loss) + loss_metrics[
-            "loss"
-        ]
-
-        metrics = {
-            "all_scores": loss_metrics["all_scores"],
-            "targets": loss_metrics["targets"],
-            "poss": loss_metrics["poss"],
-            "negs": loss_metrics["negs"],
-            "contrastive_loss": loss_metrics["loss"],
-            "lm_loss": lm_loss * self.cfg.execution.lm_loss_weight,
-            "total_loss": total_loss,
-        }
-
-        return metrics
 
     def configure_optimizers(self) -> Dict[str, Any]:  # type: ignore[override]
         logging.info(
             f"""Configuring optimizer: AdamW with lr={self.cfg.execution.lr},
-             weight_decay={self.cfg.execution.weight_decay},
-             betas={self.cfg.execution.betas}, eps={self.cfg.execution.eps}."""
+             weight_decay={self.cfg.execution.weight_decay}"""
         )
 
         optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=self.cfg.execution.lr,  # type: ignore
             weight_decay=self.cfg.execution.weight_decay,  # type: ignore
-            betas=self.cfg.execution.betas,  # type: ignore
-            eps=self.cfg.execution.eps,  # type: ignore
         )
         # Calculate steps dynamically
         total_steps = int(self.trainer.estimated_stepping_batches)
         warmup_steps = max(1, int(0.1 * total_steps))
 
-        if (
-            self.cfg.model.auto_anneal_gumbel
-            and self.cfg.model.initial_gumbel_temp is not None
-        ):
-            total_temp_range = (  # type: ignore
-                self.cfg.model.initial_gumbel_temp - self.cfg.model.min_gumbel_temp
-            )
-            self.gumbel_linear_delta = total_temp_range / total_steps
-
         scheduler = get_cosine_schedule_with_warmup(
             optimizer,
             num_warmup_steps=warmup_steps,
             num_training_steps=total_steps,
-            num_cycles=self.cfg.execution.num_cycles,
+            num_cycles=0.5,
             last_epoch=-1,
         )
 
@@ -143,63 +75,74 @@ class DeepStylometry(L.LightningModule):
             },
         }
 
-    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure) -> None:  # type: ignore[override]
-        super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
-
-        # Update Gumbel temperature after each optimizer step
-        if (
-            self.cfg.model.auto_anneal_gumbel
-            and self.cfg.model.initial_gumbel_temp is not None
-        ):
-            new_temp = self.gumbel_temp - self.gumbel_linear_delta  # type: ignore
-            self.gumbel_temp = max(new_temp, self.cfg.model.min_gumbel_temp)
-            self.log("gumbel_temp", self.gumbel_temp, prog_bar=True)
-
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        labels: Optional[torch.Tensor] = None,
-    ):
-        lm_loss, last_hidden_states = self.lm(
-            input_ids, attention_mask=attention_mask, labels=labels
-        )
-
-        if self.cfg.model.add_linear_layers:
-            embs = F.layer_norm(
-                last_hidden_states,
-                normalized_shape=(self.lm.hidden_size,),
-                weight=None,
-                bias=None,
-                eps=1e-5,
-            )
-            embs = F.dropout(embs, p=self.cfg.model.dropout, training=self.training)
-            embs = F.relu(self.fc1(embs))
-            embs = F.dropout(embs, p=self.cfg.model.dropout, training=self.training)
-            projected_embs = self.fc2(embs)
-        else:
-            projected_embs = last_hidden_states
-
-        return lm_loss, last_hidden_states, projected_embs
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor):
+        return self.model(input_ids=input_ids, attention_mask=attention_mask)
 
     def training_step(self, batch, batch_idx: int) -> Float[torch.Tensor, ""]:
-        metrics = self._compute_losses(batch)
+        q_mask = batch["attention_mask"]
+        batch_size = q_mask.size(0)
 
-        # Log metrics
-        if self.cfg.model.initial_gumbel_temp is not None:
-            self.log(
-                "gumbel_temp",
-                self.gumbel_temp,  # type: ignore
-                prog_bar=False,
-                on_step=True,
-                on_epoch=False,
-                batch_size=self.cfg.data.batch_size,
+        q_embs = self(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+        )
+        pos_embs = self(
+            input_ids=batch["pos_input_ids"],
+            attention_mask=batch["pos_attention_mask"],
+        )
+        neg_embs = self(
+            input_ids=batch["neg_input_ids"],
+            attention_mask=batch["neg_attention_mask"],
+        )
+
+        if self.trainer.world_size > 1 and self.cfg.train.gather:
+            # all_gather adds a dimension at the start, so we flatten it with the batch dim
+            # Shape changes from [num_gpus, batch_size, seq, hidden] -> [global_batch_size, seq, hidden]
+            targets = (
+                torch.arange(batch_size, device=q_embs.device)
+                + batch_size * self.trainer.global_rank
             )
+            all_pos_embs = self.trainer.strategy.all_gather(
+                pos_embs, sync_grads=True
+            ).flatten(0, 1)
+            all_pos_mask = self.trainer.strategy.all_gather(
+                batch["pos_attention_mask"]
+            ).flatten(0, 1)
+            all_neg_embs = self.trainer.strategy.all_gather(
+                neg_embs, sync_grads=True
+            ).flatten(0, 1)
+            all_neg_mask = self.trainer.strategy.all_gather(
+                batch["neg_attention_mask"]
+            ).flatten(0, 1)
+
+            k_embs = torch.cat([all_pos_embs, all_neg_embs], dim=0)
+            k_mask = torch.cat([all_pos_mask, all_neg_mask], dim=0)
+            loss_metrics = self.contrastive_loss(
+                query_embs=q_embs,
+                key_embs=k_embs,
+                q_mask=q_mask,
+                k_mask=k_mask,
+                targets=targets,
+                q_input_ids=batch["input_ids"],
+            )
+        else:
+            targets = torch.arange(batch_size, device=q_embs.device)
+            k_embs = torch.cat([pos_embs, neg_embs], dim=0)
+            k_mask = torch.cat(
+                [batch["pos_attention_mask"], batch["neg_attention_mask"]], dim=0
+            )
+            loss_metrics = self.contrastive_loss(
+                query_embs=q_embs,
+                key_embs=k_embs,
+                q_mask=q_mask,
+                k_mask=k_mask,
+                targets=targets,
+                q_input_ids=batch["input_ids"],
+            )
+
         self.log_dict(
             {
-                "train_total_loss": metrics["total_loss"],
-                "train_lm_loss": metrics["lm_loss"],
-                "train_contrastive_loss": metrics["contrastive_loss"],
+                "train/loss": loss_metrics["loss"],
             },
             prog_bar=True,
             on_step=True,
@@ -207,128 +150,4 @@ class DeepStylometry(L.LightningModule):
             sync_dist=True,
             batch_size=self.cfg.data.batch_size,
         )
-        return metrics["total_loss"]
-
-    def on_validation_start(self):
-        """Move validation metrics to correct device before validation."""
-        self.val_auroc = BinaryAUROC(device=self.device)
-        self.val_hr1 = HitRate(k=1, device=self.device)
-        self.val_hr5 = HitRate(k=5, device=self.device)
-        self.val_hr10 = HitRate(k=10, device=self.device)
-        self.val_rr = ReciprocalRank(device=self.device)
-
-    def validation_step(self, batch, batch_idx: int) -> None:
-        metrics = self._compute_losses(batch)
-        all_scores = metrics["all_scores"]
-        targets = metrics["targets"]
-        poss = metrics["poss"]
-        negs = metrics["negs"]
-        batch_size = targets.size(0)
-        binary_scores = torch.cat([poss, negs], dim=0)
-        labels = torch.cat(
-            [torch.ones(batch_size), torch.zeros(batch_size)], dim=0
-        ).long()
-
-        self.val_auroc.update(binary_scores, labels)
-        self.val_hr1.update(all_scores, targets)
-        self.val_hr5.update(all_scores, targets)
-        self.val_hr10.update(all_scores, targets)
-        self.val_rr.update(all_scores, targets)
-
-        self.log_dict(
-            {
-                "val_total_loss": metrics["total_loss"],
-                "val_lm_loss": metrics["lm_loss"],
-                "val_contrastive_loss": metrics["contrastive_loss"],
-            },
-            prog_bar=True,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=self.cfg.data.batch_size,
-        )
-
-    def on_validation_epoch_end(self) -> None:
-        self.log("completed_epoch", self.current_epoch, prog_bar=False)
-        auroc = self.val_auroc.compute()
-        avg_hr1 = self.val_hr1.compute().mean()
-        avg_hr5 = self.val_hr5.compute().mean()
-        avg_hr10 = self.val_hr10.compute().mean()
-        mrr = self.val_rr.compute().mean()
-        self.log_dict(
-            {
-                "val_auroc": auroc,
-                "val_hr1": avg_hr1,
-                "val_hr5": avg_hr5,
-                "val_hr10": avg_hr10,
-                "val_mrr": mrr,
-            },
-            prog_bar=False,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-        )
-        self.val_auroc.reset()
-        self.val_hr1.reset()
-        self.val_hr5.reset()
-        self.val_hr10.reset()
-        self.val_rr.reset()
-
-    def on_test_start(self) -> None:
-        # this.current_device is now available
-        self.test_auroc = BinaryAUROC(device=self.device)
-        self.test_hr1 = HitRate(k=1, device=self.device)
-        self.test_hr5 = HitRate(k=5, device=self.device)
-        self.test_hr10 = HitRate(k=10, device=self.device)
-        self.test_rr = ReciprocalRank(device=self.device)
-
-    def test_step(self, batch, batch_idx: int) -> None:
-        metrics = self._compute_losses(batch)
-        all_scores = metrics["all_scores"]
-        targets = metrics["targets"]
-        poss = metrics["poss"]
-        negs = metrics["negs"]
-        batch_size = targets.size(0)
-        binary_scores = torch.cat([poss, negs], dim=0)
-        labels = torch.cat(
-            [torch.ones(batch_size), torch.zeros(batch_size)], dim=0
-        ).long()
-
-        self.test_auroc.update(binary_scores, labels)
-        self.test_hr1.update(all_scores, targets)
-        self.test_hr5.update(all_scores, targets)
-        self.test_hr10.update(all_scores, targets)
-        self.test_rr.update(all_scores, targets)
-
-        self.log_dict(
-            {
-                "test_total_loss": metrics["total_loss"],
-                "test_lm_loss": metrics["lm_loss"],
-                "test_contrastive_loss": metrics["contrastive_loss"],
-            },
-            prog_bar=True,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=self.cfg.data.batch_size,
-        )
-
-    def on_test_epoch_end(self) -> None:
-        auroc = self.test_auroc.compute()
-        avg_hr1 = self.test_hr1.compute().mean()
-        avg_hr5 = self.test_hr5.compute().mean()
-        avg_hr10 = self.test_hr10.compute().mean()
-        mrr = self.test_rr.compute().mean()
-        self.log_dict(
-            {
-                "test_auroc": auroc,
-                "test_hr1": avg_hr1,
-                "test_hr5": avg_hr5,
-                "test_hr10": avg_hr10,
-                "test_mrr": mrr,
-            },
-            prog_bar=False,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-        )
+        return loss_metrics["loss"]

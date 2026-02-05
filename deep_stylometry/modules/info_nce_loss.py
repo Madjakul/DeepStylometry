@@ -32,9 +32,11 @@ class InfoNCELoss(nn.Module):
         key_embs: Float[torch.Tensor, "two_times_batch seq hidden"],
         q_mask: Int[torch.Tensor, "batch seq"],
         k_mask: Int[torch.Tensor, "two_times_batch seq"],
-        gumbel_temp: Optional[float] = None,
+        targets: Int[torch.Tensor, "batch"],
+        q_input_ids: Optional[Int[torch.Tensor, "batch seq"]] = None,
     ) -> Dict[str, torch.Tensor]:
         batch_size = query_embs.size(0)
+        neg_offset = key_embs.size(0) // 2
 
         # Compute the (B, 2B) similarity matrix
         all_scores = self.pool(
@@ -42,19 +44,18 @@ class InfoNCELoss(nn.Module):
             key_embs=key_embs,  # (2B, S, H)
             q_mask=q_mask,  # (B, S)
             k_mask=k_mask,  # (2B, S)
-            gumbel_temp=gumbel_temp,
+            q_input_ids=q_input_ids,  # (B, S)
         )
         all_scaled_scores = all_scores / self.tau  # type: ignore
 
-        targets = torch.arange(batch_size, device=query_embs.device)
-        poss = all_scores[targets, targets]
-        negs = all_scores[targets, targets + batch_size]
+        rows = torch.arange(batch_size, device=query_embs.device)
+        poss = all_scores[rows, targets]
+        negs = all_scores[rows, targets + neg_offset]
 
         loss = F.cross_entropy(all_scaled_scores, targets, reduction="mean")
 
         return {
             "all_scores": all_scores,
-            "targets": targets,
             "poss": poss,
             "negs": negs,
             "loss": loss,
