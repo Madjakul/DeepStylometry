@@ -9,12 +9,11 @@ import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from lightning.pytorch.strategies import DDPStrategy
-from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 
-from deep_stylometry.modules.modeling_deep_stylometry import DeepStylometry
 from deep_stylometry.utils.configs.base_config import BaseConfig
 from deep_stylometry.utils.data.halvest_datamodule import HALvestDataModule
 from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDataModule
+from deep_stylometry.utils.helpers import resolve_lightning_precision
 
 NUM_PROC = psutil.cpu_count(logical=False)
 
@@ -25,29 +24,6 @@ def setup_datamodule(
     num_proc: Optional[int] = None,
     tuning_mode: bool = False,
 ) -> L.LightningDataModule:
-    """Use the config to set up the correct datamodule.
-
-    Parameters
-    ----------
-    cfg: BaseConfig
-        Configuration object containing the dataset and model parameters.
-    cache_dir: Optional[str]
-        Directory to cache the dataset. If None, defaults to the current working
-        directory.
-    num_proc: Optional[int]
-        Number of processes to use for data loading. If None, defaults to the number of
-        CPUs.
-    tuning_mode: bool
-        Whether the datamodule is being set up for hyper-parameter tuning. If True,
-        the datamodule will be configured to not load the dataset from cache and
-        will not use the map batch size.
-
-    Returns
-    -------
-    dm: L.LightningDataModule
-        The LightningDataModule instance configured according to the provided
-        configuration.
-    """
     dm_map = {"se": StyleEmbeddingDataModule, "halvest": HALvestDataModule}
 
     dm = dm_map[cfg.data.ds_name](
@@ -71,25 +47,6 @@ def setup_trainer(
     logs_dir: str,
     checkpoint_dir: Optional[str] = None,
 ) -> L.Trainer:
-    """Setup the Lightning trainer with the specified configuration.
-
-    Parameters
-    ----------
-    cfg: BaseConfig
-        Configuration object containing the training parameters.
-    model: torch.nn.Module
-        The model to be trained.
-    logs_dir: str
-        Directory where the logs will be saved.
-    checkpoint_dir: Optional[str]
-        Directory where the model checkpoints will be saved. If None, no checkpoints
-        will be saved.
-
-    Returns
-    -------
-    trainer: L.Trainer
-        The configured Lightning trainer instance.
-    """
     # Set up callbacks
     callbacks = []
 
@@ -149,6 +106,7 @@ def setup_trainer(
         else:
             strategy = cfg.execution.strategy  # type: ignore
 
+    precision, _ = resolve_lightning_precision(cfg.execution.precision)  # type: ignore
     trainer = L.Trainer(
         accelerator=cfg.execution.device,
         strategy=strategy,  # type: ignore
@@ -162,72 +120,6 @@ def setup_trainer(
         log_every_n_steps=cfg.execution.log_every_n_steps,
         accumulate_grad_batches=cfg.execution.accumulate_grad_batches,
         gradient_clip_val=cfg.execution.gradient_clip_val,
-        precision=cfg.execution.precision,
+        precision=precision,
     )
     return trainer
-
-
-def train_tune(
-    config: Dict[str, Any],
-    cache_dir: Optional[str] = None,
-) -> None:
-    """Launch hyper-parameter tuning using Ray Tune and PyTorch Lightning.
-
-    Parameters
-    ----------
-    config: Dict[str, Any]
-        Configuration dictionary containing the hyper-parameters for tuning.
-    cache_dir: Optional[str]
-        Directory to cache the dataset. If None, defaults to the current working
-        directory.
-    """
-
-    cfg = BaseConfig(mode="tune").from_dict(config)
-
-    dm = setup_datamodule(
-        cfg,
-        cache_dir=cache_dir,
-        num_proc=cfg.tune.num_cpus_per_trial,
-        tuning_mode=True,
-    )
-    model = DeepStylometry(cfg)
-    callbacks = []
-    callbacks.append(LearningRateMonitor(logging_interval="step"))
-    callbacks.append(
-        TuneReportCheckpointCallback(
-            {
-                "val_auroc": "val_auroc",
-                "val_mrr": "val_mrr",
-                "val_total_loss": "val_total_loss",
-                "completed_epoch": "completed_epoch",
-            },
-            on="validation_end",
-            save_checkpoints=False,
-        )
-    )
-    loggers = []
-
-    if cfg.execution.use_wandb:
-        wandb_logger = WandbLogger(
-            project=cfg.project_name,
-            group=cfg.group_name,
-            prefix="trial",
-            log_model=False,
-        )
-        loggers.append(wandb_logger)
-
-    trainer = L.Trainer(
-        accelerator=cfg.tune.device,
-        devices=cfg.tune.num_devices_per_trial,
-        max_steps=cfg.tune.max_steps,
-        max_epochs=cfg.tune.max_epochs,
-        val_check_interval=None,
-        callbacks=callbacks,
-        enable_checkpointing=False,
-        logger=loggers,
-        log_every_n_steps=cfg.tune.log_every_n_steps,
-        accumulate_grad_batches=cfg.tune.accumulate_grad_batches,
-        gradient_clip_val=cfg.tune.gradient_clip_val,
-        precision=cfg.tune.precision,
-    )
-    trainer.fit(model=model, datamodule=dm)

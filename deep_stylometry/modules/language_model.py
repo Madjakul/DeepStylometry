@@ -7,6 +7,8 @@ import torch.nn as nn
 from jaxtyping import Float, Int
 from transformers import AutoConfig, AutoModel
 
+from deep_stylometry.utils.helpers import resolve_lightning_precision
+
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
 
@@ -16,8 +18,11 @@ class LanguageModel(nn.Module):
     def __init__(self, cfg: "BaseConfig") -> None:
         super(LanguageModel, self).__init__()
         self.cfg = cfg
+        _, torch_dtype = resolve_lightning_precision(cfg.execution.precision)
 
-        config = AutoConfig.from_pretrained(self.cfg.model.base_checkpoint)
+        config = AutoConfig.from_pretrained(
+            self.cfg.model.base_checkpoint, torch_dtype=torch_dtype
+        )
         self.model = AutoModel.from_pretrained(cfg.model.base_checkpoint, config=config)
 
         self.hidden_size = self.model.config.hidden_size

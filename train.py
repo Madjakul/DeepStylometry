@@ -9,12 +9,15 @@ from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.argparsers import TrainArgparse
 from deep_stylometry.utils.configs import BaseConfig
+from deep_stylometry.utils.helpers import set_seed
 from deep_stylometry.utils.logger import logging_config
 
 os.environ["PYTHONUNBUFFERED"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 NUM_PROC = psutil.cpu_count(logical=False)
 
+
+set_seed()
 logging_config()
 
 

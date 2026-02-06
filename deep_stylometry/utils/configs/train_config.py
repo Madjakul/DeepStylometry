@@ -1,7 +1,7 @@
 # deep_stylometry/utils/configs/train_config.py
 
 from dataclasses import dataclass
-from typing import Literal, Optional, Tuple
+from typing import Literal, Optional
 
 from deep_stylometry.utils.helpers import DictAccessMixin
 
