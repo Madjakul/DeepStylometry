@@ -12,7 +12,7 @@
 module purge
 
 source /home/$USER/.bashrc
-conda activate deep_stylometry
+conda activate deep-stylometry
 
 mkdir logs || true
 
