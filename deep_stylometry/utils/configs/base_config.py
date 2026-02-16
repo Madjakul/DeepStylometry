@@ -10,7 +10,7 @@ import yaml
 from deep_stylometry.utils.configs.data_config import DataConfig
 from deep_stylometry.utils.configs.model_config import ModelConfig
 from deep_stylometry.utils.configs.train_config import TrainConfig
-from deep_stylometry.utils.configs.tune_config import TuneConfig
+from deep_stylometry.utils.configs.test_config import TestConfig
 from deep_stylometry.utils.helpers import DictAccessMixin
 
 
@@ -21,48 +21,12 @@ class BaseConfig(DictAccessMixin):
     group_name: str = "train-deep-stylometry-512-se"
     do_train: bool = True
     do_test: bool = False
-    _execution_config: Optional[Union[TrainConfig, TuneConfig]] = None
+    _execution_config: Optional[Union[TrainConfig, TestConfig]] = None
 
     data: DataConfig = DataConfig()
     model: ModelConfig = ModelConfig()
-    _train: TrainConfig = TrainConfig()
-    _tune: TuneConfig = TuneConfig()
-
-    def __post_init__(self) -> None:
-        if self._execution_config is None:
-            self._set_execution_config()
-
-    def _set_execution_config(self):
-        """Set the execution config based on current mode."""
-        if self.mode == "train":
-            self._execution_config = self._train
-        elif self.mode == "tune":
-            self._execution_config = self._tune
-        else:
-            raise ValueError(f"Unknown mode: {self.mode}")
-
-    @property
-    def train(self) -> TrainConfig:
-        """Access the training configuration."""
-        if self.mode != "train":
-            raise ValueError(
-                "Cannot access training configuration when mode is not 'train'."
-            )
-        return self._train
-
-    @property
-    def tune(self) -> TuneConfig:
-        """Access the tuning configuration."""
-        if self.mode != "tune":
-            raise ValueError(
-                "Cannot access tuning configuration when mode is not 'tune'."
-            )
-        return self._tune
-
-    @property
-    def execution(self) -> Union[TrainConfig, TuneConfig]:
-        """Access current execution config regardless of mode."""
-        return self._execution_config  # type: ignore
+    train: TrainConfig = TrainConfig()
+    test: TestConfig = TestConfig()
 
     @classmethod
     def from_yaml(cls, yaml_path: Union[str, Path]) -> "BaseConfig":

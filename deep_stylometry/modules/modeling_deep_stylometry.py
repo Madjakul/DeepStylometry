@@ -44,8 +44,10 @@ class DeepStylometry(L.LightningModule):
         )
 
     def configure_optimizers(self) -> Dict[str, Any]:  # type: ignore[override]
-        logging.info(f"""Configuring optimizer: AdamW with lr={self.cfg.execution.lr},
-             weight_decay={self.cfg.execution.weight_decay}""")
+        logging.info(
+            f"""Configuring optimizer: AdamW with lr={self.cfg.execution.lr},
+             weight_decay={self.cfg.execution.weight_decay}"""
+        )
 
         optimizer = torch.optim.AdamW(
             self.parameters(),
@@ -76,76 +78,103 @@ class DeepStylometry(L.LightningModule):
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor):
         return self.model(input_ids=input_ids, attention_mask=attention_mask)
 
-    def training_step(self, batch, batch_idx: int) -> Float[torch.Tensor, ""]:
-        q_mask = batch["attention_mask"]
-        batch_size = q_mask.size(0)
+    def gather_with_padding(
+        self, local_tensor: torch.Tensor, pad_value: float = 0
+    ) -> torch.Tensor:
+        """
+        Robust Gather:
+        1. Identifies the global maximum sequence length across all GPUs.
+        2. Pads the local tensor to that global max.
+        3. Gathers and concatenates.
+        """
+        if self.trainer.world_size == 1:
+            return local_tensor
 
+        # 1. Get local max sequence length (dim 1 is seq_len)
+        local_max_len = torch.tensor(local_tensor.shape[1], device=self.device)
+
+        # 2. Sync to find global max length
+        global_max_len = local_max_len.clone()
+        dist.all_reduce(global_max_len, op=dist.ReduceOp.MAX)
+
+        # 3. Pad locally if necessary
+        diff = global_max_len.item() - local_max_len.item()
+        if diff > 0:
+            # F.pad logic: (pad_last_dim_left, pad_last_dim_right, pad_2nd_last_left, ...)
+            if local_tensor.dim() == 3:  # Embeddings (Batch, Seq, Hidden)
+                pad_config = (0, 0, 0, diff)
+            elif local_tensor.dim() == 2:  # Masks or IDs (Batch, Seq)
+                pad_config = (0, diff)
+            else:
+                raise ValueError(f"Unexpected tensor shape: {local_tensor.shape}")
+
+            # Use the specific pad_value provided (0 for masks/embs, pad_token_id for input_ids)
+            local_tensor = F.pad(local_tensor, pad_config, value=pad_value)
+
+        # 4. Standard all_gather
+        gathered = self.all_gather(local_tensor, sync_grads=True)
+
+        # 5. Flatten [World, Batch, ...] -> [GlobalBatch, ...]
+        return gathered.flatten(0, 1)
+
+    def training_step(self, batch, batch_idx):
+        # Local Forward Pass
         q_embs = self(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"],
+            input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]
         )
         pos_embs = self(
-            input_ids=batch["pos_input_ids"],
-            attention_mask=batch["pos_attention_mask"],
+            input_ids=batch["pos_input_ids"], attention_mask=batch["pos_attention_mask"]
         )
         neg_embs = self(
-            input_ids=batch["neg_input_ids"],
-            attention_mask=batch["neg_attention_mask"],
+            input_ids=batch["neg_input_ids"], attention_mask=batch["neg_attention_mask"]
         )
 
-        if self.trainer.world_size > 1 and self.cfg.train.gather:
-            # all_gather adds a dimension at the start, so we flatten it with the batch dim
-            # Shape changes from [num_gpus, batch_size, seq, hidden] -> [global_batch_size, seq, hidden]
-            targets = (
-                torch.arange(batch_size, device=q_embs.device)
-                + batch_size * self.trainer.global_rank
-            )
-            all_pos_embs = self.trainer.strategy.all_gather(
-                pos_embs, sync_grads=True
-            ).flatten(0, 1)
-            all_pos_mask = self.trainer.strategy.all_gather(
-                batch["pos_attention_mask"]
-            ).flatten(0, 1)
-            all_neg_embs = self.trainer.strategy.all_gather(
-                neg_embs, sync_grads=True
-            ).flatten(0, 1)
-            all_neg_mask = self.trainer.strategy.all_gather(
-                batch["neg_attention_mask"]
-            ).flatten(0, 1)
+        q_mask = batch["attention_mask"]
 
-            k_embs = torch.cat([all_pos_embs, all_neg_embs], dim=0)
-            k_mask = torch.cat([all_pos_mask, all_neg_mask], dim=0)
-            loss_metrics = self.contrastive_loss(
-                query_embs=q_embs,
-                key_embs=k_embs,
-                q_mask=q_mask,
-                k_mask=k_mask,
-                targets=targets,
-                q_input_ids=batch["input_ids"],
+        # Distributed Gathering
+        if self.trainer.world_size > 1 and self.cfg.train.gather:
+            # Gather Positives
+            # Embeddings: Pad with 0.0
+            global_pos_embs = self.gather_with_padding(pos_embs, pad_value=0.0)
+            # Masks: Pad with 0 (Standard for attention masks)
+            global_pos_mask = self.gather_with_padding(
+                batch["pos_attention_mask"], pad_value=0
             )
+
+            # Gather Negatives
+            global_neg_embs = self.gather_with_padding(neg_embs, pad_value=0.0)
+            global_neg_mask = self.gather_with_padding(
+                batch["neg_attention_mask"], pad_value=0
+            )
+
+            # Optional: If you ever need to gather input_ids for Keys, do it here:
+            # global_pos_ids = self.gather_with_padding(batch["pos_input_ids"], pad_value=self.pad_token_id)
+
+            # Construct Keys
+            k_embs = torch.cat([global_pos_embs, global_neg_embs], dim=0)
+            k_mask = torch.cat([global_pos_mask, global_neg_mask], dim=0)
+
+            # Targets Offset Calculation
+            local_bs = q_embs.size(0)
+            global_offset = self.trainer.global_rank * local_bs
+            targets = torch.arange(local_bs, device=self.device) + global_offset
+
         else:
-            targets = torch.arange(batch_size, device=q_embs.device)
+            # Single GPU Logic
             k_embs = torch.cat([pos_embs, neg_embs], dim=0)
             k_mask = torch.cat(
                 [batch["pos_attention_mask"], batch["neg_attention_mask"]], dim=0
             )
-            loss_metrics = self.contrastive_loss(
-                query_embs=q_embs,
-                key_embs=k_embs,
-                q_mask=q_mask,
-                k_mask=k_mask,
-                targets=targets,
-                q_input_ids=batch["input_ids"],
-            )
+            targets = torch.arange(q_embs.size(0), device=self.device)
 
-        self.log_dict(
-            {
-                "train/loss": loss_metrics["loss"],
-            },
-            prog_bar=True,
-            on_step=True,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=self.cfg.data.batch_size,
+        loss_metrics = self.contrastive_loss(
+            query_embs=q_embs,
+            key_embs=k_embs,
+            q_mask=q_mask,
+            k_mask=k_mask,
+            targets=targets,
+            q_input_ids=batch["input_ids"],
         )
+
+        self.log("train/loss", loss_metrics["loss"], prog_bar=True)
         return loss_metrics["loss"]
