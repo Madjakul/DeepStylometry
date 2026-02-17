@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING, Any, Dict
 
 import lightning as L
 import torch
+import torch.nn.functional as F
 import torch.nn as nn
+import torch.distributed as dist
 from jaxtyping import Float
 from transformers import get_cosine_schedule_with_warmup
 
@@ -28,7 +30,7 @@ class DeepStylometry(L.LightningModule):
         super().__init__()
         self.save_hyperparameters(ignore=["cfg"])
         self.cfg = cfg
-        self.contrastive_loss = self.loss_map[cfg.execution.loss](cfg)
+        self.contrastive_loss = self.loss_map[cfg.train.loss](cfg)
 
         assert cfg.model.expansion_ratio > 0, "expansion_ratio must be > 0"
 
@@ -44,15 +46,13 @@ class DeepStylometry(L.LightningModule):
         )
 
     def configure_optimizers(self) -> Dict[str, Any]:  # type: ignore[override]
-        logging.info(
-            f"""Configuring optimizer: AdamW with lr={self.cfg.execution.lr},
-             weight_decay={self.cfg.execution.weight_decay}"""
-        )
+        logging.info(f"""Configuring optimizer: AdamW with lr={self.cfg.train.lr},
+             weight_decay={self.cfg.train.weight_decay}""")
 
         optimizer = torch.optim.AdamW(
             self.parameters(),
-            lr=self.cfg.execution.lr,  # type: ignore
-            weight_decay=self.cfg.execution.weight_decay,  # type: ignore
+            lr=self.cfg.train.lr,
+            weight_decay=self.cfg.train.weight_decay,
         )
         # Calculate steps dynamically
         total_steps = int(self.trainer.estimated_stepping_batches)

@@ -56,7 +56,7 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         )
         tokenized_neg = self.tokenizer(
             batch["negative"],
-            runcation=self.cfg.data.truncation,
+            truncation=self.cfg.data.truncation,
             padding=self.cfg.data.padding,
             max_length=self.cfg.data.max_length,
             add_special_tokens=self.cfg.data.add_special_tokens,
@@ -147,10 +147,6 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
 
         val_targets = self._get_targets(ds)
         ds = ds.add_column("target_indices", val_targets)
-        logging.info(f"Saving processed data to disk: {val_path}")
-        ds.set_format("torch")
-        os.makedirs(self.processed_ds_dir, exist_ok=True)
-        ds.save_to_disk(val_path)
 
         columns = ds.column_names
         self.val_ds = ds.map(
@@ -164,7 +160,9 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         self.val_ds.set_format("torch")
 
         logging.info(f"Saving processed data to disk: {val_path}")
-        self.val_ds.save_to_disk(val_path)
+        ds.set_format("torch")
+        os.makedirs(self.processed_ds_dir, exist_ok=True)
+        ds.save_to_disk(val_path)
 
     def test_setup(self) -> None:
         subset = self.cfg.data.test_subset
