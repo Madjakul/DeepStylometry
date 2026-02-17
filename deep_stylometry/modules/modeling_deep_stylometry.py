@@ -5,10 +5,8 @@ from typing import TYPE_CHECKING, Any, Dict
 
 import lightning as L
 import torch
-import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
-from jaxtyping import Float
 from transformers import get_cosine_schedule_with_warmup
 
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
@@ -92,7 +90,7 @@ class DeepStylometry(L.LightningModule):
 
         # 2. Sync to find global max length
         global_max_len = local_max_len.clone()
-        dist.all_reduce(global_max_len, op=dist.ReduceOp.MAX)
+        self.trainer.strategy.reduce(global_max_len, reduce_op="max")
 
         # 3. Pad locally if necessary
         diff = global_max_len.item() - local_max_len.item()

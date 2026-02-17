@@ -10,9 +10,9 @@ import datasets
 import lightning as L
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import DataCollatorWithPadding
 
 from deep_stylometry.utils.helpers import get_tokenizer
+from deep_stylometry.utils.data.triplet_collator import TripletDataCollator
 
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs.base_config import BaseConfig
@@ -145,9 +145,6 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
             cache_dir=self.cache_dir,
         )
 
-        val_targets = self._get_targets(ds)
-        ds = ds.add_column("target_indices", val_targets)
-
         columns = ds.column_names
         self.val_ds = ds.map(
             self.tokenize,
@@ -157,6 +154,9 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
             remove_columns=columns,
             load_from_cache_file=self.cfg.data.load_from_cache_file,
         )
+
+        val_targets = self._get_targets(self.val_ds)
+        self.val_ds = self.val_ds.add_column("target_indices", val_targets)
         self.val_ds.set_format("torch")
 
         logging.info(f"Saving processed data to disk: {val_path}")
@@ -208,7 +208,7 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         collate_fn = None
         if self.cfg.train.gather:
             # Use a custom collate_fn to gather positive and negative samples across the batch
-            collate_fn = DataCollatorWithPadding(
+            collate_fn = TripletDataCollator(
                 tokenizer=self.tokenizer, padding="longest", return_tensors="pt"
             )
         return DataLoader(

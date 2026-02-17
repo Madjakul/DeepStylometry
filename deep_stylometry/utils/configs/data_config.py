@@ -12,7 +12,7 @@ class DataConfig(DictAccessMixin):
     batch_size: int = 32
     tokenizer_name: str = "answerdotai/ModernBERT-base"
     max_length: int = 512
-    padding: Literal["max_length", "longest", "do_not_pad"] = "max_length"
+    padding: Literal["max_length", "longest", "do_not_pad"] = "do_not_pad"
     truncation: Literal[
         "longest_first", "only_first", "only_second", "do_not_truncate"
     ] = "longest_first"
