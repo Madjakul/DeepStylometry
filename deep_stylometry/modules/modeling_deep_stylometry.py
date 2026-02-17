@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING, Any, Dict
 
 import lightning as L
 import torch
-import torch.nn.functional as F
-import torch.nn as nn
 import torch.distributed as dist
+import torch.nn as nn
+import torch.nn.functional as F
 from jaxtyping import Float
 from transformers import get_cosine_schedule_with_warmup
 
