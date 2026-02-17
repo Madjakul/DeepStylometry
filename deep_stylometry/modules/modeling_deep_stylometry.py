@@ -46,9 +46,6 @@ class DeepStylometry(L.LightningModule):
         )
 
     def configure_optimizers(self) -> Dict[str, Any]:  # type: ignore[override]
-        logging.info(f"""Configuring optimizer: AdamW with lr={self.cfg.train.lr},
-             weight_decay={self.cfg.train.weight_decay}""")
-
         optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=self.cfg.train.lr,

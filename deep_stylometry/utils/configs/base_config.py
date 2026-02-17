@@ -9,8 +9,8 @@ import yaml
 
 from deep_stylometry.utils.configs.data_config import DataConfig
 from deep_stylometry.utils.configs.model_config import ModelConfig
-from deep_stylometry.utils.configs.train_config import TrainConfig
 from deep_stylometry.utils.configs.test_config import TestConfig
+from deep_stylometry.utils.configs.train_config import TrainConfig
 from deep_stylometry.utils.helpers import DictAccessMixin
 
 

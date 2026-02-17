@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import datasets
 import lightning as L
 from torch.utils.data import DataLoader
-from transformers import DataCollatorWithPadding
 from tqdm import tqdm
+from transformers import DataCollatorWithPadding
 
 from deep_stylometry.utils.helpers import get_tokenizer
 
