@@ -11,8 +11,8 @@ import lightning as L
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from deep_stylometry.utils.helpers import get_tokenizer
 from deep_stylometry.utils.data.triplet_collator import TripletDataCollator
+from deep_stylometry.utils.helpers import get_tokenizer
 
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs.base_config import BaseConfig

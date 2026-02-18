@@ -2,8 +2,9 @@
 
 from dataclasses import dataclass
 from typing import Any, Dict, List
-from transformers import PreTrainedTokenizerBase
+
 import torch
+from transformers import PreTrainedTokenizerBase
 
 
 @dataclass
