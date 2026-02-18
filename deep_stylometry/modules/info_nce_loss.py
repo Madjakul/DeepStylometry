@@ -19,7 +19,7 @@ class InfoNCELoss(nn.Module):
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
         self.cfg = cfg
-        self.register_buffer("tau", torch.tensor(self.cfg.execution.tau))
+        self.register_buffer("tau", torch.tensor(self.cfg.train.tau))
 
         if self.cfg.model.pooling_method == "li":
             self.pool = LateInteraction(self.cfg)

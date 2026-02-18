@@ -18,7 +18,7 @@ class TripletLoss(nn.Module):
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
-        assert cfg.execution.margin is not None
+        assert cfg.train.margin is not None
         self.cfg = cfg
 
         if cfg.model.pooling_method == "li":
@@ -56,7 +56,7 @@ class TripletLoss(nn.Module):
         negs = all_scores[rows, targets + neg_offset]
         neg_dists = all_dists[rows, targets + neg_offset]
 
-        loss = F.relu(pos_dists - neg_dists + self.cfg.execution.margin).mean()
+        loss = F.relu(pos_dists - neg_dists + self.cfg.train.margin).mean()
 
         return {
             "all_scores": all_scores,

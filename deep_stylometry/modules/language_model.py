@@ -18,7 +18,7 @@ class LanguageModel(nn.Module):
     def __init__(self, cfg: "BaseConfig") -> None:
         super(LanguageModel, self).__init__()
         self.cfg = cfg
-        _, torch_dtype = resolve_lightning_precision(cfg.execution.precision)
+        _, torch_dtype = resolve_lightning_precision(cfg.train.precision)
 
         config = AutoConfig.from_pretrained(
             self.cfg.model.base_checkpoint, torch_dtype=torch_dtype

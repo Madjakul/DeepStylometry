@@ -35,8 +35,7 @@ class DeepStylometry(L.LightningModule):
         # Model
         self.lm = LanguageModel(cfg)
         hidden_size = self.lm.hidden_size
-        self.model = nn.Sequential(
-            self.lm,
+        self.head = nn.Sequential(
             nn.Dropout(cfg.model.dropout),
             nn.Linear(hidden_size, hidden_size * cfg.model.expansion_ratio),
             nn.ReLU(),
@@ -71,7 +70,8 @@ class DeepStylometry(L.LightningModule):
         }
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor):
-        return self.model(input_ids=input_ids, attention_mask=attention_mask)
+        embs = self.lm(input_ids=input_ids, attention_mask=attention_mask)
+        return self.head(embs)
 
     def gather_with_padding(
         self, local_tensor: torch.Tensor, pad_value: float = 0
@@ -156,10 +156,19 @@ class DeepStylometry(L.LightningModule):
 
         else:
             # Single GPU Logic
-            k_embs = torch.cat([pos_embs, neg_embs], dim=0)
-            k_mask = torch.cat(
-                [batch["pos_attention_mask"], batch["neg_attention_mask"]], dim=0
+            max_seq = max(pos_embs.size(1), neg_embs.size(1))
+            pos_embs = F.pad(pos_embs, (0, 0, 0, max_seq - pos_embs.size(1)))
+            neg_embs = F.pad(neg_embs, (0, 0, 0, max_seq - neg_embs.size(1)))
+            pos_mask = F.pad(
+                batch["pos_attention_mask"],
+                (0, max_seq - batch["pos_attention_mask"].size(1)),
             )
+            neg_mask = F.pad(
+                batch["neg_attention_mask"],
+                (0, max_seq - batch["neg_attention_mask"].size(1)),
+            )
+            k_embs = torch.cat([pos_embs, neg_embs], dim=0)
+            k_mask = torch.cat([pos_mask, neg_mask], dim=0)
             targets = torch.arange(q_embs.size(0), device=self.device)
 
         loss_metrics = self.contrastive_loss(
