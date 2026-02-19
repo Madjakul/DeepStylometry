@@ -18,9 +18,6 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 class BaseConfig(DictAccessMixin):
     mode: Literal["train", "tune"] = "train"
     project_name: str = "deep-stylometry"
-    group_name: str = "train-deep-stylometry-512-se"
-    do_train: bool = True
-    do_test: bool = False
     _execution_config: Optional[Union[TrainConfig, TestConfig]] = None
 
     data: DataConfig = DataConfig()

@@ -11,32 +11,27 @@ from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from lightning.pytorch.strategies import DDPStrategy
 
 from deep_stylometry.utils.configs.base_config import BaseConfig
-from deep_stylometry.utils.data.halvest_datamodule import HALvestDataModule
-from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDataModule
+from deep_stylometry.utils.data.halvest_datamodule import HALvestContrastiveDatamodule
+from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDatamodule
 from deep_stylometry.utils.helpers import resolve_lightning_precision
+from deep_stylometry.callbacks import LogarithmicValidationCallback
 
 NUM_PROC = psutil.cpu_count(logical=False)
 
 
 def setup_datamodule(
     cfg: BaseConfig,
+    processed_ds_dir: str,
+    num_proc: int,
     cache_dir: Optional[str] = None,
-    num_proc: Optional[int] = None,
-    tuning_mode: bool = False,
 ) -> L.LightningDataModule:
-    dm_map = {"se": StyleEmbeddingDataModule, "halvest": HALvestDataModule}
+    dm_map = {"se": StyleEmbeddingDatamodule, "halvest": HALvestContrastiveDatamodule}
 
     dm = dm_map[cfg.data.ds_name](
-        batch_size=cfg.data.batch_size,
-        num_proc=num_proc if num_proc is not None else NUM_PROC,
-        tokenizer_name=cfg.data.tokenizer_name,
-        max_length=cfg.data.max_length,
-        map_batch_size=cfg.data.map_batch_size,
-        load_from_cache_file=cfg.data.load_from_cache_file,
+        cfg=cfg,
+        processed_ds_dir=processed_ds_dir,
+        num_proc=num_proc,
         cache_dir=cache_dir,
-        config_name=cfg.data.config_name,
-        mlm_collator=cfg.data.mlm_collator,
-        tuning_mode=tuning_mode,
     )
     return dm
 
@@ -54,32 +49,32 @@ def setup_trainer(
     lr_monitor = LearningRateMonitor(logging_interval="step")
     callbacks.append(lr_monitor)
 
+    callbacks.append(
+        LogarithmicValidationCallback(start_step=1, growth=1.5, max_interval=1000)
+    )
+
     name = (
-        f"{cfg.model.base_model_name}-{cfg.data.ds_name}"
-        f"-pooling:{cfg.model.pooling_method}-softmax:{cfg.model.use_softmax}"
-        f"-gumbel:{cfg.model.initial_gumbel_temp}-dist:{cfg.model.distance_weightning}"
+        f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
+        f"__pooling-{cfg.model.pooling_method}"
     ).replace("/", "-")
 
     # Model checkpoint callback if checkpoint_dir is provided
     if checkpoint_dir is not None:
         checkpoint_callback = ModelCheckpoint(
             dirpath=osp.join(checkpoint_dir, name),
-            filename="{epoch}",
-            monitor=cfg.execution.checkpoint_metric,  # type: ignore
-            mode=cfg.execution.checkpoint_mode,  # type: ignore
-            save_top_k=cfg.execution.save_top_k,  # type: ignore
-            save_last=True,
+            filename="step-{step}",
+            save_top_k=-1,
+            monitor=None,
         )
         callbacks.append(checkpoint_callback)
 
     # Configure loggers
     loggers = []
-    if cfg.execution.use_wandb:
+    if cfg.train.use_wandb:
         wandb_logger = WandbLogger(
             project=cfg.project_name,
             name=name,
             log_model=cfg.execution.log_model,  # type: ignore
-            group=cfg.group_name,
         )
         watch = cfg.execution.watch  # type: ignore
         if watch is not None:
@@ -87,7 +82,7 @@ def setup_trainer(
                 model=model,
                 log=watch,
                 log_graph=False,
-                log_freq=cfg.execution.accumulate_grad_batches * 100,
+                log_freq=cfg.train.accumulate_grad_batches * 1000,
             )
         loggers.append(wandb_logger)
 
@@ -95,31 +90,24 @@ def setup_trainer(
     csv_logger = CSVLogger(save_dir=logs_dir, name=name)
     loggers.append(csv_logger)
 
-    if cfg.mode == "train":
-        if cfg.execution.strategy.startswith("ddp"):  # type: ignore
-            strategy = DDPStrategy(
-                find_unused_parameters=cfg.execution.strategy.endswith(  # type: ignore
-                    "find_unused_parameters_true"
-                ),
-                process_group_backend=cfg.execution.process_group_backend,  # type: ignore
-            )
-        else:
-            strategy = cfg.execution.strategy  # type: ignore
-
     precision, _ = resolve_lightning_precision(cfg.execution.precision)  # type: ignore
+
     trainer = L.Trainer(
-        accelerator=cfg.execution.device,
-        strategy=strategy,  # type: ignore
-        devices=cfg.execution.num_devices,  # type: ignore
-        max_steps=cfg.execution.max_steps,
-        max_epochs=cfg.execution.max_epochs,
-        val_check_interval=cfg.execution.val_check_interval,  # type: ignore
+        accelerator=cfg.train.device,
+        strategy=cfg.train.strategy,
+        devices=cfg.train.num_devices,
+        max_steps=cfg.train.max_steps,
+        max_epochs=cfg.train.max_epochs,
+        num_sanity_val_steps=0,
+        val_check_interval=100_000_000,
+        check_val_every_n_epoch=None,
         enable_checkpointing=checkpoint_dir is not None,
         logger=loggers,
         callbacks=callbacks,
-        log_every_n_steps=cfg.execution.log_every_n_steps,
-        accumulate_grad_batches=cfg.execution.accumulate_grad_batches,
-        gradient_clip_val=cfg.execution.gradient_clip_val,
+        log_every_n_steps=cfg.train.log_every_n_steps,
+        accumulate_grad_batches=cfg.train.accumulate_grad_batches,
+        gradient_clip_val=cfg.train.gradient_clip_val,
         precision=precision,
+        overfit_batches=cfg.train.overfit_batches,
     )
     return trainer
