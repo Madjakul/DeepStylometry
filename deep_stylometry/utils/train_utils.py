@@ -14,6 +14,7 @@ from deep_stylometry.utils.data.halvest_datamodule import HALvestContrastiveData
 from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDatamodule
 from deep_stylometry.utils.helpers import resolve_lightning_precision
 from deep_stylometry.callbacks import (
+    EvalRuntimeMonitor,
     GradNormMonitor,
     LogarithmicValidationCallback,
     LossVarianceMonitor,
@@ -52,11 +53,12 @@ def setup_trainer(
     lr_monitor = LearningRateMonitor(logging_interval="step")
     callbacks.append(lr_monitor)
 
+    callbacks.append(LossVarianceMonitor(window_size=100))
+    callbacks.append(GradNormMonitor())
+    callbacks.append(EvalRuntimeMonitor())
     callbacks.append(
         LogarithmicValidationCallback(start_step=1, growth=1.5, max_interval=1000)
     )
-    callbacks.append(LossVarianceMonitor(window_size=100))
-    callbacks.append(GradNormMonitor())
 
     name = (
         f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
