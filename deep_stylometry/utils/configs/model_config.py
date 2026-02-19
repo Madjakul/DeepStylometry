@@ -9,8 +9,7 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 @dataclass
 class ModelConfig(DictAccessMixin):
 
-    base_checkpoint: str = "FacebookAI/roberta-base"
-    add_linear_layers: bool = True
+    base_checkpoint: str = "answerdotai/ModernBERT-base"
     dropout: float = 0.1
     expansion_ratio: int = 4
     pooling_method: Literal["mean", "li"] = "li"
