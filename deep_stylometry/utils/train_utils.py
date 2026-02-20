@@ -4,21 +4,20 @@ import os.path as osp
 from typing import Optional
 
 import lightning as L
-import psutil
 import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
-from deep_stylometry.callbacks import (EvalRuntimeMonitor, GradNormMonitor,
-                                       LogarithmicValidationCallback,
-                                       LossVarianceMonitor)
+from deep_stylometry.callbacks import (
+    EvalRuntimeMonitor,
+    GradNormMonitor,
+    LogarithmicValidationCallback,
+    LossVarianceMonitor,
+)
 from deep_stylometry.utils.configs.base_config import BaseConfig
-from deep_stylometry.utils.data.halvest_datamodule import \
-    HALvestContrastiveDatamodule
+from deep_stylometry.utils.data.halvest_datamodule import HALvestContrastiveDatamodule
 from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDatamodule
 from deep_stylometry.utils.helpers import resolve_lightning_precision
-
-NUM_PROC = psutil.cpu_count(logical=False)
 
 
 def setup_datamodule(
@@ -70,6 +69,7 @@ def setup_trainer(
             filename="step-{step}",
             save_top_k=-1,
             monitor=None,
+            save_last=True,
         )
         callbacks.append(checkpoint_callback)
 
