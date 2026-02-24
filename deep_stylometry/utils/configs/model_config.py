@@ -8,7 +8,6 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 
 @dataclass
 class ModelConfig(DictAccessMixin):
-
     base_checkpoint: str = "answerdotai/ModernBERT-base"
     dropout: float = 0.1
     expansion_ratio: int = 4

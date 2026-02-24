@@ -68,6 +68,9 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
             "pos_attention_mask": tokenized_pos["attention_mask"],
             "neg_input_ids": tokenized_neg["input_ids"],
             "neg_attention_mask": tokenized_neg["attention_mask"],
+            "target_indices": (
+                batch["target_indices"] if "target_indices" in batch else None
+            ),
             "index": indices,
         }
 
@@ -146,6 +149,9 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         )
 
         columns = ds.column_names
+        val_targets = self._get_targets(ds)
+        ds = ds.add_column("target_indices", val_targets)
+
         self.val_ds = ds.map(
             self.tokenize,
             batched=True,
@@ -155,14 +161,10 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
             load_from_cache_file=self.cfg.data.load_from_cache_file,
         )
 
-        val_targets = self._get_targets(self.val_ds)
-        self.val_ds = self.val_ds.add_column("target_indices", val_targets)
-        self.val_ds.set_format("torch")
-
         logging.info(f"Saving processed data to disk: {val_path}")
-        ds.set_format("torch")
+        self.val_ds.set_format("torch")
         os.makedirs(self.processed_ds_dir, exist_ok=True)
-        ds.save_to_disk(val_path)
+        self.val_ds.save_to_disk(val_path)
 
     def test_setup(self) -> None:
         subset = self.cfg.data.test_subset
@@ -183,14 +185,10 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
             cache_dir=self.cache_dir,
         )
 
+        columns = ds.column_names  # type: ignore
         test_targets = self._get_targets(ds)
         ds = ds.add_column("target_indices", test_targets)
-        logging.info(f"Saving processed data to disk: {test_path}")
-        ds.set_format("torch")
-        os.makedirs(self.processed_ds_dir, exist_ok=True)
-        ds.save_to_disk(test_path)
 
-        columns = ds.column_names  # type: ignore
         self.test_ds = ds.map(
             self.tokenize,
             batched=True,
@@ -199,9 +197,10 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
             remove_columns=columns,
             load_from_cache_file=self.cfg.data.load_from_cache_file,
         )
-        self.test_ds.set_format("torch")
 
         logging.info(f"Saving processed data to disk: {test_path}")
+        self.test_ds.set_format("torch")
+        os.makedirs(self.processed_ds_dir, exist_ok=True)
         self.test_ds.save_to_disk(test_path)
 
     def train_dataloader(self) -> DataLoader:

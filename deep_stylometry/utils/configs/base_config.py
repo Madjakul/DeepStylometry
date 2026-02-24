@@ -1,9 +1,9 @@
 # deep_stylometry/utils/configs/base_config.py
 
 import logging
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, field
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Union
+from typing import Any, Dict, Literal, Union
 
 import yaml
 
@@ -18,12 +18,11 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 class BaseConfig(DictAccessMixin):
     mode: Literal["train", "tune"] = "train"
     project_name: str = "deep-stylometry"
-    _execution_config: Optional[Union[TrainConfig, TestConfig]] = None
 
-    data: DataConfig = DataConfig()
-    model: ModelConfig = ModelConfig()
-    train: TrainConfig = TrainConfig()
-    test: TestConfig = TestConfig()
+    data: DataConfig = field(default_factory=DataConfig)
+    model: ModelConfig = field(default_factory=ModelConfig)
+    train: TrainConfig = field(default_factory=TrainConfig)
+    test: TestConfig = field(default_factory=TestConfig)
 
     @classmethod
     def from_yaml(cls, yaml_path: Union[str, Path]) -> "BaseConfig":

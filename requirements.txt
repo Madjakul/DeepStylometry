@@ -11,8 +11,9 @@ lightning==2.6.1
 nnsight==0.5.15
 optuna==4.7.0
 plotly==6.5.2
-pyserini==1.4.0
 PyYAML==6.0.3
+rank_bm25==0.2.2
+ranx==0.3.21
 rouge_score==0.1.2
 sacrebleu==2.6.0
 sae-lens==6.36.2

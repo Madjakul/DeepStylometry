@@ -9,7 +9,7 @@ data:
   max_length: 512
   padding: "do_not_pad"
   truncation: "longest_first"
-  add_speccial_tokens: true
+  add_special_tokens: true
   map_batch_size: 1000
   load_from_cache_file: true
   subsets: ["base-2", "base-4", "base-6", "base-8", "base-10"]
@@ -18,26 +18,17 @@ data:
 model:
   base_checkpoint: "answerdotai/ModernBERT-base"
   dropout: 0.1
-  expension_ratio: 4
+  expansion_ratio: 4
   pooling_method: "li" # li or mean
   skip_list: false
 
 train:
   loss: "info_nce"
   tau: 0.5
-  lambda_: 0.5 # only if using hybrid
   margin: 0.32 # Only if using triplet loss
-  lm_loss_weight: 0.0
   # --- optimizer ---
   lr: 1.25e-5
-  betas: [0.9, 0.999]
-  eps: 1.0e-9
-  weight_decay: 0.11
-  num_cycles: 0.5
-  # --- checkpointing
-  checkpoint_metric: "val_auroc" # only if a checkpoint directory was provided
-  checkpoint_mode: "max"
-  save_top_k: 4
+  weight_decay: 0.1
   # --- trainer ---
   device: "gpu"
   num_devices: 3
@@ -49,7 +40,7 @@ train:
   log_every_n_steps: 1
   accumulate_grad_batches: 1
   gradient_clip_val: null # null
-  precision: "32" # 32-true or 16-mixed
+  precision: "16" # 32-true or 16-mixed
   # --- wandb logger ---
   use_wandb: true
   log_model: true
