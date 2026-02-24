@@ -11,6 +11,7 @@ import lightning as L
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from deep_stylometry.utils.data.eval_collator import EvalCollator
 from deep_stylometry.utils.data.triplet_collator import TripletDataCollator
 from deep_stylometry.utils.helpers import get_tokenizer
 
@@ -219,19 +220,23 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
+        collate_fn = EvalCollator(tokenizer=self.tokenizer)
         return DataLoader(
-            self.val_ds,  # type: ignore
+            self.val_ds,
             batch_size=self.cfg.data.batch_size,
             num_workers=self.num_proc,
             shuffle=False,
+            collate_fn=collate_fn,
         )
 
     def test_dataloader(self) -> DataLoader:
+        collate_fn = EvalCollator(tokenizer=self.tokenizer)
         return DataLoader(
-            self.test_ds,  # type: ignore
+            self.test_ds,
             batch_size=self.cfg.data.batch_size,
             num_workers=self.num_proc,
             shuffle=False,
+            collate_fn=collate_fn,
         )
 
     @staticmethod
