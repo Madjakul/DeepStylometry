@@ -1,4 +1,5 @@
 import psutil
+
 from deep_stylometry.utils.configs import BaseConfig
 from deep_stylometry.utils.data import HALvestContrastiveDatamodule
 

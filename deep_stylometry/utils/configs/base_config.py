@@ -1,7 +1,7 @@
 # deep_stylometry/utils/configs/base_config.py
 
 import logging
-from dataclasses import dataclass, fields, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, Literal, Union
 

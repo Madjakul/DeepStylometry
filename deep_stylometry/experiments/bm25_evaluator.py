@@ -3,8 +3,8 @@
 import logging
 from typing import Any, Dict, List
 
-from datasets import Dataset
 import bm25s
+from datasets import Dataset
 from ranx import Qrels, Run, evaluate
 from tqdm import tqdm
 from transformers import AutoTokenizer
