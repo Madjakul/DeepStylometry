@@ -8,14 +8,9 @@ import torch
 from ranx import Run
 
 from deep_stylometry.modules.mean_interaction import MeanInteraction
-from deep_stylometry.utils.eval_utils import (
-    build_corpus,
-    pad_and_cat_1d,
-    build_qrels,
-    scores_to_run,
-    gather_targets,
-    evaluate_run,
-)
+from deep_stylometry.utils.eval_utils import (build_corpus, build_qrels,
+                                              evaluate_run, gather_targets,
+                                              pad_and_cat_1d, scores_to_run)
 
 
 class TestEvalCallback(L.Callback):
