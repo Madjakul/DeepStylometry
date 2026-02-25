@@ -1,4 +1,4 @@
-# deep_stylometry/evaluation/bm25_evaluator.py
+# deep_stylometry/experiments/bm25_evaluator.py
 
 import logging
 from typing import Any, Dict, List
@@ -10,8 +10,6 @@ from tqdm import tqdm
 from transformers import AutoTokenizer
 
 from deep_stylometry.utils.helpers import get_tokenizer
-
-logger = logging.getLogger(__name__)
 
 
 def _tokenize_to_strings(
@@ -60,7 +58,7 @@ def evaluate_bm25(
     n_queries = len(ds)
 
     # Batch convert IDs -> token strings via ds.map + multiprocessing
-    logger.info("Converting token IDs to strings...")
+    logging.info("Converting token IDs to strings...")
     tokenized = ds.map(
         _tokenize_to_strings,
         batched=True,
@@ -97,11 +95,11 @@ def evaluate_bm25(
     soft_qrels = Qrels(soft)
 
     # BM25 — index and retrieve in batch
-    logger.info(f"Building BM25 index over {n_corpus} documents...")
+    logging.info(f"Building BM25 index over {n_corpus} documents...")
     retriever = bm25s.BM25()
     retriever.index(corpus_tokens)
 
-    logger.info(f"Retrieving top-{k} for {n_queries} queries...")
+    logging.info(f"Retrieving top-{k} for {n_queries} queries...")
     results, scores = retriever.retrieve(query_tokens, k=min(k, n_corpus))
     # results: (n_queries, k) doc indices
     # scores:  (n_queries, k) BM25 scores
@@ -122,5 +120,5 @@ def evaluate_bm25(
         f"recall@{k}": evaluate(soft_qrels, run, f"recall@{k}"),
         "accuracy": evaluate(hard_qrels, run, "precision@1"),
     }
-    logger.info(f"BM25: {metrics}")
+    logging.info(f"BM25: {metrics}")
     return metrics

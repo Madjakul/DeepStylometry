@@ -1,9 +1,9 @@
-# deep_strylometry/utils/argparsers/tune_argparse.py
+# deep_strylometry/utils/argparsers/test_argparse.py
 
 import argparse
 
 
-class TuneArgparse:
+class TestArgparse:
     """Argument parser for hyper-parameter tuning."""
 
     @classmethod

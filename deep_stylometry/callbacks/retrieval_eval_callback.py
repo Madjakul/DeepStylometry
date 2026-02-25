@@ -7,9 +7,13 @@ import lightning as L
 import torch
 
 from deep_stylometry.modules.mean_interaction import MeanInteraction
-from deep_stylometry.utils.eval_utils import (build_corpus, build_qrels,
-                                              evaluate_run, gather_targets,
-                                              scores_to_run)
+from deep_stylometry.utils.eval_utils import (
+    build_corpus,
+    build_qrels,
+    evaluate_run,
+    gather_targets,
+    scores_to_run,
+)
 
 
 class RetrievalEvalCallback(L.Callback):
@@ -18,9 +22,8 @@ class RetrievalEvalCallback(L.Callback):
     Always uses mean pooling to isolate training objective effect.
     """
 
-    def __init__(self, k: int = 100) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.k = k
         self.mean_pool = MeanInteraction()
         self._reset()
 
@@ -74,9 +77,42 @@ class RetrievalEvalCallback(L.Callback):
         scores = self.mean_pool(
             query_embs=q_embs, key_embs=k_embs, q_mask=q_masks, k_mask=k_masks
         )
-        run = scores_to_run(scores, self.k)
-        metrics = evaluate_run(hard_qrels, soft_qrels, run, self.k)
 
+        run = scores_to_run(scores, 100)
+        metrics = evaluate_run(hard_qrels, soft_qrels, run, 100)
+        pl_module.log_dict(
+            {f"val/{k}": v for k, v in metrics.items()},
+            prog_bar=True,
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=pl_module.cfg.data.batch_size,
+        )
+        logging.info(f"Retrieval eval: {metrics}")
+
+        run = scores_to_run(scores, 20)
+        metrics = evaluate_run(hard_qrels, soft_qrels, run, 20)
+        pl_module.log_dict(
+            {f"val/{k}": v for k, v in metrics.items()},
+            prog_bar=True,
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=pl_module.cfg.data.batch_size,
+        )
+        logging.info(f"Retrieval eval: {metrics}")
+
+        run = scores_to_run(scores, 10)
+        metrics = evaluate_run(hard_qrels, soft_qrels, run, 10)
+        pl_module.log_dict(
+            {f"val/{k}": v for k, v in metrics.items()},
+            prog_bar=True,
+            on_epoch=True,
+            sync_dist=True,
+            batch_size=pl_module.cfg.data.batch_size,
+        )
+        logging.info(f"Retrieval eval: {metrics}")
+
+        run = scores_to_run(scores, 5)
+        metrics = evaluate_run(hard_qrels, soft_qrels, run, 5)
         pl_module.log_dict(
             {f"val/{k}": v for k, v in metrics.items()},
             prog_bar=True,

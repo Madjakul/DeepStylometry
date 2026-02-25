@@ -8,12 +8,15 @@ import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
-from deep_stylometry.callbacks import (EvalRuntimeMonitor, GradNormMonitor,
-                                       LogarithmicValidationCallback,
-                                       LossVarianceMonitor)
+from deep_stylometry.callbacks import (
+    EvalRuntimeMonitor,
+    GradNormMonitor,
+    LogarithmicValidationCallback,
+    LossVarianceMonitor,
+    RetrievalEvalCallback,
+)
 from deep_stylometry.utils.configs.base_config import BaseConfig
-from deep_stylometry.utils.data.halvest_datamodule import \
-    HALvestContrastiveDatamodule
+from deep_stylometry.utils.data.halvest_datamodule import HALvestContrastiveDatamodule
 from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDatamodule
 from deep_stylometry.utils.helpers import resolve_lightning_precision
 
@@ -54,6 +57,7 @@ def setup_trainer(
     callbacks.append(
         LogarithmicValidationCallback(start_step=1, growth=1.5, max_interval=1000)
     )
+    callbacks.append(RetrievalEvalCallback())
 
     name = (
         f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
