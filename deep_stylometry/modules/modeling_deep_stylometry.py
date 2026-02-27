@@ -107,24 +107,15 @@ class DeepStylometry(L.LightningModule):
             (0, max_seq - batch["neg_attention_mask"].size(1)),
         )
 
-        # Distributed Gathering
         if self.trainer.world_size > 1 and self.cfg.train.gather:
-            # Gather Positives
-            # Embeddings: Pad with 0.0
+
+            # Use pos_embs and pos_mask (NOT batch["pos_attention_mask"])
             global_pos_embs = self.gather_with_padding(pos_embs, pad_value=0.0)
-            # Masks: Pad with 0 (Standard for attention masks)
-            global_pos_mask = self.gather_with_padding(
-                batch["pos_attention_mask"], pad_value=0
-            )
+            global_pos_mask = self.gather_with_padding(pos_mask, pad_value=0)
 
-            # Gather Negatives
+            # Use neg_embs and neg_mask (NOT batch["neg_attention_mask"])
             global_neg_embs = self.gather_with_padding(neg_embs, pad_value=0.0)
-            global_neg_mask = self.gather_with_padding(
-                batch["neg_attention_mask"], pad_value=0
-            )
-
-            # Optional: If you ever need to gather input_ids for Keys, do it here:
-            # global_pos_ids = self.gather_with_padding(batch["pos_input_ids"], pad_value=self.pad_token_id)
+            global_neg_mask = self.gather_with_padding(neg_mask, pad_value=0)
 
             # Construct Keys
             k_embs = torch.cat([global_pos_embs, global_neg_embs], dim=0)
@@ -136,18 +127,7 @@ class DeepStylometry(L.LightningModule):
             targets = torch.arange(local_bs, device=self.device) + global_offset
 
         else:
-            # Single GPU Logic
-            max_seq = max(pos_embs.size(1), neg_embs.size(1))
-            pos_embs = F.pad(pos_embs, (0, 0, 0, max_seq - pos_embs.size(1)))
-            neg_embs = F.pad(neg_embs, (0, 0, 0, max_seq - neg_embs.size(1)))
-            pos_mask = F.pad(
-                batch["pos_attention_mask"],
-                (0, max_seq - batch["pos_attention_mask"].size(1)),
-            )
-            neg_mask = F.pad(
-                batch["neg_attention_mask"],
-                (0, max_seq - batch["neg_attention_mask"].size(1)),
-            )
+            # Single GPU Logic (No extra padding needed here anymore)
             k_embs = torch.cat([pos_embs, neg_embs], dim=0)
             k_mask = torch.cat([pos_mask, neg_mask], dim=0)
             targets = torch.arange(q_embs.size(0), device=self.device)
