@@ -43,5 +43,5 @@ train:
   precision: "16-mixed" # 32-true or 16-mixed
   # --- wandb logger ---
   use_wandb: true
-  log_model: true
+  log_model: false
   watch: "all" # all, gradients, parameters or null

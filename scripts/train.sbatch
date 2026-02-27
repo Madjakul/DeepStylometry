@@ -14,6 +14,10 @@ module purge
 module load slurm
 source $HOME/.bashrc
 
+export WANDB_CACHE_DIR="$WORK_DIR/wandb_cache"
+export WANDB_DATA_DIR="$WORK_DIR/wandb_data"
+export WANDB_CONFIG_DIR="$WORK_DIR/wandb_config"
+
 conda activate deep-stylometry
 if [[ "$CONDA_DEFAULT_ENV" != "deep-stylometry" ]]; then
     echo "Error: Failed to activate environment"
