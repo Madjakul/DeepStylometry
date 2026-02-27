@@ -34,7 +34,7 @@ train:
   num_devices: 4
   strategy: "ddp"
   process_group_backend: "gloo" # gloo, nccl, mpi
-  max_epochs: 4 # max_steps: 7000
+  max_epochs: 1 # max_steps: 7000
   val_check_interval: null
   check_val_every_n_epoch: null
   log_every_n_steps: 1
