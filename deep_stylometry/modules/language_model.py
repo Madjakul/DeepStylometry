@@ -23,9 +23,8 @@ class LanguageModel(nn.Module):
         config = AutoConfig.from_pretrained(
             self.cfg.model.base_checkpoint, torch_dtype=torch_dtype
         )
-        self.model = AutoModel.from_pretrained(
-            cfg.model.base_checkpoint, config=config, add_pooling_layer=False
-        )
+
+        self.model = AutoModel.from_pretrained(cfg.model.base_checkpoint, config=config)
 
         self.hidden_size = self.model.config.hidden_size
         self.vocab_size = self.model.config.vocab_size
@@ -35,10 +34,11 @@ class LanguageModel(nn.Module):
         input_ids: Int[torch.Tensor, "batch seq"],
         attention_mask: Int[torch.Tensor, "batch seq"],
     ) -> Tuple[Float[torch.Tensor, ""], Float[torch.Tensor, "batch seq hidden"]]:
+
         out = self.model(
             input_ids,
             attention_mask=attention_mask,
-            output_hidden_states=True,
             return_dict=True,
         )
-        return out.hidden_states[-1]
+
+        return out.last_hidden_state
