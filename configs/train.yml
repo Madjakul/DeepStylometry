@@ -27,7 +27,7 @@ train:
   tau: 0.5
   margin: 0.32 # Only if using triplet loss
   # --- optimizer ---
-  lr: 1.25e-5
+  lr: 3.0e-5
   weight_decay: 0.1
   # --- trainer ---
   device: "gpu"
