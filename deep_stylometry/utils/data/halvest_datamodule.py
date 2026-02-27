@@ -210,9 +210,7 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         collate_fn = None
         if self.cfg.train.gather:
             # Use a custom collate_fn to gather positive and negative samples across the batch
-            collate_fn = TripletDataCollator(
-                tokenizer=self.tokenizer, padding="longest", return_tensors="pt"
-            )
+            collate_fn = TripletDataCollator(tokenizer=self.tokenizer)
         return DataLoader(
             self.train_ds,  # type: ignore
             batch_size=self.cfg.data.batch_size,
