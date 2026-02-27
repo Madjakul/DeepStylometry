@@ -3,7 +3,6 @@
 import logging
 import os
 
-
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.argparsers import TrainArgparse
