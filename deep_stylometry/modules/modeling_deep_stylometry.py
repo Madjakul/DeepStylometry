@@ -9,8 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import get_cosine_schedule_with_warmup
 
-from deep_stylometry.modules.alignment_uniformity_loss import \
-    AlignmentUniformityLoss
+from deep_stylometry.modules.alignment_uniformity_loss import AlignmentUniformityLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
 from deep_stylometry.modules.triplet_loss import TripletLoss
@@ -91,6 +90,22 @@ class DeepStylometry(L.LightningModule):
         )
 
         q_mask = batch["attention_mask"]
+
+        max_seq = max(pos_embs.size(1), neg_embs.size(1))
+
+        # Pad embeddings
+        pos_embs = F.pad(pos_embs, (0, 0, 0, max_seq - pos_embs.size(1)))
+        neg_embs = F.pad(neg_embs, (0, 0, 0, max_seq - neg_embs.size(1)))
+
+        # Pad masks
+        pos_mask = F.pad(
+            batch["pos_attention_mask"],
+            (0, max_seq - batch["pos_attention_mask"].size(1)),
+        )
+        neg_mask = F.pad(
+            batch["neg_attention_mask"],
+            (0, max_seq - batch["neg_attention_mask"].size(1)),
+        )
 
         # Distributed Gathering
         if self.trainer.world_size > 1 and self.cfg.train.gather:
