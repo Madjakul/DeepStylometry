@@ -21,4 +21,4 @@ class DataConfig(DictAccessMixin):
     load_from_cache_file: bool = True
     subsets: List[str] = field(default_factory=list)
     shuffle: bool = True
-    test_subset: str = "base-10"
+    test_subset: str = "base-2"
