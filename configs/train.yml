@@ -4,7 +4,7 @@ project_name: "deep-stylometry"
 
 data:
   ds_name: "halvest" # or halvest
-  batch_size: 32
+  batch_size: 128
   tokenizer_name: "answerdotai/ModernBERT-base"
   max_length: 512
   padding: "do_not_pad"
