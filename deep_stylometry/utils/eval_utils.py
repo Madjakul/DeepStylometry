@@ -96,8 +96,16 @@ def evaluate_run(
 def gather_targets(target_batches: List[torch.Tensor]) -> Optional[List[List[int]]]:
     if not target_batches:
         return None
+
     all_targets = []
+    has_any_targets = False  # Track if we find at least one valid target
+
     for batch_t in target_batches:
         for row in batch_t:
-            all_targets.append(row[row >= 0].tolist())
-    return all_targets
+            valid_targets = row[row >= 0].tolist()
+            if valid_targets:
+                has_any_targets = True
+            all_targets.append(valid_targets)
+
+    # If every single row was empty, return None to trigger the soft=hard fallback
+    return all_targets if has_any_targets else None

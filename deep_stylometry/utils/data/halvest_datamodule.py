@@ -70,7 +70,9 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
             "neg_input_ids": tokenized_neg["input_ids"],
             "neg_attention_mask": tokenized_neg["attention_mask"],
             "target_indices": (
-                batch["target_indices"] if "target_indices" in batch else None
+                batch["target_indices"]
+                if "target_indices" in batch
+                else [[-1]] * len(batch["query"])
             ),
             "index": indices,
         }

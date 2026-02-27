@@ -43,6 +43,7 @@ class EvalCollator:
         if (
             "target_indices" in features[0]
             and features[0]["target_indices"] is not None
+            and len(features[0]["target_indices"]) > 0
         ):
             targets = [f["target_indices"] for f in features]
             max_len = max(len(t) for t in targets)
