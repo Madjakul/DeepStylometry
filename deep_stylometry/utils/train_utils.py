@@ -8,13 +8,15 @@ import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
-from deep_stylometry.callbacks import (EvalRuntimeMonitor, GradNormMonitor,
-                                       LogarithmicValidationCallback,
-                                       LossVarianceMonitor,
-                                       RetrievalEvalCallback)
+from deep_stylometry.callbacks import (
+    EvalRuntimeMonitor,
+    GradNormMonitor,
+    LogarithmicValidationCallback,
+    LossVarianceMonitor,
+    RetrievalEvalCallback,
+)
 from deep_stylometry.utils.configs.base_config import BaseConfig
-from deep_stylometry.utils.data.halvest_datamodule import \
-    HALvestContrastiveDatamodule
+from deep_stylometry.utils.data.halvest_datamodule import HALvestContrastiveDatamodule
 from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDatamodule
 from deep_stylometry.utils.helpers import resolve_lightning_precision
 
@@ -79,9 +81,9 @@ def setup_trainer(
         wandb_logger = WandbLogger(
             project=cfg.project_name,
             name=name,
-            log_model=cfg.execution.log_model,  # type: ignore
+            log_model=cfg.train.log_model,
         )
-        watch = cfg.execution.watch  # type: ignore
+        watch = cfg.train.watch
         if watch is not None:
             wandb_logger.watch(
                 model=model,
@@ -95,7 +97,7 @@ def setup_trainer(
     csv_logger = CSVLogger(save_dir=logs_dir, name=name)
     loggers.append(csv_logger)
 
-    precision, _ = resolve_lightning_precision(cfg.execution.precision)  # type: ignore
+    precision, _ = resolve_lightning_precision(cfg.train.precision)
 
     trainer = L.Trainer(
         accelerator=cfg.train.device,
