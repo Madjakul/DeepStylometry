@@ -214,7 +214,7 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         return DataLoader(
             self.train_ds,  # type: ignore
             batch_size=self.cfg.data.batch_size,
-            num_workers=self.num_proc,
+            num_workers=min(self.num_proc, 2),
             shuffle=self.cfg.data.shuffle,
             collate_fn=collate_fn,
         )
@@ -224,7 +224,7 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         return DataLoader(
             self.val_ds,
             batch_size=self.cfg.data.batch_size,
-            num_workers=self.num_proc,
+            num_workers=min(self.num_proc, 2),
             shuffle=False,
             collate_fn=collate_fn,
         )
@@ -234,7 +234,7 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         return DataLoader(
             self.test_ds,
             batch_size=self.cfg.data.batch_size,
-            num_workers=self.num_proc,
+            num_workers=min(self.num_proc, 2),
             shuffle=False,
             collate_fn=collate_fn,
         )
