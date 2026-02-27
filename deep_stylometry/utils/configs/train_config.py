@@ -28,7 +28,7 @@ class TrainConfig(DictAccessMixin):
     accumulate_grad_batches: int = 1
     gradient_clip_val: Optional[float] = None
     precision: Literal["16-mixed", "32"] = "16-mixed"
-    overfit_batches: float = 0.001
+    overfit_batches: float = 0.009
     # --- misc ---
     use_wandb: bool = True
     log_model: bool = True
