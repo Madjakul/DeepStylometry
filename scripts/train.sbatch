@@ -2,7 +2,6 @@
 
 #SBATCH --job-name=train-deep-stylometry               # Job name
 #SBATCH --account=grandchallenge1
-#SBATCH --gid=grandchallenge1
 #SBATCH --nodes=1                                    # Run all processes on a single node
 #SBATCH --ntasks=1                                      # Run a single task
 #SBATCH --mem=256G                                     # Job memory request
