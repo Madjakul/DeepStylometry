@@ -23,7 +23,9 @@ class LanguageModel(nn.Module):
         config = AutoConfig.from_pretrained(
             self.cfg.model.base_checkpoint, torch_dtype=torch_dtype
         )
-        self.model = AutoModel.from_pretrained(cfg.model.base_checkpoint, config=config)
+        self.model = AutoModel.from_pretrained(
+            cfg.model.base_checkpoint, config=config, add_pooling_layer=False
+        )
 
         self.hidden_size = self.model.config.hidden_size
         self.vocab_size = self.model.config.vocab_size
