@@ -31,7 +31,7 @@ train:
   weight_decay: 0.1
   # --- trainer ---
   device: "gpu"
-  num_devices: 3
+  num_devices: 4
   strategy: "ddp" # "ddp"
   process_group_backend: "gloo" # gloo, nccl, mpi
   max_epochs: 4 # max_steps: 7000
