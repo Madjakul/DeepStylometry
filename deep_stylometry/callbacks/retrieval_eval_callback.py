@@ -56,7 +56,7 @@ class RetrievalEvalCallback(L.Callback):
     def on_validation_epoch_start(self, trainer, pl_module) -> None:
         self._reset()
 
-    def on_test_batch_end(
+    def on_validation_batch_end(
         self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0
     ) -> None:
         q = pl_module(batch["input_ids"], batch["attention_mask"]).cpu()
