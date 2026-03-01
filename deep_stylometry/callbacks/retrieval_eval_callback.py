@@ -33,7 +33,7 @@ class RetrievalEvalCallback(L.Callback):
         cfg: "BaseConfig",
         k: int = 100,
         shortlist_k: int = 500,
-        chunk_size: int = 8192,
+        chunk_size: int = 256,
     ) -> None:
         super().__init__()
         self.cfg = cfg
@@ -103,14 +103,14 @@ class RetrievalEvalCallback(L.Callback):
         dense_top_indices = torch.zeros((n_queries, self.shortlist_k), dtype=torch.long)
 
         for q_start in tqdm(
-            range(0, n_queries, self.chunk_size), desc="Dense Eval", unit="chunk"
+            range(0, n_queries, self.chunk_size * 8), desc="Dense Eval", unit="chunk"
         ):
-            q_end = min(q_start + self.chunk_size, n_queries)
+            q_end = min(q_start + self.chunk_size * 8, n_queries)
             q_chunk = q_embs[q_start:q_end].to(pl_module.device)
             q_mask_chunk = q_masks[q_start:q_end].to(pl_module.device)
 
-            for k_start in range(0, n_corpus, self.chunk_size):
-                k_end = min(k_start + self.chunk_size, n_corpus)
+            for k_start in range(0, n_corpus, self.chunk_size * 8):
+                k_end = min(k_start + self.chunk_size * 8, n_corpus)
                 k_chunk = k_embs[k_start:k_end].to(pl_module.device)
                 k_mask_chunk = k_masks[k_start:k_end].to(pl_module.device)
 
