@@ -9,8 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import get_cosine_schedule_with_warmup
 
-from deep_stylometry.modules.alignment_uniformity_loss import \
-    AlignmentUniformityLoss
+from deep_stylometry.modules.alignment_uniformity_loss import AlignmentUniformityLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
 from deep_stylometry.modules.triplet_loss import TripletLoss
@@ -191,6 +190,35 @@ class DeepStylometry(L.LightningModule):
             on_step=False,
             on_epoch=True,
             sync_dist=True,
+            batch_size=self.cfg.data.batch_size,
+        )
+
+        loss_metrics = self.contrastive_loss(
+            query_embs=q_embs,
+            key_embs=k_embs,
+            q_mask=q_mask,
+            k_mask=k_mask,
+            targets=targets,
+            q_input_ids=batch["input_ids"],
+        )
+
+        accuracy = (loss_metrics["poss"] > loss_metrics["negs"]).float().mean()
+        self.log(
+            "val/accuracy",
+            accuracy,
+            prog_bar=True,
+            sync_dist=True,
+            on_step=False,
+            on_epoch=True,
+            batch_size=self.cfg.data.batch_size,
+        )
+        self.log(
+            "val/loss",
+            loss_metrics["loss"],
+            prog_bar=True,
+            sync_dist=True,
+            on_step=False,
+            on_epoch=True,
             batch_size=self.cfg.data.batch_size,
         )
 
