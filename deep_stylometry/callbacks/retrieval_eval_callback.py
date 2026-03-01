@@ -10,9 +10,13 @@ from tqdm import tqdm
 
 from deep_stylometry.modules.late_interaction import LateInteraction
 from deep_stylometry.modules.mean_interaction import MeanInteraction
-from deep_stylometry.utils.eval_utils import (build_corpus, build_qrels,
-                                              evaluate_run, gather_targets,
-                                              pad_and_cat_1d)
+from deep_stylometry.utils.eval_utils import (
+    build_corpus,
+    build_qrels,
+    evaluate_run,
+    gather_targets,
+    pad_and_cat_1d,
+)
 
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
@@ -37,6 +41,7 @@ class RetrievalEvalCallback(L.Callback):
         self.shortlist_k = shortlist_k
         self.chunk_size = chunk_size
         self.mean_pool = MeanInteraction()
+        self.li = LateInteraction(self.cfg)
         self._reset()
 
     def _reset(self) -> None:
@@ -159,7 +164,6 @@ class RetrievalEvalCallback(L.Callback):
                     logging.info(f"Dense @{k_val}: {metrics}")
 
         logging.info("Starting Stage 2: Late Interaction Reranking...")
-        li = LateInteraction(self.cfg)
         ts_run_dict: Dict[str, Dict[str, float]] = {}
 
         # Loop query by query, fetching ONLY its shortlist candidates
@@ -181,7 +185,7 @@ class RetrievalEvalCallback(L.Callback):
                 cand_embs_chunk = k_embs[chunk_cand_ids].to(pl_module.device)
                 cand_masks_chunk = k_masks[chunk_cand_ids].to(pl_module.device)
 
-                chunk_scores = li(
+                chunk_scores = self.li(
                     query_embs=q_emb_i,
                     key_embs=cand_embs_chunk,
                     q_mask=q_mask_i,
