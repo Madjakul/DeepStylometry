@@ -10,9 +10,13 @@ from tqdm import tqdm
 
 from deep_stylometry.modules.late_interaction import LateInteraction
 from deep_stylometry.modules.mean_interaction import MeanInteraction
-from deep_stylometry.utils.eval_utils import (build_corpus, build_qrels,
-                                              evaluate_run, gather_targets,
-                                              pad_and_cat_1d)
+from deep_stylometry.utils.eval_utils import (
+    build_corpus,
+    build_qrels,
+    evaluate_run,
+    gather_targets,
+    pad_and_cat_1d,
+)
 
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
@@ -155,6 +159,7 @@ class RetrievalEvalCallback(L.Callback):
                 pl_module.log_dict(
                     {f"val/single_{m}": v for m, v in metrics.items()},
                     on_epoch=True,
+                    sync_dist=True,
                 )
                 if k_val == eval_k:
                     logging.info(f"Dense @{k_val}: {metrics}")
@@ -207,6 +212,7 @@ class RetrievalEvalCallback(L.Callback):
                 pl_module.log_dict(
                     {f"val/multi_{m}": v for m, v in metrics.items()},
                     on_epoch=True,
+                    sync_dist=True,
                 )
                 if k_val == eval_k:
                     logging.info(f"Two-stage @{k_val}: {metrics}")
