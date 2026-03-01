@@ -10,8 +10,16 @@ from tqdm import tqdm
 
 from deep_stylometry.modules.late_interaction import LateInteraction
 from deep_stylometry.modules.mean_interaction import MeanInteraction
-from deep_stylometry.utils.eval_utils import (build_corpus, build_qrels,
-                                              evaluate_run, gather_targets)
+from deep_stylometry.utils.eval_utils import (
+    build_corpus,
+    build_qrels,
+    evaluate_run,
+    gather_targets,
+)
+
+K = 100
+Q_CHUNK = 256
+K_CHUNK = 256
 
 
 class RetrievalEvalCallback(L.Callback):
@@ -76,12 +84,6 @@ class RetrievalEvalCallback(L.Callback):
         n_corpus = k_embs.size(0)
         targets = gather_targets(self.target_indices)
         hard_qrels, soft_qrels = build_qrels(n_queries, n_corpus, targets)
-
-        K = 100
-        Q_CHUNK = 256
-        K_CHUNK = (
-            256  # You can increase this for Mean Pooling, but keep it small for LI
-        )
 
         top_scores = torch.full((n_queries, K), float("-inf"))
         top_indices = torch.zeros((n_queries, K), dtype=torch.long)

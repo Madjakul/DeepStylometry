@@ -33,7 +33,7 @@ train:
   device: "gpu"
   num_devices: 4
   strategy: "ddp"
-  process_group_backend: "gloo" # gloo, nccl, mpi
+  process_group_backend: "nccl" # gloo, nccl, mpi
   max_epochs: 1 # max_steps: 7000
   val_check_interval: null
   check_val_every_n_epoch: null
