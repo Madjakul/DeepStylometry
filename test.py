@@ -11,7 +11,7 @@ from deep_stylometry.callbacks import TestEvalCallback
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.configs import BaseConfig
-from deep_stylometry.utils.helpers import set_seed, resolve_lightning_precision
+from deep_stylometry.utils.helpers import resolve_lightning_precision, set_seed
 from deep_stylometry.utils.logger import logging_config
 
 os.environ["PYTHONUNBUFFERED"] = "1"
