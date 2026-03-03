@@ -11,7 +11,7 @@ from deep_stylometry.callbacks import TestEvalCallback
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.configs import BaseConfig
-from deep_stylometry.utils.helpers import set_seed
+from deep_stylometry.utils.helpers import set_seed, resolve_lightning_precision
 from deep_stylometry.utils.logger import logging_config
 
 os.environ["PYTHONUNBUFFERED"] = "1"
@@ -58,6 +58,7 @@ if __name__ == "__main__":
     logging.info(f"Loading model from {args.checkpoint_path}...")
     # Load weights from your saved checkpoint
     model = DeepStylometry.load_from_checkpoint(args.checkpoint_path, cfg=cfg)
+    precision, _ = resolve_lightning_precision(cfg.test.precision)
 
     # Force 1 GPU for testing to avoid distributed gather complications
     trainer = L.Trainer(
@@ -65,7 +66,7 @@ if __name__ == "__main__":
         devices=cfg.test.num_devices,
         logger=loggers,  # Set to your WandbLogger/CSVLogger if you want to save the test metrics remotely
         callbacks=[TestEvalCallback(max_cache_size=cfg.data.batch_size)],
-        precision=train_utils.resolve_lightning_precision(cfg.test.precision),
+        precision=precision,
     )
 
     logging.info("=== Starting Evaluation ===")
