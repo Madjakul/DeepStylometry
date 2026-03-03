@@ -9,8 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import get_cosine_schedule_with_warmup
 
-from deep_stylometry.modules.alignment_uniformity_loss import \
-    AlignmentUniformityLoss
+from deep_stylometry.modules.alignment_uniformity_loss import AlignmentUniformityLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
 from deep_stylometry.modules.triplet_loss import TripletLoss
@@ -222,6 +221,9 @@ class DeepStylometry(L.LightningModule):
             on_epoch=True,
             batch_size=self.cfg.data.batch_size,
         )
+
+    def test_step(self, batch, batch_idx):
+        pass
 
     def gather_with_padding(
         self, local_tensor: torch.Tensor, pad_value: float = 0
