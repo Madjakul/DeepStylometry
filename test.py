@@ -1,33 +1,53 @@
-# tune.py
+# test.py
 
+# test.py
+
+import argparse
 import logging
 import os
 
-import psutil
+import lightning as L
 
-from deep_stylometry.utils import tune_utils
-from deep_stylometry.utils.argparsers import TuneArgparse
+from deep_stylometry.modules import DeepStylometry
+from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.configs import BaseConfig
+from deep_stylometry.utils.helpers import set_seed
 from deep_stylometry.utils.logger import logging_config
 
-os.environ["RAY_memory_monitor_refresh_ms"] = "0"
 os.environ["PYTHONUNBUFFERED"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-NUM_PROC = psutil.cpu_count(logical=False)
-
+set_seed()
 logging_config()
 
-
 if __name__ == "__main__":
-    args = TuneArgparse.parse_known_args()
-    config = BaseConfig(mode="tune").from_yaml(args.config_path)
-    logging.info(f"--- Tuning hyperparameters ---")
-    logging.info(f"Config file: {args.config_path}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config_path", type=str, required=True)
+    parser.add_argument("--processed_ds_dir", type=str, required=True)
+    parser.add_argument("--checkpoint_path", type=str, required=True)
+    parser.add_argument("--num_proc", type=int, default=4)
+    args = parser.parse_args()
 
-    tuner = tune_utils.setup_tuner(
-        config=config,
-        ray_storage_path=args.ray_storage_path,
-        cache_dir=args.cache_dir,
+    cfg = BaseConfig(mode="test").from_yaml(args.config_path)
+
+    logging.info("Preparing data module...")
+    dm = train_utils.setup_datamodule(
+        cfg=cfg,
+        processed_ds_dir=args.processed_ds_dir,
+        num_proc=args.num_proc,
     )
-    results = tuner.fit()
-    logging.info("--- Tuning finished ---")
+
+    logging.info(f"Loading model from {args.checkpoint_path}...")
+    # Load weights from your saved checkpoint
+    model = DeepStylometry.load_from_checkpoint(args.checkpoint_path, cfg=cfg)
+
+    # Force 1 GPU for testing to avoid distributed gather complications
+    trainer = L.Trainer(
+        accelerator="gpu",
+        devices=1,
+        logger=False,  # Set to your WandbLogger/CSVLogger if you want to save the test metrics remotely
+    )
+
+    logging.info("=== Starting Evaluation ===")
+    trainer.test(model=model, datamodule=dm)
+    logging.info("=== Evaluation Finished ===")

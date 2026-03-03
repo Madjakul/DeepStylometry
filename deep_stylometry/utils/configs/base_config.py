@@ -16,7 +16,7 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 
 @dataclass
 class BaseConfig(DictAccessMixin):
-    mode: Literal["train", "tune"] = "train"
+    mode: Literal["train", "test"] = "train"
     project_name: str = "deep-stylometry"
 
     data: DataConfig = field(default_factory=DataConfig)

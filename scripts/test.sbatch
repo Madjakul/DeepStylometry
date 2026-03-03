@@ -1,20 +1,29 @@
 #!/bin/sh
 
-#SBATCH --job-name=deep_strylometry_tune                # Job name
-#SBATCH --nodes=1                                       # Run all processes on a single node
+#SBATCH --job-name=test-deep-stylometry               # Job name
+#SBATCH --account=grandchallenge1
+#SBATCH --nodes=1                                    # Run all processes on a single node
 #SBATCH --ntasks=1                                      # Run a single task
-#SBATCH --partition=almanach                            # GPU parition
-#SBATCH --gres=gpu:rtx8000:3                                    # Request 1 GPU
-#SBATCH --cpus-per-task=32                              # Number of CPU cores per task
+#SBATCH --mem=256G                                     # Job memory request
+#SBATCH --gres=gpu:1                             # Request 1 GPU
+#SBATCH --cpus-per-task=16                              # Number of CPU cores per task
 #SBATCH --time=2-00:00:00                               # Time limit hrs:min:sec
-#SBATCH --output=logs/%x_%j.log                         # Standard output and error log. %x denotes the job name, %j the jobid.
+#SBATCH --output=logs/%x-%j-%t.log                         # Standard output and error log. %x denotes the job name, %j the jobid.
 
 module purge
+module load slurm
+source $HOME/.bashrc
 
-export RAY_TMPDIR="/scratch/$USER/DeepStylometry"
-source /home/$USER/.bashrc
+export WANDB_CACHE_DIR="$WORK_DIR/wandb_cache"
+export WANDB_DATA_DIR="$WORK_DIR/wandb_data"
+export WANDB_CONFIG_DIR="$WORK_DIR/wandb_config"
+
 conda activate deep-stylometry
+if [[ "$CONDA_DEFAULT_ENV" != "deep-stylometry" ]]; then
+    echo "Error: Failed to activate environment"
+    exit 1
+fi
 
-mkdir logs || true
+export DATASETS_MULTIPROCESS_CONTEXT=spawn
 
-./scripts/tune.sh
+./scripts/test.sh

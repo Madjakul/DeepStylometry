@@ -5,34 +5,56 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 # ************************** Customizable Arguments ************************************
 
-CONFIG_PATH=$PROJECT_ROOT/configs/tune.yml
-RAY_STORAGE_PATH=$PROJECT_ROOT/ray_logs
-LOGS_DIR=$PROJECT_ROOT/logs
+CONFIG_PATH=$PROJECT_ROOT/configs/train.yml
+PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
+CHECKPOINT_PATH=$PROJECT_ROOT/tmp/answerdotai-ModernBERT-base__halvest__pooling-mean/step-step=23000.ckpt
 
 # --------------------------------------------------------------------------------------
 
-# CACHE_DIR=$PROJECT_ROOT/../cache/
-NUM_PROC=32
-#
+# CACHE_DIR=$SCRATCH/cache
+NUM_PROC=16
 
 # **************************************************************************************
 
-mkdir -p "$RAY_STORAGE_PATH" || true
 mkdir -p "$LOGS_DIR" || true
-mkdir -p "$PROJECT_ROOT/tmp/" || true
-
-cmd=(python3 "$PROJECT_ROOT/tune.py"
-    --config_path "$CONFIG_PATH"
-    --ray_storage_path "$RAY_STORAGE_PATH"
-    --logs_dir "$LOGS_DIR")
-
-if [[ -v CACHE_DIR ]]; then
-    mkdir -p "$CACHE_DIR" || true
-    cmd+=(--cache_dir "$CACHE_DIR")
+if [[ -v CHECKPOINT_DIR ]]; then
+    mkdir -p "$CHECKPOINT_DIR" || true
 fi
 
-if [[ -v NUM_PROC ]]; then
-    cmd+=(--num_proc "$NUM_PROC")
-fi
+if [[ $SLURM_JOB_ID != "" ]]; then
+    echo "SLURM_JOB_ID: $SLURM_JOB_ID"
+    echo "SLURM_JOB_NODELIST: $SLURM_JOB_NODELIST"
+    echo "SLURM_NNODES: $SLURM_NNODES"
+    echo "SLURM_NTASKS: $SLURM_NTASKS"
+    echo "SLURM_TASKS_PER_NODE: $SLURM_TASKS_PER_NODE"
+    echo "SLURM_GPUS_ON_NODE: $SLURM_GPUS_ON_NODE"
+    echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 
-"${cmd[@]}"
+    torchrun \
+        --standalone \
+        --nnodes=1 \
+        --nproc_per_node=$SLURM_GPUS_ON_NODE \
+        "$PROJECT_ROOT/train.py" \
+        --config_path "$CONFIG_PATH" \
+        --processed_ds_dir "$PROCESSED_DS_DIR" \
+        --checkpoint_path "$CHECKPOINT_PATH" \
+        ${CACHE_DIR:+--cache_dir "$CACHE_DIR"} \
+        ${NUM_PROC:+--num_proc "$NUM_PROC"}
+else
+    cmd=()
+    cmd+=(python3 "$PROJECT_ROOT/train.py"
+        --config_path "$CONFIG_PATH"
+        --processed_ds_dir "$PROCESSED_DS_DIR"
+        --checkpoint_path "$CHECKPOINT_PATH")
+
+    if [[ -v CACHE_DIR ]]; then
+        mkdir -p "$CACHE_DIR" || true
+        cmd+=(--cache_dir "$CACHE_DIR")
+    fi
+
+    if [[ -v NUM_PROC ]]; then
+        cmd+=(--num_proc "$NUM_PROC")
+    fi
+
+    "${cmd[@]}"
+fi

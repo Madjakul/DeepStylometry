@@ -1,85 +1,25 @@
-# tune.yml
+# test.yml
 
-mode: "tune"
 project_name: "deep-stylometry"
-group_name: "tune-deepstylometry-512-se-triplet-li"
 
 data:
-  ds_name: "se" # or halvest
-  batch_size: 24
-  tokenizer_name: "FacebookAI/roberta-base"
+  ds_name: "halvest" # or halvest
+  batch_size: 64
+  tokenizer_name: "answerdotai/ModernBERT-base"
   max_length: 512
+  padding: "do_not_pad"
+  truncation: "longest_first"
+  add_special_tokens: true
   map_batch_size: 1000
   load_from_cache_file: true
-  # config_name: null
-  mlm_collator: false # only if you use an encoder
+  subsets: ["base-2", "base-4", "base-6", "base-8", "base-10"]
+  shuffle: true
+  test_subset: "base-2"
 
-model:
-  base_model_name: "FacebookAI/roberta-base"
-  is_decoder_model: false
-  add_linear_layers: true
-  dropout: 0.3
-  pooling_method: "li" # li or mean
-  # --- late interaction
-  distance_weightning: none
-  alpha:
-    0.1
-    # type: loguniform
-    # min: 0.1
-    # max: 1.0
-  use_softmax: false
-  initial_gumbel_temp: null
-  auto_anneal_gumbel: false
-  min_gumbel_temp: 0.5
-
-tune:
-  loss: "triplet"
-  tau:
-    0.1 # Only if you use info-nce loss or hybrid
-    # type: choice
-    # values: [0.05, 0.07, 0.1, 0.15, 0.2]
-  lambda_:
-    0.5 # Only if using hybrid loss
-    # type: uniform
-    # min: 0.51
-    # max: 0.99
-  margin: # Only if using triplet loss
-    type: uniform
-    min: 0.5
-    max: 3.0
-  lm_loss_weight: 0.0
-  # --- optimizer ---
-  lr:
-    type: loguniform
-    min: 7.0e-6
-    max: 7.0e-5
-  betas:
-    type: choice
-    values: [[0.9, 0.999], [0.8, 0.999], [0.7, 0.999]]
-  eps:
-    type: choice
-    values: [1.0e-7, 1.0e-8, 1.0e-9]
-  weight_decay:
-    type: loguniform
-    min: 0.01
-    max: 0.2
-  num_cycles: 0.5
-  # --- trainer ---
+test:
   device: "gpu"
-  num_devices_per_trial: 1
-  num_cpus_per_trial: 10
-  max_epochs: 3
+  num_devices: 1
   log_every_n_steps: 1
-  accumulate_grad_batches: 1
-  gradient_clip_val: null
-  precision: "32" # 32-true or bf16-mixed
-  # --- tuner ---
-  metric: "val_auroc"
-  mode: "max"
-  num_samples: 30
-  max_concurrent_trials: 3
-  time_budget_s: 151200 # 42h (in seconds)
-  max_t: 3
-  grace_period: 2
+  precision: "16-mixed" # 32-true or 16-mixed
   # --- wandb logger ---
   use_wandb: true
