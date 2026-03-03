@@ -1,7 +1,5 @@
 # test.py
 
-# test.py
-
 import argparse
 import logging
 import os
@@ -63,8 +61,8 @@ if __name__ == "__main__":
 
     # Force 1 GPU for testing to avoid distributed gather complications
     trainer = L.Trainer(
-        accelerator="gpu",
-        devices=1,
+        accelerator=cfg.test.device,
+        devices=cfg.test.num_devices,
         logger=loggers,  # Set to your WandbLogger/CSVLogger if you want to save the test metrics remotely
         callbacks=[TestEvalCallback(max_cache_size=cfg.data.batch_size)],
         precision=train_utils.resolve_lightning_precision(cfg.test.precision),
