@@ -35,7 +35,7 @@ if [[ $SLURM_JOB_ID != "" ]]; then
         --standalone \
         --nnodes=1 \
         --nproc_per_node=$SLURM_GPUS_ON_NODE \
-        "$PROJECT_ROOT/train.py" \
+        "$PROJECT_ROOT/test.py" \
         --config_path "$CONFIG_PATH" \
         --processed_ds_dir "$PROCESSED_DS_DIR" \
         --checkpoint_path "$CHECKPOINT_PATH" \
@@ -44,7 +44,7 @@ if [[ $SLURM_JOB_ID != "" ]]; then
         ${NUM_PROC:+--num_proc "$NUM_PROC"}
 else
     cmd=()
-    cmd+=(python3 "$PROJECT_ROOT/train.py"
+    cmd+=(python3 "$PROJECT_ROOT/test.py"
         --config_path "$CONFIG_PATH"
         --processed_ds_dir "$PROCESSED_DS_DIR"
         --logs_dir "$LOGS_DIR"
