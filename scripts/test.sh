@@ -8,6 +8,7 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 CONFIG_PATH=$PROJECT_ROOT/configs/train.yml
 PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
 CHECKPOINT_PATH=$PROJECT_ROOT/tmp/answerdotai-ModernBERT-base__halvest__pooling-mean/step-step=23000.ckpt
+LOGS_DIR=$PROJECT_ROOT/logs
 
 # --------------------------------------------------------------------------------------
 
@@ -38,6 +39,7 @@ if [[ $SLURM_JOB_ID != "" ]]; then
         --config_path "$CONFIG_PATH" \
         --processed_ds_dir "$PROCESSED_DS_DIR" \
         --checkpoint_path "$CHECKPOINT_PATH" \
+        --logs_dir "$LOGS_DIR" \
         ${CACHE_DIR:+--cache_dir "$CACHE_DIR"} \
         ${NUM_PROC:+--num_proc "$NUM_PROC"}
 else
@@ -45,6 +47,7 @@ else
     cmd+=(python3 "$PROJECT_ROOT/train.py"
         --config_path "$CONFIG_PATH"
         --processed_ds_dir "$PROCESSED_DS_DIR"
+        --logs_dir "$LOGS_DIR"
         --checkpoint_path "$CHECKPOINT_PATH")
 
     if [[ -v CACHE_DIR ]]; then

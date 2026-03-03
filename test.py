@@ -7,12 +7,14 @@ import logging
 import os
 
 import lightning as L
+from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.configs import BaseConfig
 from deep_stylometry.utils.helpers import set_seed
 from deep_stylometry.utils.logger import logging_config
+from deep_stylometry.callbacks import TestEvalCallback
 
 os.environ["PYTHONUNBUFFERED"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -26,6 +28,7 @@ if __name__ == "__main__":
     parser.add_argument("--processed_ds_dir", type=str, required=True)
     parser.add_argument("--checkpoint_path", type=str, required=True)
     parser.add_argument("--num_proc", type=int, default=4)
+    parser.add_argument("--logs_dir", type=str, default="logs")
     args = parser.parse_args()
 
     cfg = BaseConfig(mode="test").from_yaml(args.config_path)
@@ -37,6 +40,23 @@ if __name__ == "__main__":
         num_proc=args.num_proc,
     )
 
+    name = (
+        f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
+        f"__pooling-{cfg.model.pooling_method}"
+    )
+    loggers = []
+    if cfg.train.use_wandb:
+        wandb_logger = WandbLogger(
+            project=cfg.project_name,
+            name=name,
+            log_model=cfg.train.log_model,
+        )
+        loggers.append(wandb_logger)
+
+    # Add CSV logger by default
+    csv_logger = CSVLogger(save_dir=args.logs_dir, name=name)
+    loggers.append(csv_logger)
+
     logging.info(f"Loading model from {args.checkpoint_path}...")
     # Load weights from your saved checkpoint
     model = DeepStylometry.load_from_checkpoint(args.checkpoint_path, cfg=cfg)
@@ -45,7 +65,9 @@ if __name__ == "__main__":
     trainer = L.Trainer(
         accelerator="gpu",
         devices=1,
-        logger=False,  # Set to your WandbLogger/CSVLogger if you want to save the test metrics remotely
+        logger=loggers,  # Set to your WandbLogger/CSVLogger if you want to save the test metrics remotely
+        callbacks=[TestEvalCallback(max_cache_size=cfg.data.batch_size)],
+        precision=train_utils.resolve_lightning_precision(cfg.test.precision),
     )
 
     logging.info("=== Starting Evaluation ===")
