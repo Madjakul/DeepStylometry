@@ -65,7 +65,7 @@ if __name__ == "__main__":
         accelerator=cfg.test.device,
         devices=cfg.test.num_devices,
         logger=loggers,  # Set to your WandbLogger/CSVLogger if you want to save the test metrics remotely
-        callbacks=[TestEvalCallback(max_cache_size=cfg.data.batch_size)],
+        callbacks=[TestEvalCallback()],
         precision=precision,
     )
 
