@@ -4,7 +4,7 @@ import logging
 import os
 import shutil
 import tempfile
-from typing import List, TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import h5py
 import lightning as L
@@ -15,7 +15,8 @@ from tqdm import tqdm
 
 from deep_stylometry.modules.late_interaction import LateInteraction
 from deep_stylometry.modules.mean_interaction import MeanInteraction
-from deep_stylometry.utils.eval_utils import build_qrels, evaluate_run, gather_targets
+from deep_stylometry.utils.eval_utils import (build_qrels, evaluate_run,
+                                              gather_targets)
 
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
