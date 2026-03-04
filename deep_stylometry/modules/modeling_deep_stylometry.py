@@ -223,7 +223,25 @@ class DeepStylometry(L.LightningModule):
         )
 
     def test_step(self, batch, batch_idx):
-        pass
+        q_embs = self(
+            input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]
+        )
+        pos_embs = self(
+            input_ids=batch["pos_input_ids"], attention_mask=batch["pos_attention_mask"]
+        )
+        neg_embs = self(
+            input_ids=batch["neg_input_ids"], attention_mask=batch["neg_attention_mask"]
+        )
+        return {
+            "q_embs": q_embs,
+            "q_mask": batch["attention_mask"],
+            "q_input_ids": batch["input_ids"],
+            "pos_embs": pos_embs,
+            "pos_mask": batch["pos_attention_mask"],
+            "neg_embs": neg_embs,
+            "neg_mask": batch["neg_attention_mask"],
+            "target_indices": batch.get("target_indices", None),
+        }
 
     def gather_with_padding(
         self, local_tensor: torch.Tensor, pad_value: float = 0

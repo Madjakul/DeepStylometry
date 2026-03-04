@@ -1,207 +1,281 @@
 # deep_stylometry/callbacks/test_eval_callback.py
 
+# deep_stylometry/callbacks/test_eval_callback.py
+
+import logging
 import os
 import shutil
 import tempfile
-from collections import defaultdict
+from typing import List, Optional
 
+import h5py
 import lightning as L
 import torch
 import torch.nn.functional as F
-from ranx import Run, evaluate
+from ranx import Run
 
-from deep_stylometry.utils.eval_utils import build_qrels, gather_targets
+from deep_stylometry.modules.late_interaction import LateInteraction
+from deep_stylometry.modules.mean_interaction import MeanInteraction
+from deep_stylometry.utils.eval_utils import build_qrels, evaluate_run, gather_targets
 
 
 class TestEvalCallback(L.Callback):
-    def __init__(self, k: int = 100, shortlist_k: int = 500, max_cache_size: int = 64):
-        super().__init__()
-        self.k = k
-        self.shortlist_k = shortlist_k
-        self.max_cache_size = max_cache_size
-        self.tmp_dir = tempfile.mkdtemp()
-        self._batch_cache = {}
-        self._reset_state()
+    """Full-corpus test evaluation.
 
-    def _reset_state(self):
-        self.q_dense, self.p_dense, self.n_dense, self.targets = [], [], [], []
+    Queries stay in RAM.  Documents are streamed to HDF5 on disk. Both
+    MeanInteraction and LateInteraction (if available) are scored over
+    the full corpus with double chunking (query chunks × doc chunks), so
+    no giant matrix ever materializes.
+    """
+
+    def __init__(
+        self,
+        k: int = 100,
+        q_chunk: int = 256,
+        k_chunk: int = 256,
+        max_seq_len: int = 512,
+    ):
+        super().__init__()
+        self.K = k
+        self.Q_CHUNK = q_chunk
+        self.K_CHUNK = k_chunk
+        self.max_seq_len = max_seq_len
+        self.tmp_dir = tempfile.mkdtemp()
+        self.h5_path = os.path.join(self.tmp_dir, "corpus.h5")
+
+    def _reset(self):
+        self.q_embs: List[torch.Tensor] = []
+        self.q_masks: List[torch.Tensor] = []
+        self.q_ids: List[torch.Tensor] = []
+        self.targets: List[torch.Tensor] = []
         self.n_batches = 0
-        self._batch_cache.clear()
+
+    # ------------------------------------------------------------------ #
+    #  Hooks                                                               #
+    # ------------------------------------------------------------------ #
 
     def on_test_epoch_start(self, trainer, pl_module):
-        self._reset_state()
+        self._reset()
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self.h5_file = h5py.File(self.h5_path, "w")
+        self.h5_datasets = {}
+        logging.info(f"TestEvalCallback: HDF5 → {self.h5_path}")
 
     def on_test_batch_end(
         self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0
     ):
-        q_3d = pl_module.lm(batch["input_ids"], batch["attention_mask"]).half()
-        p_3d = pl_module.lm(batch["pos_input_ids"], batch["pos_attention_mask"]).half()
-        n_3d = pl_module.lm(batch["neg_input_ids"], batch["neg_attention_mask"]).half()
+        S = self.max_seq_len
 
-        # 1. DENSE STAGE: Pool to 1D and keep in RAM
-        pool = lambda t, m: F.normalize((t * m.unsqueeze(-1)).sum(1), p=2, dim=-1)
-        self.q_dense.append(pool(q_3d, batch["attention_mask"]).cpu())
-        self.p_dense.append(pool(p_3d, batch["pos_attention_mask"]).cpu())
-        self.n_dense.append(pool(n_3d, batch["neg_attention_mask"]).cpu())
+        def pad(t, s):
+            diff = s - t.size(1)
+            if diff > 0:
+                return F.pad(t, (0, 0, 0, diff) if t.dim() == 3 else (0, diff))
+            return t[:, :s] if t.dim() == 2 else t[:, :s, :]
 
-        # 2. LATE INTERACTION STAGE: Save heavy 3D tensors directly to disk
-        torch.save(
-            {
-                "q": q_3d.cpu(),
-                "q_m": batch["attention_mask"].cpu(),
-                "q_id": batch["input_ids"].cpu(),
-                "p": p_3d.cpu(),
-                "p_m": batch["pos_attention_mask"].cpu(),
-                "n": n_3d.cpu(),
-                "n_m": batch["neg_attention_mask"].cpu(),
-            },
-            os.path.join(self.tmp_dir, f"batch_{batch_idx}.pt"),
-        )
+        # Queries → RAM
+        self.q_embs.append(pad(outputs["q_embs"], S).half().cpu())
+        self.q_masks.append(pad(outputs["q_mask"], S).cpu())
+        self.q_ids.append(pad(outputs["q_input_ids"], S).cpu())
 
-        if "target_indices" in batch:
-            self.targets.append(batch["target_indices"].cpu())
+        # Documents → HDF5
+        for prefix, embs_key, mask_key in [
+            ("pos", "pos_embs", "pos_mask"),
+            ("neg", "neg_embs", "neg_mask"),
+        ]:
+            embs_np = pad(outputs[embs_key], S).half().cpu().numpy()
+            masks_np = pad(outputs[mask_key], S).cpu().to(torch.int8).numpy()
+            bs = embs_np.shape[0]
+
+            for suffix, data in [("embs", embs_np), ("masks", masks_np)]:
+                key = f"{prefix}_{suffix}"
+                if key not in self.h5_datasets:
+                    self.h5_datasets[key] = self.h5_file.create_dataset(
+                        key,
+                        shape=(0, *data.shape[1:]),
+                        maxshape=(None, *data.shape[1:]),
+                        dtype=data.dtype,
+                        chunks=(min(64, bs), *data.shape[1:]),
+                    )
+                ds = self.h5_datasets[key]
+                old = ds.shape[0]
+                ds.resize(old + bs, axis=0)
+                ds[old : old + bs] = data
+
+        if outputs["target_indices"] is not None:
+            self.targets.append(outputs["target_indices"].cpu())
+
         self.n_batches += 1
+        if (batch_idx + 1) % 50 == 0:
+            n = sum(t.size(0) for t in self.q_embs)
+            logging.info(f"  [test] batch {batch_idx + 1}: {n} samples")
 
-    # Point 1: Safe manual cache instead of lru_cache
-    def load_batch(self, file_idx: int):
-        if file_idx not in self._batch_cache:
-            # FIFO eviction (Python 3.7+ dicts preserve insertion order)
-            if len(self._batch_cache) >= self.max_cache_size:
-                self._batch_cache.pop(next(iter(self._batch_cache)))
-
-            self._batch_cache[file_idx] = torch.load(
-                os.path.join(self.tmp_dir, f"batch_{file_idx}.pt"), weights_only=True
-            )
-        return self._batch_cache[file_idx]
-
-    @torch.no_grad()
     def on_test_epoch_end(self, trainer, pl_module):
         if self.n_batches == 0:
+            logging.warning("TestEvalCallback: no batches.")
             return
 
-        bs = pl_module.cfg.data.batch_size
-        p_cat = torch.cat(self.p_dense, dim=0)
-        n_cat = torch.cat(self.n_dense, dim=0)
+        self.h5_file.close()
+        device = pl_module.device
 
-        # Point 6: Ensure balanced corpus for the math to work
-        assert len(p_cat) == len(
-            n_cat
-        ), f"Corpus mismatch! {len(p_cat)} pos != {len(n_cat)} neg"
+        q_embs = torch.cat(self.q_embs, dim=0)  # (N, S, H) fp16 in RAM
+        q_masks = torch.cat(self.q_masks, dim=0)  # (N, S)
+        q_ids = torch.cat(self.q_ids, dim=0)  # (N, S)
+        n_queries = q_embs.size(0)
 
-        # --- DENSE RETRIEVAL (In-Memory) ---
-        q_dense = torch.cat(self.q_dense, dim=0).to(pl_module.device)
-        k_dense = torch.cat([p_cat, n_cat], dim=0).to(pl_module.device)
-        n_corpus = k_dense.size(0)
+        h5 = h5py.File(self.h5_path, "r")
+        n_pos = h5["pos_embs"].shape[0]
+        n_neg = h5["neg_embs"].shape[0]
+        assert n_pos == n_neg, f"Corpus mismatch: {n_pos} pos != {n_neg} neg"
+        n_corpus = n_pos + n_neg
 
-        dense_scores = torch.matmul(q_dense, k_dense.T)
-        dense_top_s, shortlists = dense_scores.topk(
-            min(self.shortlist_k, n_corpus), dim=1
+        logging.info(f"  {n_queries} queries × {n_corpus} docs")
+
+        targets = gather_targets(self.targets)
+        hard_qrels, soft_qrels = build_qrels(n_queries, n_corpus, targets)
+
+        # --- Score with MeanInteraction (always) ---
+        mean_pool = MeanInteraction()
+        logging.info("  Scoring with MeanInteraction...")
+        dense_run = self._score_full_corpus(
+            pool=mean_pool,
+            q_embs=q_embs,
+            q_masks=q_masks,
+            q_ids=q_ids,
+            h5=h5,
+            n_pos=n_pos,
+            n_corpus=n_corpus,
+            device=device,
         )
-
-        # Point 2: Log Dense Run (Covers Comparison 1 & 3 Baselines)
-        dense_run_dict = {}
-        for q_idx in range(q_dense.size(0)):
-            c_ids = shortlists[q_idx].cpu().tolist()
-            c_scores = dense_top_s[q_idx].cpu().tolist()
-            dense_run_dict[f"q{q_idx}"] = {
-                f"d{c_ids[j]}": float(c_scores[j])
-                for j in range(min(self.k, len(c_ids)))
-            }
-
-        # --- LATE INTERACTION (Streamed from Disk) ---
-        li = getattr(pl_module.contrastive_loss, "pool", None)
-        li_run_dict = {}
-
-        if li:
-            for q_idx in range(q_dense.size(0)):
-                # 1. Read Query from Disk
-                q_data = self.load_batch(q_idx // bs)
-                q_emb = q_data["q"][q_idx % bs].unsqueeze(0).to(pl_module.device)
-                q_mask = q_data["q_m"][q_idx % bs].unsqueeze(0).to(pl_module.device)
-                q_id = q_data["q_id"][q_idx % bs].unsqueeze(0).to(pl_module.device)
-
-                cand_ids = shortlists[q_idx].cpu().tolist()
-
-                # --- I/O OPTIMIZATION: Group fetches by file ---
-                file_fetches = defaultdict(list)
-                for list_idx, c_idx in enumerate(cand_ids):
-                    is_neg = c_idx >= (n_corpus // 2)
-                    offset = c_idx - (n_corpus // 2) if is_neg else c_idx
-                    file_fetches[offset // bs].append(
-                        {
-                            "list_idx": list_idx,
-                            "is_neg": is_neg,
-                            "item_idx": offset % bs,
-                        }
-                    )
-
-                cand_embs, cand_masks = [None] * len(cand_ids), [None] * len(cand_ids)
-
-                # Batch load from disk safely using the new dict cache
-                for file_idx, items in file_fetches.items():
-                    c_data = self.load_batch(file_idx)
-                    for item in items:
-                        k_key = "n" if item["is_neg"] else "p"
-                        cand_embs[item["list_idx"]] = c_data[k_key][item["item_idx"]]
-                        cand_masks[item["list_idx"]] = c_data[f"{k_key}_m"][
-                            item["item_idx"]
-                        ]
-
-                # Pad streamed candidates locally and Score
-                m_len = max(m.size(0) for m in cand_masks)
-                cand_embs = torch.stack(
-                    [F.pad(e, (0, 0, 0, m_len - e.size(0))) for e in cand_embs]
-                ).to(pl_module.device)
-                cand_masks = torch.stack(
-                    [F.pad(m, (0, m_len - m.size(0))) for m in cand_masks]
-                ).to(pl_module.device)
-
-                scores = li(
-                    query_embs=q_emb,
-                    key_embs=cand_embs,
-                    q_mask=q_mask,
-                    k_mask=cand_masks,
-                    q_input_ids=q_id,
-                ).squeeze(0)
-                top_s, top_i = scores.topk(min(self.k, len(cand_ids)))
-                li_run_dict[f"q{q_idx}"] = {
-                    f"d{cand_ids[top_i[j]]}": float(top_s[j]) for j in range(len(top_i))
-                }
-
-        # --- LOGGING & CLEANUP ---
-        hard_qrels, soft_qrels = build_qrels(
-            q_dense.size(0), n_corpus, gather_targets(self.targets)
-        )
-
-        cutoffs = [5, 10, 20, 100]
-        mrr_reqs = [f"mrr@{k}" for k in cutoffs]
-        ndcg_reqs = [f"ndcg@{k}" for k in cutoffs]
-        recall_reqs = [f"recall@{k}" for k in cutoffs]
-
-        def compute_metrics(run_dict):
-            run = Run(run_dict)
-            # MRR uses hard qrels, nDCG and Recall use soft qrels
-            mrr_res = evaluate(hard_qrels, run, metrics=mrr_reqs)
-            ndcg_res = evaluate(soft_qrels, run, metrics=ndcg_reqs)
-            recall_res = evaluate(soft_qrels, run, metrics=recall_reqs)
-
-            # Merge dictionaries
-            return {**mrr_res, **ndcg_res, **recall_res}
-
-        # Log Dense First-Stage
-        dense_metrics = compute_metrics(dense_run_dict)
-        pl_module.log_dict(
-            {f"test/dense_baseline/{k}": v for k, v in dense_metrics.items()},
-            on_epoch=True,
-        )
-
-        # Log Late Interaction Second-Stage
-        if li:
-            li_metrics = compute_metrics(li_run_dict)
+        for k in [5, 10, 20, 100]:
+            metrics = evaluate_run(hard_qrels, soft_qrels, dense_run, k)
             pl_module.log_dict(
-                {f"test/late_interaction_rerank/{k}": v for k, v in li_metrics.items()},
+                {f"test/dense/{name}": v for name, v in metrics.items()},
                 on_epoch=True,
             )
+            logging.info(f"  test/dense @{k}: {metrics}")
 
-        shutil.rmtree(self.tmp_dir)  # Nuke disk storage
-        self._batch_cache.clear()  # Free RAM
+        # --- Score with LateInteraction (if available) ---
+        li = getattr(pl_module.contrastive_loss, "pool", None)
+        if isinstance(li, LateInteraction):
+            logging.info("  Scoring with LateInteraction...")
+            li_run = self._score_full_corpus(
+                pool=li,
+                q_embs=q_embs,
+                q_masks=q_masks,
+                q_ids=q_ids,
+                h5=h5,
+                n_pos=n_pos,
+                n_corpus=n_corpus,
+                device=device,
+            )
+            for k in [5, 10, 20, 100]:
+                metrics = evaluate_run(hard_qrels, soft_qrels, li_run, k)
+                pl_module.log_dict(
+                    {f"test/late_interaction/{name}": v for name, v in metrics.items()},
+                    on_epoch=True,
+                )
+                logging.info(f"  test/late_interaction @{k}: {metrics}")
+        else:
+            logging.info("  No LateInteraction module, skipping.")
+
+        h5.close()
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+        logging.info("TestEvalCallback: done.")
+
+    # ------------------------------------------------------------------ #
+    #  Double-chunked scoring                                              #
+    # ------------------------------------------------------------------ #
+
+    def _score_full_corpus(
+        self,
+        pool,
+        q_embs: torch.Tensor,
+        q_masks: torch.Tensor,
+        q_ids: torch.Tensor,
+        h5: h5py.File,
+        n_pos: int,
+        n_corpus: int,
+        device: torch.device,
+    ) -> Run:
+        """
+        Double-chunked scoring: outer loop over query chunks, inner loop
+        over doc chunks read from HDF5.  Maintains a running top-K per
+        query on CPU.  Identical pattern to RetrievalEvalCallback.
+        """
+        n_queries = q_embs.size(0)
+        top_scores = torch.full((n_queries, self.K), float("-inf"))
+        top_indices = torch.zeros((n_queries, self.K), dtype=torch.long)
+
+        for q_start in range(0, n_queries, self.Q_CHUNK):
+            q_end = min(q_start + self.Q_CHUNK, n_queries)
+
+            q_chunk = q_embs[q_start:q_end].float().to(device)
+            q_mask_chunk = q_masks[q_start:q_end].to(device)
+            q_id_chunk = q_ids[q_start:q_end].to(device)
+
+            for k_start in range(0, n_corpus, self.K_CHUNK):
+                k_end = min(k_start + self.K_CHUNK, n_corpus)
+
+                # Read doc chunk from HDF5 (may span pos/neg boundary)
+                k_chunk, k_mask_chunk = self._read_docs(
+                    h5, k_start, k_end, n_pos, device
+                )
+
+                chunk_scores = pool(
+                    query_embs=q_chunk,
+                    key_embs=k_chunk,
+                    q_mask=q_mask_chunk,
+                    k_mask=k_mask_chunk,
+                    q_input_ids=q_id_chunk,
+                ).cpu()  # (q_chunk_size, k_chunk_size)
+
+                # Merge with running top-K
+                combined_scores = torch.cat(
+                    [top_scores[q_start:q_end], chunk_scores], dim=1
+                )
+                combined_indices = torch.cat(
+                    [
+                        top_indices[q_start:q_end],
+                        torch.arange(k_start, k_end)
+                        .unsqueeze(0)
+                        .expand(q_end - q_start, -1),
+                    ],
+                    dim=1,
+                )
+                best_scores, best_local = combined_scores.topk(self.K, dim=1)
+                top_scores[q_start:q_end] = best_scores
+                top_indices[q_start:q_end] = combined_indices.gather(1, best_local)
+
+            logging.info(f"    queries {q_end}/{n_queries}")
+
+        return Run(
+            {
+                f"q{i}": {
+                    f"d{int(top_indices[i, j])}": float(top_scores[i, j])
+                    for j in range(self.K)
+                    if top_scores[i, j] != float("-inf")
+                }
+                for i in range(n_queries)
+            }
+        )
+
+    @staticmethod
+    def _read_docs(h5, start, end, n_pos, device):
+        """Read a contiguous doc slice from HDF5.
+
+        Handles the pos/neg boundary.
+        """
+        parts_e, parts_m = [], []
+        if start < n_pos:
+            s = min(end, n_pos)
+            parts_e.append(torch.from_numpy(h5["pos_embs"][start:s]))
+            parts_m.append(torch.from_numpy(h5["pos_masks"][start:s]))
+        if end > n_pos:
+            ns = max(start, n_pos) - n_pos
+            ne = end - n_pos
+            parts_e.append(torch.from_numpy(h5["neg_embs"][ns:ne]))
+            parts_m.append(torch.from_numpy(h5["neg_masks"][ns:ne]))
+        return (
+            torch.cat(parts_e).float().to(device),
+            torch.cat(parts_m).to(device),
+        )
