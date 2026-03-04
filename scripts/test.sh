@@ -7,7 +7,7 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 CONFIG_PATH=$PROJECT_ROOT/configs/train.yml
 PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
-CHECKPOINT_PATH=$PROJECT_ROOT/tmp/answerdotai-ModernBERT-base__halvest__pooling-mean/step-step=23000.ckpt
+CHECKPOINT_PATH=$PROJECT_ROOT/tmp/answerdotai-ModernBERT-base__halvest__pooling-li/step-step=23000.ckpt
 LOGS_DIR=$PROJECT_ROOT/logs
 
 # --------------------------------------------------------------------------------------
