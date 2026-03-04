@@ -1,23 +1,24 @@
 # deep_stylometry/callbacks/test_eval_callback.py
 
-# deep_stylometry/callbacks/test_eval_callback.py
-
 import logging
 import os
 import shutil
 import tempfile
-from typing import List, Optional
+from typing import List, TYPE_CHECKING
 
 import h5py
 import lightning as L
 import torch
 import torch.nn.functional as F
 from ranx import Run
+from tqdm import tqdm
 
 from deep_stylometry.modules.late_interaction import LateInteraction
 from deep_stylometry.modules.mean_interaction import MeanInteraction
-from deep_stylometry.utils.eval_utils import (build_qrels, evaluate_run,
-                                              gather_targets)
+from deep_stylometry.utils.eval_utils import build_qrels, evaluate_run, gather_targets
+
+if TYPE_CHECKING:
+    from deep_stylometry.utils.configs import BaseConfig
 
 
 class TestEvalCallback(L.Callback):
@@ -31,12 +32,14 @@ class TestEvalCallback(L.Callback):
 
     def __init__(
         self,
+        cfg: "BaseConfig",
         k: int = 100,
         q_chunk: int = 256,
         k_chunk: int = 256,
         max_seq_len: int = 512,
     ):
         super().__init__()
+        self.cfg = cfg
         self.K = k
         self.Q_CHUNK = q_chunk
         self.K_CHUNK = k_chunk
@@ -156,28 +159,25 @@ class TestEvalCallback(L.Callback):
             logging.info(f"  test/dense @{k}: {metrics}")
 
         # --- Score with LateInteraction (if available) ---
-        li = getattr(pl_module.contrastive_loss, "pool", None)
-        if isinstance(li, LateInteraction):
-            logging.info("  Scoring with LateInteraction...")
-            li_run = self._score_full_corpus(
-                pool=li,
-                q_embs=q_embs,
-                q_masks=q_masks,
-                q_ids=q_ids,
-                h5=h5,
-                n_pos=n_pos,
-                n_corpus=n_corpus,
-                device=device,
+        li = LateInteraction(self.cfg)
+        logging.info("  Scoring with LateInteraction...")
+        li_run = self._score_full_corpus(
+            pool=li,
+            q_embs=q_embs,
+            q_masks=q_masks,
+            q_ids=q_ids,
+            h5=h5,
+            n_pos=n_pos,
+            n_corpus=n_corpus,
+            device=device,
+        )
+        for k in [5, 10, 20, 100]:
+            metrics = evaluate_run(hard_qrels, soft_qrels, li_run, k)
+            pl_module.log_dict(
+                {f"test/late_interaction/{name}": v for name, v in metrics.items()},
+                on_epoch=True,
             )
-            for k in [5, 10, 20, 100]:
-                metrics = evaluate_run(hard_qrels, soft_qrels, li_run, k)
-                pl_module.log_dict(
-                    {f"test/late_interaction/{name}": v for name, v in metrics.items()},
-                    on_epoch=True,
-                )
-                logging.info(f"  test/late_interaction @{k}: {metrics}")
-        else:
-            logging.info("  No LateInteraction module, skipping.")
+            logging.info(f"  test/late_interaction @{k}: {metrics}")
 
         h5.close()
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
@@ -207,14 +207,16 @@ class TestEvalCallback(L.Callback):
         top_scores = torch.full((n_queries, self.K), float("-inf"))
         top_indices = torch.zeros((n_queries, self.K), dtype=torch.long)
 
-        for q_start in range(0, n_queries, self.Q_CHUNK):
+        for q_start in tqdm(range(0, n_queries, self.Q_CHUNK), desc="Scoring queries"):
             q_end = min(q_start + self.Q_CHUNK, n_queries)
 
             q_chunk = q_embs[q_start:q_end].float().to(device)
             q_mask_chunk = q_masks[q_start:q_end].to(device)
             q_id_chunk = q_ids[q_start:q_end].to(device)
 
-            for k_start in range(0, n_corpus, self.K_CHUNK):
+            for k_start in tqdm(
+                range(0, n_corpus, self.K_CHUNK), desc="Scoring docs", leave=False
+            ):
                 k_end = min(k_start + self.K_CHUNK, n_corpus)
 
                 # Read doc chunk from HDF5 (may span pos/neg boundary)
