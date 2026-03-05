@@ -39,8 +39,12 @@ if __name__ == "__main__":
     )
 
     name = (
-        f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
-        f"__pooling-{cfg.model.pooling_method}"
+        (
+            f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
+            f"__pooling-{cfg.model.pooling_method}__{cfg.data.test_subset}"
+        )
+        .replace("/", "_")
+        .lower()
     )
     loggers = []
     if cfg.train.use_wandb:
