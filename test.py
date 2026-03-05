@@ -43,7 +43,7 @@ if __name__ == "__main__":
             f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
             f"__pooling-{cfg.model.pooling_method}__{cfg.data.test_subset}"
         )
-        .replace("/", "_")
+        .replace("/", "-")
         .lower()
     )
     loggers = []
