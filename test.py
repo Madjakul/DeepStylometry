@@ -9,10 +9,10 @@ from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from deep_stylometry.callbacks import TestEvalCallback
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils import train_utils
+from deep_stylometry.utils.argparsers import TestArgparse
 from deep_stylometry.utils.configs import BaseConfig
 from deep_stylometry.utils.helpers import resolve_lightning_precision, set_seed
 from deep_stylometry.utils.logger import logging_config
-from deep_stylometry.utils.argparsers import TestArgparse
 
 os.environ["PYTHONUNBUFFERED"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
