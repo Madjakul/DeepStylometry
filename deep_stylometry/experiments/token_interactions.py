@@ -143,7 +143,7 @@ def generate_html_heatmap_pair(q_data, doc_data, align_1d, pair_idx):
 
     return f"""
     <div style='margin-bottom:32px;padding:20px;border:1px solid #ccc;border-radius:8px;font-family:sans-serif;'>
-      <h3 style='margin-top:0'>Pair {pair_idx+1}</h3>
+      <h3 style='margin-top:0'>Pair {pair_idx}</h3>
       <p style='font-size:13px;color:#666;font-weight:bold;margin:0 0 8px'>Query Document (Drivers of Score)</p>
       <div style='line-height:2.4;font-size:15px;margin-bottom:20px'>{q_spans}</div>
       <p style='font-size:13px;color:#666;font-weight:bold;margin:0 0 8px'>Target Document</p>
