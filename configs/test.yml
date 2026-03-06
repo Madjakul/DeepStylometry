@@ -3,7 +3,7 @@
 project_name: "deep-stylometry"
 
 model:
-  pooling_method: "mean"
+  pooling_method: "li"
 
 data:
   ds_name: "halvest" # or halvest
