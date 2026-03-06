@@ -69,7 +69,7 @@ def process_pair(q_text, pos_text, model, tokenizer, device):
     query_data = []
     for qi in q_valid:
         tok = q_tokens[qi]
-        clean_tok = tok.replace("Ġ", "").lower()
+        clean_tok = tok.replace("Ġ", "").strip().lower()
         query_data.append(
             {"token_raw": tok, "token_clean": clean_tok, "score": float(scores_1d[qi])}
         )
@@ -250,7 +250,10 @@ if __name__ == "__main__":
             # Visualize a few pairs for the HTML output
             if idx < 5:
                 html_output += generate_html_heatmap_pair(
-                    q_data, doc_data, align_remapped, pair_idx=f"{period_name}_{idx}"
+                    q_data,
+                    doc_data,
+                    align_remapped,
+                    pair_idx=f"{'pre' if 'Pre' in period_name else 'post'}_{idx}",
                 )
 
             # Experiment 2: Frequency analysis based on Q_DATA (Drivers of the score)
