@@ -16,7 +16,7 @@ class TestArgparse:
             Parsed arguments.
         """
         parser = argparse.ArgumentParser(
-            description="Arguments used for hyper-parameter tuning."
+            description="Arguments used to test a single subset on retrieval."
         )
         parser.add_argument(
             "--config_path",
@@ -25,10 +25,16 @@ class TestArgparse:
             help="Path to the config file.",
         )
         parser.add_argument(
-            "--ray_storage_path",
+            "--processed_ds_dir",
             type=str,
             required=True,
-            help="Directory where Ray will save the logs and experiments results.",
+            help="Directory where the processed datasets are stored.",
+        )
+        parser.add_argument(
+            "--checkpoint_path",
+            type=str,
+            required=True,
+            help="Path to the model checkpoint to load.",
         )
         parser.add_argument(
             "--logs_dir",

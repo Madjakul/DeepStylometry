@@ -1,6 +1,5 @@
 # test.py
 
-import argparse
 import logging
 import os
 
@@ -13,6 +12,7 @@ from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.configs import BaseConfig
 from deep_stylometry.utils.helpers import resolve_lightning_precision, set_seed
 from deep_stylometry.utils.logger import logging_config
+from deep_stylometry.utils.argparsers import TestArgparse
 
 os.environ["PYTHONUNBUFFERED"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -21,14 +21,7 @@ set_seed()
 logging_config()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config_path", type=str, required=True)
-    parser.add_argument("--processed_ds_dir", type=str, required=True)
-    parser.add_argument("--checkpoint_path", type=str, required=True)
-    parser.add_argument("--num_proc", type=int, default=4)
-    parser.add_argument("--logs_dir", type=str, default="logs")
-    args = parser.parse_args()
-
+    args = TestArgparse.parse_known_args()
     cfg = BaseConfig(mode="test").from_yaml(args.config_path)
 
     logging.info("Preparing data module...")
@@ -36,6 +29,7 @@ if __name__ == "__main__":
         cfg=cfg,
         processed_ds_dir=args.processed_ds_dir,
         num_proc=args.num_proc,
+        cache_dir=args.cache_dir,
     )
 
     name = (
