@@ -267,7 +267,7 @@ if __name__ == "__main__":
 
     print(f"Loading {args.subset} from HuggingFace...")
     ds = datasets.load_dataset(
-        "almanach/halvest-contrastive", name=args.subset, split="test"
+        "almanach/halvest-contrastive", name=args.subset, split="train"
     )
 
     def parse_year(y):
