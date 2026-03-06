@@ -1,12 +1,11 @@
 # deep_styometry/experiments/token_interactions.py
 
 import argparse
-from collections import Counter, defaultdict
-
-import datasets
 import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer
+import datasets
+from collections import Counter, defaultdict
 
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils.configs import BaseConfig
@@ -243,10 +242,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_viz",
         type=int,
-        default=5,
+        default=50,
         help="Number of pairs to render in the HTML per period.",
     )
-    parser.add_argument("--top_k_tokens", type=int, default=30)
+    parser.add_argument("--top_k_tokens", type=int, default=50)
     parser.add_argument(
         "--top_pct",
         type=float,
