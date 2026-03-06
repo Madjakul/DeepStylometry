@@ -237,8 +237,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_path", type=str, required=True)
     parser.add_argument("--checkpoint_path", type=str, required=True)
-    parser.add_argument("--subset", type=str, default="base-10")
-    parser.add_argument("--n_samples", type=int, default=500)
+    parser.add_argument("--subset", type=str, default="base-2")
+    parser.add_argument("--n_samples", type=int, default=400)
     parser.add_argument(
         "--n_viz",
         type=int,
@@ -277,14 +277,14 @@ if __name__ == "__main__":
             return -1
 
     pre_ds = ds.filter(
-        lambda x: 0 < parse_year(x["query_year"]) <= 2023
-        and 0 < parse_year(x["pos_year"]) <= 2023
+        lambda x: 0 < parse_year(x["query_year"]) < 2023
+        and 0 < parse_year(x["pos_year"]) < 2023
     )
     pre_ds = pre_ds.select(range(min(args.n_samples, len(pre_ds))))
 
     post_ds = ds.filter(
-        lambda x: parse_year(x["query_year"]) >= 2024
-        and parse_year(x["pos_year"]) >= 2024
+        lambda x: parse_year(x["query_year"]) >= 2023
+        and parse_year(x["pos_year"]) >= 2023
     )
     post_ds = post_ds.select(range(min(args.n_samples, len(post_ds))))
 
