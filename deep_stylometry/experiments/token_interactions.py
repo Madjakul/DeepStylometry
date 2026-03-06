@@ -1,11 +1,12 @@
 # deep_styometry/experiments/token_interactions.py
 
 import argparse
+from collections import Counter
+
+import datasets
 import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer
-import datasets
-from collections import Counter
 
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils.configs import BaseConfig
