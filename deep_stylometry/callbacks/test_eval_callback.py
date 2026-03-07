@@ -15,8 +15,7 @@ from tqdm import tqdm
 
 from deep_stylometry.modules.late_interaction import LateInteraction
 from deep_stylometry.modules.mean_interaction import MeanInteraction
-from deep_stylometry.utils.eval_utils import (build_qrels, evaluate_run,
-                                              gather_targets)
+from deep_stylometry.utils.eval_utils import build_qrels, evaluate_run, gather_targets
 
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
@@ -128,7 +127,7 @@ class TestEvalCallback(L.Callback):
         hard_qrels, soft_qrels = build_qrels(n_queries, n_corpus, targets)
 
         # --- Score with MeanInteraction ---
-        mean_pool = MeanInteraction()
+        mean_pool = MeanInteraction().to(device)
         logging.info("  Scoring with MeanInteraction...")
         dense_run = self._score_full_corpus(
             pool=mean_pool,
@@ -149,7 +148,7 @@ class TestEvalCallback(L.Callback):
             logging.info(f"  test/dense @{k}: {metrics}")
 
         # --- Score with LateInteraction ---
-        li = LateInteraction(self.cfg)
+        li = LateInteraction(self.cfg).to(device)
         logging.info("  Scoring with LateInteraction...")
         li_run = self._score_full_corpus(
             pool=li,
