@@ -8,12 +8,13 @@ import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
-from deep_stylometry.callbacks import (EvalRuntimeMonitor,
-                                       LogarithmicValidationCallback,
-                                       LossVarianceMonitor)
+from deep_stylometry.callbacks import (
+    EvalRuntimeMonitor,
+    LogarithmicValidationCallback,
+    LossVarianceMonitor,
+)
 from deep_stylometry.utils.configs.base_config import BaseConfig
-from deep_stylometry.utils.data.halvest_datamodule import \
-    HALvestContrastiveDatamodule
+from deep_stylometry.utils.data.halvest_datamodule import HALvestContrastiveDatamodule
 from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDatamodule
 from deep_stylometry.utils.helpers import resolve_lightning_precision
 
@@ -55,9 +56,13 @@ def setup_trainer(
     )
 
     name = (
-        f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
-        f"__pooling-{cfg.model.pooling_method}"
-    ).replace("/", "-")
+        (
+            f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
+            f"__pooling-{cfg.model.pooling_method}__skip_list-{cfg.model.skip_list}"
+        )
+        .replace("/", "-")
+        .lower()
+    )
 
     # Model checkpoint callback if checkpoint_dir is provided
     if checkpoint_dir is not None:

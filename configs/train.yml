@@ -20,7 +20,7 @@ model:
   dropout: 0.1
   expansion_ratio: 4
   pooling_method: "mean" # li or mean
-  skip_list: false
+  skip_list: true
 
 train:
   loss: "info_nce"

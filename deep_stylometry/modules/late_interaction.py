@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Optional
 import torch
 import torch.nn.functional as F
 from jaxtyping import Float, Int
+from tqdm import tqdm
 
 from deep_stylometry.utils.helpers import get_tokenizer
 
@@ -21,22 +22,26 @@ class LateInteraction(torch.nn.Module):
         logging.info("Using Late Interaction pooling method")
         self.cfg = cfg
 
-        tokenizer = get_tokenizer(cfg.model.base_checkpoint)
-        punc_token_ids = set()
-        for punc in string.punctuation:
-            punc_token_ids.update(tokenizer.encode(punc, add_special_tokens=False))
-            punc_token_ids.update(
-                tokenizer.encode(f" {punc}", add_special_tokens=False)
+        if self.cfg.model.skip_list:
+            tokenizer = get_tokenizer(cfg.model.base_checkpoint)
+            punc_chars = set(string.punctuation) | {" "}
+            punc_token_ids = set()
+            for token_str, token_id in tqdm(
+                tokenizer.get_vocab().items(), desc="Identifying punctuation tokens"
+            ):
+                # Decode the raw token to a string (handles Ġ, Ċ, byte-level prefixes, etc.)
+                decoded = tokenizer.convert_tokens_to_string([token_str])
+                if decoded and all(c in punc_chars for c in decoded):
+                    punc_token_ids.add(token_id)
+            self.register_buffer(
+                "punc_token_ids",
+                torch.tensor(list(punc_token_ids), dtype=torch.long),
+                persistent=False,
             )
-        self.register_buffer(
-            "punc_token_ids",
-            torch.tensor(list(punc_token_ids), dtype=torch.long),
-            persistent=False,
-        )
-        logging.info(
-            f"Initialized Late Interaction with {len(punc_token_ids)} punctuation"
-            " tokens to skip."
-        )
+            logging.info(
+                f"Initialized Late Interaction with {len(punc_token_ids)} punctuation"
+                " tokens to skip."
+            )
 
     def forward(
         self,
