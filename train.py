@@ -3,18 +3,18 @@
 import logging
 import os
 
-import psutil
-
 from deep_stylometry.modules import DeepStylometry
 from deep_stylometry.utils import train_utils
 from deep_stylometry.utils.argparsers import TrainArgparse
 from deep_stylometry.utils.configs import BaseConfig
+from deep_stylometry.utils.helpers import set_seed
 from deep_stylometry.utils.logger import logging_config
 
 os.environ["PYTHONUNBUFFERED"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-NUM_PROC = psutil.cpu_count(logical=False)
 
+
+set_seed()
 logging_config()
 
 
@@ -25,48 +25,20 @@ if __name__ == "__main__":
     logging.info("Preparing data module...")
     dm = train_utils.setup_datamodule(
         cfg=cfg,
+        processed_ds_dir=args.processed_ds_dir,
+        num_proc=args.num_proc,
         cache_dir=args.cache_dir,
-        num_proc=args.num_proc if args.num_proc is not None else NUM_PROC,
     )
 
-    if cfg.do_test:
-        logging.info("Setting up DataModule for test split...")
-        dm.setup("test")
+    logging.info("=== Fine-tuning ===")
+    model = DeepStylometry(cfg)
 
-    model = None
-    trainer = None
+    trainer = train_utils.setup_trainer(
+        cfg=cfg,
+        model=model,
+        logs_dir=args.logs_dir,
+        checkpoint_dir=args.checkpoint_dir,
+    )
 
-    # Training
-    if cfg.do_train:
-        logging.info("--- Fine-tuning ---")
-        model = DeepStylometry(cfg)
-
-        trainer = train_utils.setup_trainer(
-            cfg=cfg,
-            model=model,
-            logs_dir=args.logs_dir,
-            checkpoint_dir=args.checkpoint_dir,
-        )
-
-        trainer.fit(model=model, datamodule=dm)
-        logging.info("--- Fine-tuning finished ---")
-
-    # Testing
-    if cfg.do_test:
-        logging.info("--- Testing ---")
-        if trainer is None:
-            if args.checkpoint_path is not None:
-                logging.info("Loading DeepStylometry model from checkpoint.")
-                model = DeepStylometry.load_from_checkpoint(args.checkpoint_path)
-            else:
-                model = DeepStylometry(cfg)
-
-            trainer = train_utils.setup_trainer(
-                cfg=cfg,
-                model=model,
-                logs_dir=args.logs_dir,
-                checkpoint_dir=None,
-            )
-
-        trainer.test(model=model, datamodule=dm)
-        logging.info("--- Testing finished ---")
+    trainer.fit(model=model, datamodule=dm)
+    logging.info("=== Fine-tuning finished ===")

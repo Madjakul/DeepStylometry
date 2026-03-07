@@ -25,16 +25,16 @@ class TrainArgparse:
             help="Path to the config file.",
         )
         parser.add_argument(
+            "--processed_ds_dir",
+            type=str,
+            required=True,
+            help="Directory where the processed datasets are stored.",
+        )
+        parser.add_argument(
             "--logs_dir",
             type=str,
             required=True,
             help="Directory where the logs are stored.",
-        )
-        parser.add_argument(
-            "--num_proc",
-            type=int,
-            default=None,
-            help="Number of processes to use. Default is the number of CPUs.",
         )
         parser.add_argument(
             "--checkpoint_dir",
@@ -43,11 +43,10 @@ class TrainArgparse:
             help="Directory where the model's checkpoints are stored.",
         )
         parser.add_argument(
-            "--checkpoint_path",
-            type=str,
+            "--num_proc",
+            type=int,
             default=None,
-            help="""Path to a checkpoint file if it exists. This argument is only used 
-                when testing an existing model.""",
+            help="Number of processes to use. Default is the number of CPUs.",
         )
         parser.add_argument(
             "--cache_dir",

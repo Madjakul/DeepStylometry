@@ -1,7 +1,12 @@
 # deep_strylometry/utils/helpers.py
 
+import logging
+import os
+import random
 from typing import Any
 
+import numpy as np
+import torch
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 WIDTH = 88
@@ -44,3 +49,43 @@ def get_tokenizer(model_name: str, **kwargs) -> "PreTrainedTokenizerBase":
         else:
             raise ValueError("Tokenizer has neither pad_token nor eos_token defined.")
     return tokenizer
+
+
+def set_seed(seed: int = 7) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    logging.info(f"Random seed set as {seed}")
+
+
+def resolve_lightning_precision(
+    requested_precision: str,
+) -> tuple[str, torch.dtype]:
+    if requested_precision == "bf16-mixed":
+        bf16_ok = (
+            torch.cuda.is_available()
+            and torch.cuda.is_bf16_supported()
+            and torch.cuda.get_device_capability(0)[0] >= 8
+        )
+        if bf16_ok:
+            logging.info("Using bfloat16 mixed precision.")
+            return "bf16-mixed", torch.bfloat16
+        else:
+            logging.warning(
+                "Bfloat16 mixed precision is not supported on this hardware. Falling back to float16 mixed precision."
+            )
+            return "16-mixed", torch.float16
+
+    if requested_precision == "16-mixed":
+        logging.info("Using float16 mixed precision.")
+        return "16-mixed", torch.float16
+
+    if requested_precision in ("32", "32-true"):
+        logging.info("Using float32 precision.")
+        return "32-true", torch.float32
+
+    raise ValueError(f"Unknown Lightning precision: {requested_precision}")

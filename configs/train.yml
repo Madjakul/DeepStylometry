@@ -1,64 +1,47 @@
 # train.yml
 
-mode: "train"
 project_name: "deep-stylometry"
-group_name: "train-deepstylometry-512-se-default"
-do_train: true
-do_test: false
 
 data:
-  ds_name: "se" # or halvest
-  batch_size: 32
-  tokenizer_name: "FacebookAI/roberta-base"
+  ds_name: "halvest" # or halvest
+  batch_size: 64
+  tokenizer_name: "answerdotai/ModernBERT-base"
   max_length: 512
+  padding: "do_not_pad"
+  truncation: "longest_first"
+  add_special_tokens: true
   map_batch_size: 1000
   load_from_cache_file: true
-  config_name: null
-  mlm_collator: false # only if you use an encoder
+  subsets: ["base-2", "base-4", "base-6", "base-8", "base-10"]
+  shuffle: true
 
 model:
-  base_model_name: "FacebookAI/roberta-base"
-  is_decoder_model: false
-  add_linear_layers: true
-  dropout: 0.3
-  pooling_method: "mean" # li or mean
-  # --- late interaction
-  distance_weightning: "none" # none, exp or linear
-  alpha: 0.28
-  use_softmax: true
-  initial_gumbel_temp: null # null
-  auto_anneal_gumbel: true
-  min_gumbel_temp: 0.5
+  base_checkpoint: "answerdotai/ModernBERT-base"
+  dropout: 0.1
+  expansion_ratio: 4
+  pooling_method: "li" # li or mean
+  skip_list: true
 
 train:
-  loss: "triplet"
+  loss: "info_nce"
   tau: 0.5
-  lambda_: 0.5 # only if using hybrid
   margin: 0.32 # Only if using triplet loss
-  lm_loss_weight: 0.0
   # --- optimizer ---
-  lr: 1.25e-5
-  betas: [0.9, 0.999]
-  eps: 1.0e-9
-  weight_decay: 0.11
-  num_cycles: 0.5
-  # --- checkpointing
-  checkpoint_metric: "val_auroc" # only if a checkpoint directory was provided
-  checkpoint_mode: "max"
-  save_top_k: 4
+  lr: 3.0e-5
+  weight_decay: 0.1
   # --- trainer ---
   device: "gpu"
-  num_devices: 3
-  strategy: "ddp_find_unused_parameters_true" # "ddp"
-  process_group_backend: "gloo" # gloo, nccl, mpi
-  max_epochs: 4 # max_steps: 7000
+  num_devices: 4
+  strategy: "ddp"
+  process_group_backend: "nccl" # gloo, nccl, mpi
+  max_epochs: 1 # max_steps: 7000
   val_check_interval: null
   check_val_every_n_epoch: null
   log_every_n_steps: 1
   accumulate_grad_batches: 1
   gradient_clip_val: null # null
-  precision: "32" # 32-true or 16-mixed
+  precision: "16-mixed" # 32-true or 16-mixed
   # --- wandb logger ---
   use_wandb: true
-  log_model: true
+  log_model: false
   watch: "all" # all, gradients, parameters or null
