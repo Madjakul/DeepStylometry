@@ -36,7 +36,7 @@ if __name__ == "__main__":
         (
             f"test__{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
             f"__pooling-{cfg.model.pooling_method}__{cfg.data.test_subset}"
-            f"skip_list-{cfg.model.skip_list}-false"
+            f"__skip_list-{cfg.model.skip_list}-false"
         )
         .replace("/", "-")
         .lower()
