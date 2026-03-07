@@ -104,7 +104,8 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
                 continue
 
             logging.info(
-                "Processed data not found for train. Running full preprocessing pipeline..."
+                "Processed data not found for train. Running full preprocessing"
+                " pipeline..."
             )
             ds = datasets.load_dataset(
                 path="almanach/halvest-contrastive",
@@ -209,7 +210,6 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
     def train_dataloader(self) -> DataLoader:
         collate_fn = None
         if self.cfg.train.gather:
-            # Use a custom collate_fn to gather positive and negative samples across the batch
             collate_fn = TripletDataCollator(tokenizer=self.tokenizer)
         return DataLoader(
             self.train_ds,  # type: ignore

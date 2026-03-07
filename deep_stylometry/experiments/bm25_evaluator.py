@@ -15,11 +15,6 @@ from deep_stylometry.utils.helpers import get_tokenizer
 def _tokenize_to_strings(
     batch: Dict[str, Any], tokenizer: AutoTokenizer
 ) -> Dict[str, List[str]]:
-    """
-    Map function: convert token IDs to space-joined token strings.
-    Uses tokenizer.convert_ids_to_tokens (C-backed, fast) instead of
-    Python str() loops.
-    """
     q_tokens, p_tokens, n_tokens = [], [], []
 
     for ids, mask in zip(batch["input_ids"], batch["attention_mask"]):
@@ -43,17 +38,6 @@ def evaluate_bm25(
     k: int = 100,
     num_proc: int = 4,
 ) -> Dict[str, float]:
-    """Run BM25 retrieval on a triplet dataset.
-
-    Corpus = positives [0, N) + negatives [N, 2N).
-    Token IDs are converted to subword strings via the tokenizer.
-
-    Args:
-        ds: Dataset with input_ids, attention_mask, pos_*, neg_*, target_indices.
-        tokenizer_name: HF tokenizer name for convert_ids_to_tokens.
-        k: Cutoff for retrieval metrics.
-        num_proc: Workers for ds.map().
-    """
     tokenizer = get_tokenizer(tokenizer_name)
     n_queries = len(ds)
 

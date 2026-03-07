@@ -21,7 +21,6 @@ class MeanInteraction(torch.nn.Module):
         k_mask: Int[torch.Tensor, "two_times_batch seq"],
         **kwargs,
     ) -> Float[torch.Tensor, "batch two_times_batch"]:
-        # Mean pooling and normalization
         query_vec = (query_embs * q_mask.unsqueeze(-1)).sum(dim=1)
         query_vec = F.normalize(query_vec, p=2, dim=-1)
 

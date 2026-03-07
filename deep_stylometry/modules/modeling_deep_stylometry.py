@@ -1,6 +1,5 @@
 # deep_stylometry/modules/modeling_deep_stylometry.py
 
-import logging
 from typing import TYPE_CHECKING, Any, Dict
 
 import lightning as L
@@ -9,8 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import get_cosine_schedule_with_warmup
 
-from deep_stylometry.modules.alignment_uniformity_loss import \
-    AlignmentUniformityLoss
+from deep_stylometry.modules.alignment_uniformity_loss import AlignmentUniformityLoss
 from deep_stylometry.modules.info_nce_loss import InfoNCELoss
 from deep_stylometry.modules.language_model import LanguageModel
 from deep_stylometry.modules.triplet_loss import TripletLoss
@@ -266,7 +264,6 @@ class DeepStylometry(L.LightningModule):
         # 3. Pad locally if necessary
         diff = global_max_len.item() - local_max_len.item()
         if diff > 0:
-            # F.pad logic: (pad_last_dim_left, pad_last_dim_right, pad_2nd_last_left, ...)
             if local_tensor.dim() == 3:  # Embeddings (Batch, Seq, Hidden)
                 pad_config = (0, 0, 0, diff)
             elif local_tensor.dim() == 2:  # Masks or IDs (Batch, Seq)
@@ -274,7 +271,6 @@ class DeepStylometry(L.LightningModule):
             else:
                 raise ValueError(f"Unexpected tensor shape: {local_tensor.shape}")
 
-            # Use the specific pad_value provided (0 for masks/embs, pad_token_id for input_ids)
             local_tensor = F.pad(local_tensor, pad_config, value=pad_value)
 
         # 4. Standard all_gather

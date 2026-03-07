@@ -15,21 +15,13 @@ from tqdm import tqdm
 
 from deep_stylometry.modules.late_interaction import LateInteraction
 from deep_stylometry.modules.mean_interaction import MeanInteraction
-from deep_stylometry.utils.eval_utils import (build_qrels, evaluate_run,
-                                              gather_targets)
+from deep_stylometry.utils.eval_utils import build_qrels, evaluate_run, gather_targets
 
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
 
 
 class TestEvalCallback(L.Callback):
-    """Full-corpus test evaluation.
-
-    Queries stay in RAM.  Documents are streamed to HDF5 on disk. Both
-    MeanInteraction and LateInteraction (if available) are scored over
-    the full corpus with double chunking (query chunks × doc chunks), so
-    no giant matrix ever materializes.
-    """
 
     def __init__(
         self,
@@ -54,10 +46,6 @@ class TestEvalCallback(L.Callback):
         self.q_ids: List[torch.Tensor] = []
         self.targets: List[torch.Tensor] = []
         self.n_batches = 0
-
-    # ------------------------------------------------------------------ #
-    #  Hooks                                                               #
-    # ------------------------------------------------------------------ #
 
     def on_test_epoch_start(self, trainer, pl_module):
         self._reset()
@@ -138,7 +126,7 @@ class TestEvalCallback(L.Callback):
         targets = gather_targets(self.targets)
         hard_qrels, soft_qrels = build_qrels(n_queries, n_corpus, targets)
 
-        # --- Score with MeanInteraction (always) ---
+        # --- Score with MeanInteraction ---
         mean_pool = MeanInteraction()
         logging.info("  Scoring with MeanInteraction...")
         dense_run = self._score_full_corpus(
@@ -159,7 +147,7 @@ class TestEvalCallback(L.Callback):
             )
             logging.info(f"  test/dense @{k}: {metrics}")
 
-        # --- Score with LateInteraction (if available) ---
+        # --- Score with LateInteraction ---
         li = LateInteraction(self.cfg)
         logging.info("  Scoring with LateInteraction...")
         li_run = self._score_full_corpus(
@@ -184,10 +172,6 @@ class TestEvalCallback(L.Callback):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
         logging.info("TestEvalCallback: done.")
 
-    # ------------------------------------------------------------------ #
-    #  Double-chunked scoring                                              #
-    # ------------------------------------------------------------------ #
-
     def _score_full_corpus(
         self,
         pool,
@@ -199,11 +183,6 @@ class TestEvalCallback(L.Callback):
         n_corpus: int,
         device: torch.device,
     ) -> Run:
-        """
-        Double-chunked scoring: outer loop over query chunks, inner loop
-        over doc chunks read from HDF5.  Maintains a running top-K per
-        query on CPU.  Identical pattern to RetrievalEvalCallback.
-        """
         n_queries = q_embs.size(0)
         top_scores = torch.full((n_queries, self.K), float("-inf"))
         top_indices = torch.zeros((n_queries, self.K), dtype=torch.long)
@@ -265,10 +244,6 @@ class TestEvalCallback(L.Callback):
 
     @staticmethod
     def _read_docs(h5, start, end, n_pos, device):
-        """Read a contiguous doc slice from HDF5.
-
-        Handles the pos/neg boundary.
-        """
         parts_e, parts_m = [], []
         if start < n_pos:
             s = min(end, n_pos)

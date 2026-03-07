@@ -16,12 +16,7 @@ def build_corpus(
     neg_embs_list: List[torch.Tensor],
     neg_masks_list: List[torch.Tensor],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Pad all embeddings to a SINGLE global max seq length, then concatenate.
-
-    This ensures pos and neg can be torch.cat'd on dim=0.
-    """
     all_embs = q_embs_list + pos_embs_list + neg_embs_list
-    all_masks = q_masks_list + pos_masks_list + neg_masks_list
     global_max_seq = max(t.size(1) for t in all_embs)
 
     def pad_to(t: torch.Tensor, target: int) -> torch.Tensor:

@@ -7,8 +7,6 @@ from lightning.pytorch.utilities import rank_zero_only
 
 
 class EvalRuntimeMonitor(Callback):
-    """A Lightning Callback to log the total runtime of validation and test
-    epochs."""
 
     def __init__(self):
         super().__init__()

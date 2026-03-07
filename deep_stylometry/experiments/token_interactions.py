@@ -44,15 +44,6 @@ def late_interaction_score(q_embs, doc_embs, q_mask, doc_mask):
 
 
 def process_pair(q_text, pos_text, neg_text, model, tokenizer, device):
-    """Tokenizes and embeds query, positive, and negative.
-
-    Returns:
-      query_data      : list of dicts (token_raw, token_clean, score, orig_idx)
-      doc_data        : list of dicts (token_raw, token_clean, score)
-      align_remapped  : list of ints — doc_data index each query token aligned to
-      pos_score       : float — full late-interaction score(query, positive)
-      neg_score       : float — full late-interaction score(query, negative)
-    """
 
     def _tok(text):
         return tokenizer(text, return_tensors="pt", truncation=True, max_length=512).to(

@@ -9,8 +9,6 @@ from transformers import PreTrainedTokenizerBase
 
 @dataclass
 class EvalCollator:
-    """Pads triplet fields to longest in batch, and pads target_indices with
-    -1."""
 
     tokenizer: PreTrainedTokenizerBase
 

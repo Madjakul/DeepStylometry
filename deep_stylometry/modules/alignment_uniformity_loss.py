@@ -30,22 +30,18 @@ class AlignmentUniformityLoss(nn.Module):
         query_pooled = (query_embs * q_mask.unsqueeze(-1)).sum(dim=1) / q_lengths
         key_pooled = (key_embs * k_mask.unsqueeze(-1)).sum(dim=1) / k_lengths
 
-        # L2 normalize the pooled representations
         query_pooled = F.normalize(query_pooled, p=2, dim=-1)
         key_pooled = F.normalize(key_pooled, p=2, dim=-1)
 
         positive_keys = key_pooled[targets]
 
-        # Compute squared L2 distance between positive pairs
         alignment_loss = (
             torch.norm(query_pooled - positive_keys, p=2, dim=-1).pow(2).mean()
         )
 
-        # Combine all embeddings for uniformity calculation
         all_embeddings = torch.cat([query_pooled, key_pooled], dim=0)
         pairwise_dists = torch.cdist(all_embeddings, all_embeddings, p=2).pow(2)
 
-        # Apply the log uniformity formula
         mask = ~torch.eye(
             pairwise_dists.size(0), dtype=torch.bool, device=pairwise_dists.device
         )

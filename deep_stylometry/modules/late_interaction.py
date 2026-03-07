@@ -74,8 +74,6 @@ class LateInteraction(torch.nn.Module):
             keep_mask = ~punc_mask
             scores = scores * keep_mask.unsqueeze(1).float()
 
-        # Apply query mask and aggregate over query tokens
-        # Zero out padding query positions, then sum
         scores = scores * q_mask.unsqueeze(1).float()
         scores = scores.sum(dim=-1)  # (batch_q, batch_k)
 

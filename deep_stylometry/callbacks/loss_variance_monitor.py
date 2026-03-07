@@ -1,4 +1,4 @@
-# deep_stylometry/callbacks/variance_monitor.py
+# deep_stylometry/callbacks/loss_variance_monitor.py
 
 import logging
 from collections import deque
@@ -9,18 +9,6 @@ import torch
 
 
 class LossVarianceMonitor(L.Callback):
-    """Monitor training stability via rolling loss variance and rolling query-
-    length variance, logged at reduced frequency so wandb plots remain
-    readable.
-
-    Because both metrics are logged at the same global_step, wandb lets you build
-    a custom scatter chart of loss_variance_rolling vs query_length_variance_rolling.
-
-    Args:
-        window_size:      Number of steps in the rolling window for both metrics.
-        log_every_n_steps: Emit to the logger only every N steps (default: window_size).
-                           Set independently of trainer.log_every_n_steps.
-    """
 
     def __init__(self, window_size: int = 100, log_every_n_steps: Optional[int] = None):
         super().__init__()
@@ -53,14 +41,12 @@ class LossVarianceMonitor(L.Callback):
             loss = outputs
         self.losses.append(loss.detach().cpu())
 
-        # --- accumulate per-sample query lengths for this batch ---
         attention_mask = batch.get("attention_mask")
         if attention_mask is not None:
             # store mean query length for the batch as a scalar representative
             batch_length_var = torch.var(attention_mask.sum(dim=1).float())
             self.query_lengths.append(batch_length_var.cpu())
 
-        # --- gate logging ---
         if trainer.global_step % self.log_every_n_steps != 0:
             return
         if len(self.losses) < 2:
