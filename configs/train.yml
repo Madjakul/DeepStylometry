@@ -19,7 +19,7 @@ model:
   base_checkpoint: "answerdotai/ModernBERT-base"
   dropout: 0.1
   expansion_ratio: 4
-  pooling_method: "mean" # li or mean
+  pooling_method: "li" # li or mean
   skip_list: true
 
 train:
