@@ -100,7 +100,11 @@ submit() {
         return
     fi
     local jid
-    jid=$(sbatch --parsable ${dep:+$dep} "$@")
+    # Pass --output with absolute path so SLURM never fails to find logs/
+    # regardless of the submit working directory.
+    jid=$(sbatch --parsable \
+        --output="$PROJECT_ROOT/logs/%x-%j-%t.log" \
+        ${dep:+$dep} "$@")
     echo "$jid"
     echo "[SUBMITTED] $desc → job $jid" >&2
 }
@@ -250,22 +254,59 @@ run_fixed_patches() {
     fi
     submit_tests "test_pli_wholeword" "$CKPT_WW" "$JID_TRAIN_WW" > /dev/null
 
-    # P3 — PLI ngram variants (all submitted in parallel; last jid exposed for Tune)
-    echo "=== P3: PLI ngram-{2,3,4,5} ==="
-    LAST_P3_JID=""
-    for N in 2 3 4 5; do
-        CKPT_NG=$CHECKPOINT_DIR/$(run_name_std pli true ngram $N)/last.ckpt
-        JID=""
-        if ! skip_train "$CKPT_NG"; then
-            JID=$(submit "train P3 pli-ngram${N}" "" \
-                "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_pli_ngram${N}.yml")
-        else
-            echo "[SKIP] P3 ngram-${N} training skipped (--test-only or checkpoint exists)." >&2
-        fi
-        submit_tests "test_pli_ngram${N}" "$CKPT_NG" "$JID" > /dev/null
-        LAST_P3_JID="$JID"
-    done
-    # Export so tune phase can pick it up
+    # P3 — PLI ngram variants.
+    # Training is chained 2-by-2 to avoid hitting the per-account GPU quota:
+    #   chain A: ngram2 ──afterany──▶ ngram4
+    #   chain B: ngram3 ──afterany──▶ ngram5
+    # Tests are submitted with afterany on their own training job (unchanged).
+    echo "=== P3: PLI ngram-{2,3,4,5} (chains: 2→4 and 3→5) ==="
+
+    # -- ngram2 (no upstream dependency) --
+    CKPT_N2=$CHECKPOINT_DIR/$(run_name_std pli true ngram 2)/last.ckpt
+    JID_N2=""
+    if ! skip_train "$CKPT_N2"; then
+        JID_N2=$(submit "train P3 pli-ngram2" "" \
+            "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_pli_ngram2.yml")
+    else
+        echo "[SKIP] P3 ngram-2 training skipped (--test-only or checkpoint exists)." >&2
+    fi
+    submit_tests "test_pli_ngram2" "$CKPT_N2" "$JID_N2" > /dev/null
+
+    # -- ngram3 (no upstream dependency) --
+    CKPT_N3=$CHECKPOINT_DIR/$(run_name_std pli true ngram 3)/last.ckpt
+    JID_N3=""
+    if ! skip_train "$CKPT_N3"; then
+        JID_N3=$(submit "train P3 pli-ngram3" "" \
+            "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_pli_ngram3.yml")
+    else
+        echo "[SKIP] P3 ngram-3 training skipped (--test-only or checkpoint exists)." >&2
+    fi
+    submit_tests "test_pli_ngram3" "$CKPT_N3" "$JID_N3" > /dev/null
+
+    # -- ngram4 (starts after ngram2 finishes) --
+    CKPT_N4=$CHECKPOINT_DIR/$(run_name_std pli true ngram 4)/last.ckpt
+    JID_N4=""
+    if ! skip_train "$CKPT_N4"; then
+        JID_N4=$(submit "train P3 pli-ngram4" "$(dep_afterany "$JID_N2")" \
+            "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_pli_ngram4.yml")
+    else
+        echo "[SKIP] P3 ngram-4 training skipped (--test-only or checkpoint exists)." >&2
+    fi
+    submit_tests "test_pli_ngram4" "$CKPT_N4" "$JID_N4" > /dev/null
+
+    # -- ngram5 (starts after ngram3 finishes) --
+    CKPT_N5=$CHECKPOINT_DIR/$(run_name_std pli true ngram 5)/last.ckpt
+    JID_N5=""
+    if ! skip_train "$CKPT_N5"; then
+        JID_N5=$(submit "train P3 pli-ngram5" "$(dep_afterany "$JID_N3")" \
+            "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_pli_ngram5.yml")
+    else
+        echo "[SKIP] P3 ngram-5 training skipped (--test-only or checkpoint exists)." >&2
+    fi
+    submit_tests "test_pli_ngram5" "$CKPT_N5" "$JID_N5" > /dev/null
+
+    # Expose last submitted training JID for tune phase
+    LAST_P3_JID="${JID_N5:-${JID_N4:-${JID_N3:-$JID_N2}}}"
     export LAST_P3_JID
 }
 

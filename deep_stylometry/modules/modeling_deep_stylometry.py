@@ -196,8 +196,17 @@ class DeepStylometry(L.LightningModule):
             batch["neg_attention_mask"],
             (0, max_seq - batch["neg_attention_mask"].size(1)),
         )
+        pos_ids = F.pad(
+            batch["pos_input_ids"],
+            (0, max_seq - batch["pos_input_ids"].size(1)),
+        )
+        neg_ids = F.pad(
+            batch["neg_input_ids"],
+            (0, max_seq - batch["neg_input_ids"].size(1)),
+        )
         k_embs = torch.cat([pos_embs, neg_embs], dim=0)
         k_mask = torch.cat([pos_mask, neg_mask], dim=0)
+        k_ids = torch.cat([pos_ids, neg_ids], dim=0)
         targets = torch.arange(q_embs.size(0), device=self.device)
 
         alignment_uniformity_metrics = self.alignment_uniformity_loss(
@@ -226,6 +235,7 @@ class DeepStylometry(L.LightningModule):
             k_mask=k_mask,
             targets=targets,
             q_input_ids=batch["input_ids"],
+            k_input_ids=k_ids,
         )
 
         accuracy = (loss_metrics["poss"] > loss_metrics["negs"]).float().mean()
