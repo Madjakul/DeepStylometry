@@ -286,6 +286,11 @@ run_appendix() {
 LAST_P3_JID=""
 JID_TUNE=""
 
+# Ensure the logs directory exists before any sbatch call.
+# SLURM resolves #SBATCH --output=logs/... at job start; if the directory is
+# missing the job is immediately killed before executing any code.
+mkdir -p "$PROJECT_ROOT/logs"
+
 case "$PHASE" in
     baselines)
         run_baselines ;;
