@@ -16,10 +16,19 @@
 #     appendix       — Appendix: P4 with cross-attention compression
 #     all            — everything (default)
 #
-# --resume   Skip phases whose last.ckpt already exists on disk.
-#            Test jobs still run if the checkpoint is present.
+# --resume      Skip training jobs whose last.ckpt already exists.
+#               Test jobs still run if the checkpoint is present.
 #
-# --dry-run  Echo sbatch commands without submitting.
+# --train-only  Submit only training jobs; skip all test submissions.
+#               Use this to resubmit failed training runs without triggering
+#               redundant tests while other jobs are still in the queue.
+#
+# --test-only   Submit only test jobs (skips all training).  Combine with
+#               --resume to avoid submitting tests for missing checkpoints:
+#                 ./scripts/run_all_phases.sh --phase fixed_patches --test-only
+#               Each test job is submitted with no dependency (runs immediately).
+#
+# --dry-run     Echo sbatch commands without submitting.
 #
 # SLURM dependency notes:
 #   --dependency=afterok  : downstream job only starts on upstream success.
@@ -43,6 +52,8 @@ PROCESSED_DS_DIR=${PROCESSED_DS_DIR:-${WORK_DIR:-$HOME}/Datasets/deep-stylometry
 PHASE="all"
 DRY_RUN=false
 RESUME=false
+TRAIN_ONLY=false
+TEST_ONLY=false
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -55,12 +66,21 @@ while [[ $# -gt 0 ]]; do
             DRY_RUN=true; shift ;;
         --resume)
             RESUME=true; shift ;;
+        --train-only)
+            TRAIN_ONLY=true; shift ;;
+        --test-only)
+            TEST_ONLY=true; shift ;;
         *)
             echo "Unknown argument: $1" >&2
-            echo "Usage: $0 [--phase baselines|fixed_patches|tune|learned|appendix|all] [--resume] [--dry-run]" >&2
+            echo "Usage: $0 [--phase baselines|fixed_patches|tune|learned|appendix|all] [--resume] [--train-only] [--test-only] [--dry-run]" >&2
             exit 1 ;;
     esac
 done
+
+if $TRAIN_ONLY && $TEST_ONLY; then
+    echo "Error: --train-only and --test-only are mutually exclusive." >&2
+    exit 1
+fi
 
 if $DRY_RUN; then
     echo "[DRY-RUN] No jobs will be submitted."
@@ -95,7 +115,16 @@ dep_afterany() {
     if [[ -z "$jid" || "$jid" == "0" ]]; then echo ""; else echo "--dependency=afterany:$jid"; fi
 }
 
-# Return true (0) if the checkpoint already exists and --resume is set
+# Return true (0) if training should be skipped:
+#   - --resume and checkpoint already exists, OR
+#   - --test-only mode
+skip_train() {
+    local ckpt="$1"
+    $TEST_ONLY && return 0
+    $RESUME && [[ -f "$ckpt" ]]
+}
+
+# Kept for backward compat (used in resume messages below)
 ckpt_exists() {
     local ckpt="$1"
     $RESUME && [[ -f "$ckpt" ]]
@@ -123,8 +152,16 @@ submit_tests() {
     local ckpt_path="$2"    # path to last.ckpt
     local train_jid="$3"    # job id to depend on (may be "" if --resume skipped train)
 
+    # Skip entirely when --train-only is set
+    $TRAIN_ONLY && return 0
+
     local dep
-    dep=$(dep_afterany "$train_jid")
+    # --test-only: no upstream training job, run immediately
+    if $TEST_ONLY; then
+        dep=""
+    else
+        dep=$(dep_afterany "$train_jid")
+    fi
 
     local jids=()
     for subset in base-2 base-4 base-8 unrestricted; do
@@ -164,11 +201,11 @@ run_baselines() {
     echo "=== B2: MeanInteraction baseline ==="
     CKPT_MEAN=$CHECKPOINT_DIR/$(run_name_std mean false)/last.ckpt
     JID_TRAIN_MEAN=""
-    if ! ckpt_exists "$CKPT_MEAN"; then
+    if ! skip_train "$CKPT_MEAN"; then
         JID_TRAIN_MEAN=$(submit "train B2 mean" "" \
             "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_mean.yml")
     else
-        echo "[RESUME] Checkpoint found for B2 mean, skipping training." >&2
+        echo "[SKIP] B2 mean training skipped (--test-only or checkpoint exists)." >&2
     fi
     submit_tests "test_mean" "$CKPT_MEAN" "$JID_TRAIN_MEAN" > /dev/null
 
@@ -176,11 +213,11 @@ run_baselines() {
     echo "=== B3: LateInteraction baseline ==="
     CKPT_LI=$CHECKPOINT_DIR/$(run_name_std li true)/last.ckpt
     JID_TRAIN_LI=""
-    if ! ckpt_exists "$CKPT_LI"; then
+    if ! skip_train "$CKPT_LI"; then
         JID_TRAIN_LI=$(submit "train B3 li" "" \
             "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train.yml")
     else
-        echo "[RESUME] Checkpoint found for B3 li, skipping training." >&2
+        echo "[SKIP] B3 li training skipped (--test-only or checkpoint exists)." >&2
     fi
     submit_tests "test" "$CKPT_LI" "$JID_TRAIN_LI" > /dev/null
 }
@@ -193,11 +230,11 @@ run_fixed_patches() {
     echo "=== P1: PLI whitespace ==="
     CKPT_WS=$CHECKPOINT_DIR/$(run_name_std pli true whitespace 1)/last.ckpt
     JID_TRAIN_WS=""
-    if ! ckpt_exists "$CKPT_WS"; then
+    if ! skip_train "$CKPT_WS"; then
         JID_TRAIN_WS=$(submit "train P1 pli-whitespace" "" \
             "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_pli_whitespace.yml")
     else
-        echo "[RESUME] Checkpoint found for P1 whitespace, skipping training." >&2
+        echo "[SKIP] P1 whitespace training skipped (--test-only or checkpoint exists)." >&2
     fi
     submit_tests "test_pli_whitespace" "$CKPT_WS" "$JID_TRAIN_WS" > /dev/null
 
@@ -205,11 +242,11 @@ run_fixed_patches() {
     echo "=== P2: PLI wholeword ==="
     CKPT_WW=$CHECKPOINT_DIR/$(run_name_std pli true wholeword 1)/last.ckpt
     JID_TRAIN_WW=""
-    if ! ckpt_exists "$CKPT_WW"; then
+    if ! skip_train "$CKPT_WW"; then
         JID_TRAIN_WW=$(submit "train P2 pli-wholeword" "" \
             "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_pli_wholeword.yml")
     else
-        echo "[RESUME] Checkpoint found for P2 wholeword, skipping training." >&2
+        echo "[SKIP] P2 wholeword training skipped (--test-only or checkpoint exists)." >&2
     fi
     submit_tests "test_pli_wholeword" "$CKPT_WW" "$JID_TRAIN_WW" > /dev/null
 
@@ -219,11 +256,11 @@ run_fixed_patches() {
     for N in 2 3 4 5; do
         CKPT_NG=$CHECKPOINT_DIR/$(run_name_std pli true ngram $N)/last.ckpt
         JID=""
-        if ! ckpt_exists "$CKPT_NG"; then
+        if ! skip_train "$CKPT_NG"; then
             JID=$(submit "train P3 pli-ngram${N}" "" \
                 "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_pli_ngram${N}.yml")
         else
-            echo "[RESUME] Checkpoint found for P3 ngram-${N}, skipping training." >&2
+            echo "[SKIP] P3 ngram-${N} training skipped (--test-only or checkpoint exists)." >&2
         fi
         submit_tests "test_pli_ngram${N}" "$CKPT_NG" "$JID" > /dev/null
         LAST_P3_JID="$JID"
@@ -255,11 +292,11 @@ run_learned() {
     echo "=== P4: PLI learned boundaries ==="
     CKPT_LEARNED=$CHECKPOINT_DIR/$(run_name_std pli true learned 3)/last.ckpt
     JID_TRAIN_LEARNED=""
-    if ! ckpt_exists "$CKPT_LEARNED"; then
+    if ! skip_train "$CKPT_LEARNED"; then
         JID_TRAIN_LEARNED=$(submit "train P4 pli-learned" "$dep" \
             "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_pli_learned.yml")
     else
-        echo "[RESUME] Checkpoint found for P4 learned, skipping training." >&2
+        echo "[SKIP] P4 learned training skipped (--test-only or checkpoint exists)." >&2
     fi
     submit_tests "test_pli_learned" "$CKPT_LEARNED" "$JID_TRAIN_LEARNED" > /dev/null
 }
@@ -271,11 +308,11 @@ run_appendix() {
     echo "=== Appendix: PLI learned + cross-attention compression ==="
     CKPT_XATTN=$CHECKPOINT_DIR/$(run_name_std pli true learned-xattn 3)/last.ckpt
     JID_TRAIN_XATTN=""
-    if ! ckpt_exists "$CKPT_XATTN"; then
+    if ! skip_train "$CKPT_XATTN"; then
         JID_TRAIN_XATTN=$(submit "train appendix pli-xattn" "" \
             "$PROJECT_ROOT/scripts/train.sbatch" "$CONFIGS/train_pli_learned_xattn.yml")
     else
-        echo "[RESUME] Checkpoint found for appendix xattn, skipping training." >&2
+        echo "[SKIP] Appendix xattn training skipped (--test-only or checkpoint exists)." >&2
     fi
     submit_tests "test_pli_learned_xattn" "$CKPT_XATTN" "$JID_TRAIN_XATTN" > /dev/null
 }
