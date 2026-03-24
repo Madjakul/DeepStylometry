@@ -50,18 +50,44 @@ class PatchInteraction(nn.Module):
         self.patch_size = cfg.model.patch_size
         self.compression = cfg.model.patch_compression
 
-        # Tokeniser (needed for whitespace / wholeword boundaries)
+        # Tokeniser (needed for whitespace / wholeword boundaries).
+        # Build a (vocab_size,) boolean lookup table so forward() uses O(1)-per-
+        # token direct indexing instead of O(S log V) torch.isin binary search.
         if self.patch_method in ("whitespace", "wholeword"):
-            self.tokenizer = get_tokenizer(cfg.model.base_checkpoint)
-            self._special_ids: set = set()
+            tokenizer = get_tokenizer(cfg.model.base_checkpoint)
+            vocab = tokenizer.get_vocab()
+            vocab_size = max(vocab.values()) + 1
+
+            # is_word_start[token_id] = True  →  token begins a new word patch
+            # is_special[token_id]    = True  →  token is a special token (singleton patch)
+            is_word_start_lut = torch.zeros(vocab_size, dtype=torch.bool)
+            is_special_lut = torch.zeros(vocab_size, dtype=torch.bool)
+
+            special_ids_set: set = set()
             for attr in ("cls_token_id", "sep_token_id", "pad_token_id",
-                         "bos_token_id", "eos_token_id"):
-                val = getattr(self.tokenizer, attr, None)
+                         "bos_token_id", "eos_token_id", "mask_token_id"):
+                val = getattr(tokenizer, attr, None)
                 if val is not None:
-                    self._special_ids.add(val)
+                    special_ids_set.add(val)
+            if special_ids_set:
+                is_special_lut[torch.tensor(sorted(special_ids_set), dtype=torch.long)] = True
+
+            n_word_start = 0
+            for token_str, token_id in vocab.items():
+                if token_str.startswith("Ġ") or token_str.startswith("▁"):
+                    is_word_start_lut[token_id] = True
+                    n_word_start += 1
+
+            self.register_buffer("is_word_start_lut", is_word_start_lut, persistent=False)
+            self.register_buffer("is_special_lut", is_special_lut, persistent=False)
+            logging.info(
+                f"PatchInteraction: boundary LUT built — "
+                f"{n_word_start} word-start tokens, "
+                f"{len(special_ids_set)} special tokens (vocab_size={vocab_size})."
+            )
         else:
-            self.tokenizer = None
-            self._special_ids = set()
+            self.is_word_start_lut = None
+            self.is_special_lut = None
 
         # Learned patching sub-modules
         if self.patch_method == "learned":
@@ -99,40 +125,38 @@ class PatchInteraction(nn.Module):
         input_ids: Int[torch.Tensor, "batch seq"],
         mask: Int[torch.Tensor, "batch seq"],
     ) -> Int[torch.Tensor, "batch seq"]:
-        """Assign patch IDs based on Ġ-prefix word boundaries."""
-        B, S = input_ids.shape
-        patch_ids = torch.full((B, S), -1, dtype=torch.long,
-                               device=input_ids.device)
+        """Assign patch IDs based on Ġ-prefix word boundaries.
 
-        for b in range(B):
-            token_strings = self.tokenizer.convert_ids_to_tokens(
-                input_ids[b].tolist()
-            )
-            pid = -1
-            prev_was_special = True
+        A new patch begins at:
+        - Special tokens (CLS, SEP, etc.) — each gets its own singleton patch.
+        - Tokens whose decoded form starts with Ġ/▁ (word-start tokens).
+        - The first valid (non-padding) token of each example.
+        - The first non-special token after any special token (handles the case
+          where the first word of a sentence lacks the Ġ prefix).
 
-            for s, tok_str in enumerate(token_strings):
-                if mask[b, s] == 0:
-                    break  # Padding: leave as -1
-                token_id = input_ids[b, s].item()
+        Uses O(1)-per-token direct LUT indexing — no binary search, no Python
+        loops, fully GPU-compatible and safe for DDP.
+        """
+        # Direct LUT indexing: O(B*S) gather, much faster than torch.isin
+        is_special = self.is_special_lut[input_ids]      # (B, S)
+        is_word_start = self.is_word_start_lut[input_ids]  # (B, S)
 
-                if token_id in self._special_ids:
-                    pid += 1
-                    patch_ids[b, s] = pid
-                    prev_was_special = True
-                else:
-                    is_word_start = (
-                        prev_was_special
-                        or (tok_str is not None and (
-                            tok_str.startswith("Ġ")
-                            or tok_str.startswith("▁")
-                        ))
-                    )
-                    if is_word_start:
-                        pid += 1
-                    patch_ids[b, s] = pid
-                    prev_was_special = False
+        # Token immediately after a special token starts a new patch even if it
+        # lacks the Ġ prefix (e.g. first word after CLS).
+        # Shift is_special one step to the right; pad the new position with False.
+        is_after_special = F.pad(
+            is_special[:, :-1], (1, 0), value=False
+        )  # (B, S)
 
+        # First valid (non-padding) position per example
+        is_first_valid = (mask.cumsum(dim=1) == 1) & (mask > 0)  # (B, S)
+
+        is_boundary = (
+            is_special | is_word_start | is_after_special | is_first_valid
+        ) & (mask > 0)
+
+        patch_ids = is_boundary.long().cumsum(dim=-1) - 1  # 0-indexed
+        patch_ids = patch_ids.masked_fill(mask == 0, -1)
         return patch_ids
 
     def _wholeword_patches(

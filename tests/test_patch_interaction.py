@@ -135,6 +135,51 @@ class TestPatchInteractionWhitespace:
         assert n_patches <= n_tokens
 
 
+    def test_whitespace_no_python_loop(self, dummy_cfg):
+        """_whitespace_patches must use direct LUT buffers, not a stored tokenizer
+        or isin-style lookup (LUT indexing is O(1) per token vs O(S log V))."""
+        dummy_cfg.model.pooling_method = "pli"
+        dummy_cfg.model.patch_method = "whitespace"
+        pli = PatchInteraction(dummy_cfg)
+        assert not hasattr(pli, "tokenizer") or pli.tokenizer is None, (
+            "PatchInteraction should not keep a tokenizer instance after init"
+        )
+        assert hasattr(pli, "is_word_start_lut") and pli.is_word_start_lut is not None
+        assert hasattr(pli, "is_special_lut") and pli.is_special_lut is not None
+        # LUT should be 1-D boolean of size vocab_size
+        assert pli.is_word_start_lut.dtype == torch.bool
+        assert pli.is_word_start_lut.dim() == 1
+
+    def test_whitespace_three_word_sentence(self, dummy_cfg):
+        """'Hello world foo' should produce exactly 3 content patches
+        (one per word) plus 2 special-token patches (CLS + SEP) = 5 patches."""
+        dummy_cfg.model.pooling_method = "pli"
+        dummy_cfg.model.patch_method = "whitespace"
+        pli = PatchInteraction(dummy_cfg)
+
+        from transformers import AutoTokenizer
+        tok = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-base")
+        enc = tok(["Hello world foo"], return_tensors="pt")
+        patch_ids = pli._whitespace_patches(enc["input_ids"], enc["attention_mask"])
+        n_patches = patch_ids.clamp(min=0).max().item() + 1
+        # CLS(1) + Hello(1) + world(1) + foo(1) + SEP(1) = 5
+        assert n_patches == 5, f"Expected 5 patches, got {n_patches}"
+
+    def test_whitespace_padding_gives_minus_one(self, dummy_cfg):
+        """Padding positions must have patch_id == -1."""
+        dummy_cfg.model.pooling_method = "pli"
+        dummy_cfg.model.patch_method = "whitespace"
+        pli = PatchInteraction(dummy_cfg)
+
+        from transformers import AutoTokenizer
+        tok = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-base")
+        texts = ["Hi", "Hello world test sentence long enough to force padding"]
+        enc = tok(texts, return_tensors="pt", padding=True, max_length=32, truncation=True)
+        patch_ids = pli._whitespace_patches(enc["input_ids"], enc["attention_mask"])
+        pad_positions = enc["attention_mask"] == 0
+        assert (patch_ids[pad_positions] == -1).all()
+
+
 class TestPatchInteractionPaddingIndependence:
     def test_padding_does_not_affect_ngram_scores(self, pli_cfg):
         """Adding fully-masked padding positions should not change scores."""
