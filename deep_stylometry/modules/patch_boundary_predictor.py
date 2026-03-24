@@ -92,18 +92,14 @@ class PatchBoundaryPredictor(nn.Module):
             ``(B,)`` number of patches per example.
         """
         B, S, _ = token_embs.shape
-        device = token_embs.device
 
         # Raw boundary logits / probabilities
         logits = self.ffn(token_embs).squeeze(-1)  # (B, S)
         cut_probs = torch.sigmoid(logits)  # (B, S)
 
-        # First valid token is ALWAYS a boundary; padding tokens are never
-        first_valid = torch.zeros(B, S, device=device)
-        for b in range(B):
-            valid_positions = mask[b].nonzero(as_tuple=True)[0]
-            if len(valid_positions) > 0:
-                first_valid[b, valid_positions[0]] = 1.0
+        # First valid token is ALWAYS a boundary; padding tokens are never.
+        # Vectorised: position where cumulative mask count hits 1 (= first real token).
+        first_valid = ((mask.cumsum(dim=1) == 1) & (mask > 0)).float()  # (B, S)
 
         if training:
             tau = self._current_tau(step)

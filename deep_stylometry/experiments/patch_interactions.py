@@ -52,7 +52,8 @@ def compute_patch_alignments(
     k_norm = F.normalize(k_patch_embs, p=2, dim=-1)
 
     sim = torch.einsum("bsh,bth->bst", q_norm, k_norm)  # (1, Pq, Pk)
-    mask_inv = (1.0 - k_patch_mask.float()).unsqueeze(0).unsqueeze(2)
+    # k_patch_mask is (1, Pk); unsqueeze to (1, 1, Pk) to broadcast with (1, Pq, Pk)
+    mask_inv = (1.0 - k_patch_mask.float()).unsqueeze(1)  # (1, 1, Pk)
     sim = sim + mask_inv * (-10000.0)
 
     max_result = sim[0].max(dim=-1)  # (Pq,)

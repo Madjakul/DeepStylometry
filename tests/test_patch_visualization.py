@@ -48,6 +48,23 @@ class TestComputePatchAlignments:
         # Every query patch should be aligned to some doc patch
         assert len(align) == Pq
 
+    def test_sim_stays_3d(self):
+        """Masking must not inflate sim to 4D (old bug: unsqueeze(0).unsqueeze(2)
+        on a (1,Pk) mask produced (1,1,1,Pk) which broadcast (1,Pq,Pk) to 4D).
+        scores and align must remain 1D (Pq,), not 2D."""
+        Pq, Pk, H = 5, 7, 64
+        q = torch.randn(1, Pq, H)
+        k = torch.randn(1, Pk, H)
+        q_mask = torch.ones(1, Pq, dtype=torch.long)
+        k_mask = torch.ones(1, Pk, dtype=torch.long)
+        k_mask[:, 4:] = 0  # partial padding
+
+        scores, align, total = compute_patch_alignments(q, k, q_mask, k_mask)
+        assert scores.dim() == 1, f"scores should be 1D, got shape {scores.shape}"
+        assert align.dim() == 1, f"align should be 1D, got shape {align.shape}"
+        assert scores.shape[0] == Pq
+        assert align.shape[0] == Pq
+
     def test_padded_key_patches_not_selected(self):
         """Padded key patches (mask=0) should never be the best match."""
         Pq, Pk, H = 3, 6, 32

@@ -209,9 +209,10 @@ class PatchInteraction(nn.Module):
         method = self.patch_method
         # Fall back to ngram when input_ids are required but unavailable
         if input_ids is None and method in ("whitespace", "wholeword"):
-            logging.debug(
+            logging.warning(
                 f"input_ids not provided for {method} patching; "
-                f"falling back to ngram-{self.patch_size}"
+                f"silently falling back to ngram-{self.patch_size}. "
+                f"Pass k_input_ids to avoid this."
             )
             method = "ngram"
 
