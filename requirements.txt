@@ -27,3 +27,8 @@ transformer-lens==2.17.0
 transformers==4.51.3
 wandb==0.24.2
 wtpsplit==2.1.7
+# --- Testing ---
+pytest>=8.0
+pytest-cov>=5.0
+# --- Optional: spaCy for POS-boundary analysis in patch_interactions.py ---
+# spacy>=3.7

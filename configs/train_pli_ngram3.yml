@@ -1,0 +1,54 @@
+# train_pli_ngram3.yml — Phase P3b: PLI with n=3 token ngram patching
+
+project_name: "deep-stylometry"
+
+data:
+  ds_name: "halvest"
+  batch_size: 64
+  tokenizer_name: "answerdotai/ModernBERT-base"
+  max_length: 512
+  padding: "do_not_pad"
+  truncation: "longest_first"
+  add_special_tokens: true
+  map_batch_size: 1000
+  load_from_cache_file: true
+  subsets: ["base-2", "base-4", "base-6", "base-8", "base-10"]
+  shuffle: true
+
+model:
+  base_checkpoint: "answerdotai/ModernBERT-base"
+  dropout: 0.1
+  expansion_ratio: 4
+  pooling_method: "pli"
+  skip_list: true
+  lm_hidden_size: 768
+  patch_method: "ngram"
+  patch_size: 3
+  patch_compression: "mean"
+  patch_cross_attn_dim: 128
+  patch_cross_attn_heads: 2
+  patch_lambda: 0.1
+  gumbel_tau_init: 1.0
+  gumbel_tau_final: 0.1
+  gumbel_anneal_steps: 10000
+
+train:
+  loss: "info_nce"
+  tau: 0.5
+  margin: 0.32
+  lr: 3.0e-5
+  weight_decay: 0.1
+  device: "gpu"
+  num_devices: 4
+  strategy: "ddp"
+  process_group_backend: "nccl"
+  max_epochs: 1
+  val_check_interval: null
+  check_val_every_n_epoch: null
+  log_every_n_steps: 1
+  accumulate_grad_batches: 1
+  gradient_clip_val: null
+  precision: "16-mixed"
+  use_wandb: true
+  log_model: false
+  watch: "all"

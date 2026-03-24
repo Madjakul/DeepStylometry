@@ -107,6 +107,16 @@ class DeepStylometry(L.LightningModule):
             (0, max_seq - batch["neg_attention_mask"].size(1)),
         )
 
+        # Pad input_ids (for patch-level interaction key patching)
+        pos_ids = F.pad(
+            batch["pos_input_ids"],
+            (0, max_seq - batch["pos_input_ids"].size(1)),
+        )
+        neg_ids = F.pad(
+            batch["neg_input_ids"],
+            (0, max_seq - batch["neg_input_ids"].size(1)),
+        )
+
         if self.trainer.world_size > 1 and self.cfg.train.gather:
 
             # Use pos_embs and pos_mask (NOT batch["pos_attention_mask"])
@@ -117,9 +127,14 @@ class DeepStylometry(L.LightningModule):
             global_neg_embs = self.gather_with_padding(neg_embs, pad_value=0.0)
             global_neg_mask = self.gather_with_padding(neg_mask, pad_value=0)
 
+            # Gather input_ids for patch interaction
+            global_pos_ids = self.gather_with_padding(pos_ids, pad_value=0)
+            global_neg_ids = self.gather_with_padding(neg_ids, pad_value=0)
+
             # Construct Keys
             k_embs = torch.cat([global_pos_embs, global_neg_embs], dim=0)
             k_mask = torch.cat([global_pos_mask, global_neg_mask], dim=0)
+            k_ids = torch.cat([global_pos_ids, global_neg_ids], dim=0)
 
             # Targets Offset Calculation
             local_bs = q_embs.size(0)
@@ -130,6 +145,7 @@ class DeepStylometry(L.LightningModule):
             # Single GPU Logic (No extra padding needed here anymore)
             k_embs = torch.cat([pos_embs, neg_embs], dim=0)
             k_mask = torch.cat([pos_mask, neg_mask], dim=0)
+            k_ids = torch.cat([pos_ids, neg_ids], dim=0)
             targets = torch.arange(q_embs.size(0), device=self.device)
 
         loss_metrics = self.contrastive_loss(
@@ -139,10 +155,20 @@ class DeepStylometry(L.LightningModule):
             k_mask=k_mask,
             targets=targets,
             q_input_ids=batch["input_ids"],
+            k_input_ids=k_ids,
+            step=self.global_step,
         )
 
+        loss = loss_metrics["loss"]
+
+        # Add patch regularisation loss when using learned PLI
+        if "patch_reg_loss" in loss_metrics:
+            patch_reg = loss_metrics["patch_reg_loss"]
+            loss = loss + self.cfg.model.patch_lambda * patch_reg
+            self.log("train/patch_reg_loss", patch_reg, prog_bar=False)
+
         self.log("train/loss", loss_metrics["loss"], prog_bar=True)
-        return loss_metrics["loss"]
+        return loss
 
     def validation_step(self, batch, batch_idx):
         # Local Forward Pass
@@ -238,8 +264,10 @@ class DeepStylometry(L.LightningModule):
             "q_input_ids": batch["input_ids"],
             "pos_embs": pos_embs,
             "pos_mask": batch["pos_attention_mask"],
+            "pos_input_ids": batch["pos_input_ids"],
             "neg_embs": neg_embs,
             "neg_mask": batch["neg_attention_mask"],
+            "neg_input_ids": batch["neg_input_ids"],
             "target_indices": batch.get("target_indices", None),
         }
 

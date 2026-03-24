@@ -23,6 +23,9 @@ class InfoNCELoss(nn.Module):
 
         if self.cfg.model.pooling_method == "li":
             self.pool = LateInteraction(self.cfg)
+        elif self.cfg.model.pooling_method == "pli":
+            from deep_stylometry.modules.patch_interaction import PatchInteraction
+            self.pool = PatchInteraction(self.cfg)
         else:
             self.pool = MeanInteraction()
 
@@ -34,18 +37,28 @@ class InfoNCELoss(nn.Module):
         k_mask: Int[torch.Tensor, "two_times_batch seq"],
         targets: Int[torch.Tensor, "batch"],
         q_input_ids: Optional[Int[torch.Tensor, "batch seq"]] = None,
+        k_input_ids: Optional[Int[torch.Tensor, "two_times_batch seq"]] = None,
+        step: Optional[int] = None,
     ) -> Dict[str, torch.Tensor]:
         batch_size = query_embs.size(0)
         neg_offset = key_embs.size(0) // 2
 
-        # Compute the (B, 2B) similarity matrix
-        all_scores = self.pool(
-            query_embs=query_embs,  # (B, S, H)
-            key_embs=key_embs,  # (2B, S, H)
-            q_mask=q_mask,  # (B, S)
-            k_mask=k_mask,  # (2B, S)
-            q_input_ids=q_input_ids,  # (B, S)
+        # Build pool kwargs (PatchInteraction accepts extra args)
+        pool_kwargs: Dict = dict(
+            query_embs=query_embs,
+            key_embs=key_embs,
+            q_mask=q_mask,
+            k_mask=k_mask,
         )
+        from deep_stylometry.modules.patch_interaction import PatchInteraction
+
+        if isinstance(self.pool, (LateInteraction, PatchInteraction)):
+            pool_kwargs["q_input_ids"] = q_input_ids
+        if isinstance(self.pool, PatchInteraction):
+            pool_kwargs["k_input_ids"] = k_input_ids
+            pool_kwargs["step"] = step
+
+        all_scores = self.pool(**pool_kwargs)
         all_scaled_scores = all_scores / self.tau  # type: ignore
 
         rows = torch.arange(batch_size, device=query_embs.device)
@@ -54,9 +67,17 @@ class InfoNCELoss(nn.Module):
 
         loss = F.cross_entropy(all_scaled_scores, targets, reduction="mean")
 
-        return {
+        result: Dict[str, torch.Tensor] = {
             "all_scores": all_scores,
             "poss": poss,
             "negs": negs,
             "loss": loss,
         }
+
+        # Patch regulariser (only for PatchInteraction with learned patching)
+        if isinstance(self.pool, PatchInteraction):
+            patch_reg = self.pool.get_patch_reg_loss()
+            if patch_reg is not None:
+                result["patch_reg_loss"] = patch_reg
+
+        return result

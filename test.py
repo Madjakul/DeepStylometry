@@ -24,6 +24,12 @@ if __name__ == "__main__":
     args = TestArgparse.parse_known_args()
     cfg = BaseConfig(mode="test").from_yaml(args.config_path)
 
+    # CLI overrides (allow per-job customisation without editing YAML)
+    if args.test_subset is not None:
+        cfg.data.test_subset = args.test_subset
+    if args.ds_name is not None:
+        cfg.data.ds_name = args.ds_name
+
     logging.info("Preparing data module...")
     dm = train_utils.setup_datamodule(
         cfg=cfg,
@@ -32,15 +38,15 @@ if __name__ == "__main__":
         cache_dir=args.cache_dir,
     )
 
+    if cfg.model.pooling_method == "pli":
+        patch_tag = f"pli-{cfg.model.patch_method}-n{cfg.model.patch_size}"
+    else:
+        patch_tag = cfg.model.pooling_method
     name = (
-        (
-            f"test__{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
-            f"__pooling-{cfg.model.pooling_method}__{cfg.data.test_subset}"
-            f"__skip_list-{cfg.model.skip_list}-true"
-        )
-        .replace("/", "-")
-        .lower()
-    )
+        f"test__{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
+        f"__pooling-{patch_tag}__{cfg.data.test_subset}"
+        f"__skip_list-{cfg.model.skip_list}"
+    ).replace("/", "-").lower()
     loggers = []
     if cfg.train.use_wandb:
         wandb_logger = WandbLogger(

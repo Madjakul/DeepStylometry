@@ -54,14 +54,17 @@ def setup_trainer(
         LogarithmicValidationCallback(start_step=10, growth=1.5, max_interval=1000)
     )
 
-    name = (
-        (
+    if cfg.model.pooling_method == "pli":
+        patch_tag = f"{cfg.model.patch_method}-n{cfg.model.patch_size}"
+        name = (
+            f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
+            f"__pooling-pli-{patch_tag}__skip_list-{cfg.model.skip_list}"
+        ).replace("/", "-").lower()
+    else:
+        name = (
             f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
             f"__pooling-{cfg.model.pooling_method}__skip_list-{cfg.model.skip_list}"
-        )
-        .replace("/", "-")
-        .lower()
-    )
+        ).replace("/", "-").lower()
 
     # Model checkpoint callback if checkpoint_dir is provided
     if checkpoint_dir is not None:

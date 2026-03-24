@@ -2,5 +2,6 @@
 
 from deep_stylometry.utils.argparsers.test_argparse import TestArgparse
 from deep_stylometry.utils.argparsers.train_argparse import TrainArgparse
+from deep_stylometry.utils.argparsers.tune_argparse import TuneArgparse
 
-__all__ = ["TrainArgparse", "TestArgparse"]
+__all__ = ["TrainArgparse", "TestArgparse", "TuneArgparse"]

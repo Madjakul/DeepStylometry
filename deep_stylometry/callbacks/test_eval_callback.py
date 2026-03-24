@@ -72,9 +72,9 @@ class TestEvalCallback(L.Callback):
         self.q_ids.append(pad(outputs["q_input_ids"], S).cpu())
 
         # Documents → HDF5
-        for prefix, embs_key, mask_key in [
-            ("pos", "pos_embs", "pos_mask"),
-            ("neg", "neg_embs", "neg_mask"),
+        for prefix, embs_key, mask_key, ids_key in [
+            ("pos", "pos_embs", "pos_mask", "pos_input_ids"),
+            ("neg", "neg_embs", "neg_mask", "neg_input_ids"),
         ]:
             embs_np = pad(outputs[embs_key], S).half().cpu().numpy()
             masks_np = pad(outputs[mask_key], S).cpu().to(torch.int8).numpy()
@@ -94,6 +94,23 @@ class TestEvalCallback(L.Callback):
                 old = ds.shape[0]
                 ds.resize(old + bs, axis=0)
                 ds[old : old + bs] = data
+
+            # Store input_ids if available in outputs
+            if ids_key in outputs and outputs[ids_key] is not None:
+                ids_np = pad(outputs[ids_key], S).cpu().to(torch.int32).numpy()
+                key_ids = f"{prefix}_ids"
+                if key_ids not in self.h5_datasets:
+                    self.h5_datasets[key_ids] = self.h5_file.create_dataset(
+                        key_ids,
+                        shape=(0, *ids_np.shape[1:]),
+                        maxshape=(None, *ids_np.shape[1:]),
+                        dtype=ids_np.dtype,
+                        chunks=(min(64, bs), *ids_np.shape[1:]),
+                    )
+                ds_ids = self.h5_datasets[key_ids]
+                old = ds_ids.shape[0]
+                ds_ids.resize(old + bs, axis=0)
+                ds_ids[old : old + bs] = ids_np
 
         if outputs["target_indices"] is not None:
             self.targets.append(outputs["target_indices"].cpu())
@@ -121,6 +138,7 @@ class TestEvalCallback(L.Callback):
         n_neg = h5["neg_embs"].shape[0]
         assert n_pos == n_neg, f"Corpus mismatch: {n_pos} pos != {n_neg} neg"
         n_corpus = n_pos + n_neg
+        has_doc_ids = "pos_ids" in h5 and "neg_ids" in h5
 
         logging.info(f"  {n_queries} queries × {n_corpus} docs")
 
@@ -139,6 +157,7 @@ class TestEvalCallback(L.Callback):
             n_pos=n_pos,
             n_corpus=n_corpus,
             device=device,
+            has_doc_ids=has_doc_ids,
         )
         for k in [5, 10, 20, 100]:
             metrics = evaluate_run(hard_qrels, soft_qrels, dense_run, k)
@@ -160,6 +179,7 @@ class TestEvalCallback(L.Callback):
             n_pos=n_pos,
             n_corpus=n_corpus,
             device=device,
+            has_doc_ids=has_doc_ids,
         )
         for k in [5, 10, 20, 100]:
             metrics = evaluate_run(hard_qrels, soft_qrels, li_run, k)
@@ -168,6 +188,36 @@ class TestEvalCallback(L.Callback):
                 on_epoch=True,
             )
             logging.info(f"  test/late_interaction @{k}: {metrics}")
+
+        # --- Score with PatchInteraction (when configured) ---
+        if self.cfg.model.pooling_method == "pli" or self.cfg.model.patch_method != "none":
+            try:
+                from deep_stylometry.modules.patch_interaction import PatchInteraction
+                pli = PatchInteraction(self.cfg).to(device)
+                logging.info(
+                    f"  Scoring with PatchInteraction ({self.cfg.model.patch_method})..."
+                )
+                pli_run = self._score_full_corpus(
+                    pool=pli,
+                    q_embs=q_embs,
+                    q_masks=q_masks,
+                    q_ids=q_ids,
+                    h5=h5,
+                    n_pos=n_pos,
+                    n_corpus=n_corpus,
+                    device=device,
+                    has_doc_ids=has_doc_ids,
+                )
+                for k in [5, 10, 20, 100]:
+                    metrics = evaluate_run(hard_qrels, soft_qrels, pli_run, k)
+                    pl_module.log_dict(
+                        {f"test/patch_interaction/{name}": v
+                         for name, v in metrics.items()},
+                        on_epoch=True,
+                    )
+                    logging.info(f"  test/patch_interaction @{k}: {metrics}")
+            except Exception as exc:
+                logging.warning(f"  PatchInteraction scoring skipped: {exc}")
 
         h5.close()
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
@@ -183,7 +233,10 @@ class TestEvalCallback(L.Callback):
         n_pos: int,
         n_corpus: int,
         device: torch.device,
+        has_doc_ids: bool = False,
     ) -> Run:
+        from deep_stylometry.modules.patch_interaction import PatchInteraction
+
         n_queries = q_embs.size(0)
         top_scores = torch.full((n_queries, self.K), float("-inf"))
         top_indices = torch.zeros((n_queries, self.K), dtype=torch.long)
@@ -201,17 +254,22 @@ class TestEvalCallback(L.Callback):
                 k_end = min(k_start + self.K_CHUNK, n_corpus)
 
                 # Read doc chunk from HDF5 (may span pos/neg boundary)
-                k_chunk, k_mask_chunk = self._read_docs(
-                    h5, k_start, k_end, n_pos, device
+                k_chunk, k_mask_chunk, k_id_chunk = self._read_docs(
+                    h5, k_start, k_end, n_pos, device, has_doc_ids
                 )
 
-                chunk_scores = pool(
+                # Build call kwargs
+                call_kwargs: dict = dict(
                     query_embs=q_chunk,
                     key_embs=k_chunk,
                     q_mask=q_mask_chunk,
                     k_mask=k_mask_chunk,
                     q_input_ids=q_id_chunk,
-                ).cpu()  # (q_chunk_size, k_chunk_size)
+                )
+                if isinstance(pool, PatchInteraction) and k_id_chunk is not None:
+                    call_kwargs["k_input_ids"] = k_id_chunk
+
+                chunk_scores = pool(**call_kwargs).cpu()  # (q_chunk, k_chunk)
 
                 # Merge with running top-K
                 combined_scores = torch.cat(
@@ -244,18 +302,24 @@ class TestEvalCallback(L.Callback):
         )
 
     @staticmethod
-    def _read_docs(h5, start, end, n_pos, device):
-        parts_e, parts_m = [], []
+    def _read_docs(h5, start, end, n_pos, device, has_doc_ids=False):
+        parts_e, parts_m, parts_ids = [], [], []
         if start < n_pos:
             s = min(end, n_pos)
             parts_e.append(torch.from_numpy(h5["pos_embs"][start:s]))
             parts_m.append(torch.from_numpy(h5["pos_masks"][start:s]))
+            if has_doc_ids:
+                parts_ids.append(torch.from_numpy(h5["pos_ids"][start:s]).long())
         if end > n_pos:
             ns = max(start, n_pos) - n_pos
             ne = end - n_pos
             parts_e.append(torch.from_numpy(h5["neg_embs"][ns:ne]))
             parts_m.append(torch.from_numpy(h5["neg_masks"][ns:ne]))
-        return (
-            torch.cat(parts_e).float().to(device),
-            torch.cat(parts_m).to(device),
-        )
+            if has_doc_ids:
+                parts_ids.append(torch.from_numpy(h5["neg_ids"][ns:ne]).long())
+
+        k_embs = torch.cat(parts_e).float().to(device)
+        k_masks = torch.cat(parts_m).to(device)
+        k_ids = torch.cat(parts_ids).to(device) if parts_ids else None
+
+        return k_embs, k_masks, k_ids

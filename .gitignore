@@ -180,3 +180,5 @@ ray/
 
 # Slurm
 .Trash*/
+
+.claude/

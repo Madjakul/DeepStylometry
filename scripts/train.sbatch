@@ -26,4 +26,4 @@ fi
 
 export DATASETS_MULTIPROCESS_CONTEXT=spawn
 
-./scripts/train.sh
+./scripts/train.sh "$@"

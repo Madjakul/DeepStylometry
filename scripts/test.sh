@@ -5,9 +5,10 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 # ************************** Customizable Arguments ************************************
 
-CONFIG_PATH=$PROJECT_ROOT/configs/test.yml
+# Positional args: $1=config_path $2=checkpoint_path
+CONFIG_PATH=${1:-$PROJECT_ROOT/configs/test.yml}
 PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
-CHECKPOINT_PATH=$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-li__skip_list-true/step-step=23000.ckpt
+CHECKPOINT_PATH=${2:-$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-li__skip_list-true/step-step=23000.ckpt}
 LOGS_DIR=$PROJECT_ROOT/logs
 
 # --------------------------------------------------------------------------------------
