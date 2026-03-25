@@ -95,8 +95,8 @@ submit() {
     local desc="$1"; shift
     local dep="$1"; shift   # e.g. "--dependency=afterok:123" or ""
     if $DRY_RUN; then
-        echo "[DRY-RUN] sbatch ${dep:+$dep }$*  # $desc"
-        echo "0"   # fake job id
+        echo "[DRY-RUN] sbatch ${dep:+$dep }$*  # $desc" >&2
+        echo "0"   # fake job id (stdout only, captured by caller)
         return
     fi
     local jid
@@ -135,12 +135,18 @@ ckpt_exists() {
 }
 
 # Run name mirrors train_utils.py logic (lowercase, / → -)
+# For pli: run_name_std pli <skip> <patch_method> <patch_size> [<patch_compression>]
+# patch_compression is appended to patch_tag only when provided and not "mean".
 run_name_std() {
     local pool="$1" skip="$2"
     local base="answerdotai-modernbert-base__halvest"
     if [[ "$pool" == "pli" ]]; then
-        local pm="$3" ps="$4"
-        echo "${base}__pooling-pli-${pm}-n${ps}__skip_list-${skip}"
+        local pm="$3" ps="$4" compression="${5:-mean}"
+        local patch_tag="${pm}-n${ps}"
+        if [[ "$compression" != "mean" ]]; then
+            patch_tag="${patch_tag}-${compression}"
+        fi
+        echo "${base}__pooling-pli-${patch_tag}__skip_list-${skip}"
     else
         echo "${base}__pooling-${pool}__skip_list-${skip}"
     fi
@@ -319,7 +325,7 @@ run_tune() {
     dep=$(dep_afterok "$upstream_jid")
     echo "=== Tune: Optuna PLI hyperparameter search ==="
     JID_TUNE=$(submit "tune PLI optuna" "$dep" \
-        "$PROJECT_ROOT/scripts/tune.sbatch" "$CONFIGS/train_pli_ngram3.yml")
+        "$PROJECT_ROOT/scripts/tune.sbatch" "$CONFIGS/train_pli_learned.yml")
     export JID_TUNE
 }
 
@@ -347,7 +353,7 @@ run_learned() {
 # ---------------------------------------------------------------------------
 run_appendix() {
     echo "=== Appendix: PLI learned + cross-attention compression ==="
-    CKPT_XATTN=$CHECKPOINT_DIR/$(run_name_std pli true learned-xattn 3)/last.ckpt
+    CKPT_XATTN=$CHECKPOINT_DIR/$(run_name_std pli true learned 3 cross_attention)/last.ckpt
     JID_TRAIN_XATTN=""
     if ! skip_train "$CKPT_XATTN"; then
         JID_TRAIN_XATTN=$(submit "train appendix pli-xattn" "" \

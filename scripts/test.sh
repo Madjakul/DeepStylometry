@@ -5,10 +5,19 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 # ************************** Customizable Arguments ************************************
 
-CONFIG_PATH=$PROJECT_ROOT/configs/test_pli_ngram4.yml # $PROJECT_ROOT/configs/test.yml
+# First two positional args override config/checkpoint; args after -- are forwarded to test.py
+CONFIG_PATH=${1:-$PROJECT_ROOT/configs/test_pli_ngram4.yml}
+CHECKPOINT_PATH=${2:-$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-pli-ngram-n4__skip_list-true/last.ckpt}
 PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
-CHECKPOINT_PATH=$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-pli-ngram-n4__skip_list-true/last.ckpt # $PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-li__skip_list-true/step-step=23000.ckpt
 LOGS_DIR=$PROJECT_ROOT/logs
+
+# Collect extra args: everything after the '--' separator
+EXTRA_ARGS=()
+shift 2 2>/dev/null || true
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--" ]]; then shift; EXTRA_ARGS+=("$@"); break; fi
+    shift
+done
 
 # --------------------------------------------------------------------------------------
 

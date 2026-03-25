@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 #SBATCH --job-name=tune-pli-deep-stylometry         # Job name
 #SBATCH --account=grandchallenge1
