@@ -10,10 +10,6 @@
 #SBATCH --time=2-00:00:00                               # Time limit hrs:min:sec
 #SBATCH --output=logs/%x-%j-%t.log                         # Standard output and error log. %x denotes the job name, %j the jobid.
 
-# Ensure logs/ exists for subsequent jobs (this job's log is already open by SLURM).
-# The real guard is the mkdir in run_all_phases.sh, which runs before sbatch submission.
-mkdir -p logs
-
 module purge
 module load slurm
 source $HOME/.bashrc

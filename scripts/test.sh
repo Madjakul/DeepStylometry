@@ -7,7 +7,7 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 CONFIG_PATH=$PROJECT_ROOT/configs/test_pli_ngram5.yml # $PROJECT_ROOT/configs/test.yml
 PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
-CHECKPOINT_PATH=$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-pli-ngram-n5__skip_list-true/last.ckpt # $PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-li__skip_list-true/step-step=23000.ckpt
+CHECKPOINT_PATH=$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-pli-ngram-n4__skip_list-true/last.ckpt # $PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-li__skip_list-true/step-step=23000.ckpt
 LOGS_DIR=$PROJECT_ROOT/logs
 
 # --------------------------------------------------------------------------------------
