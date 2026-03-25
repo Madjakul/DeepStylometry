@@ -6,8 +6,8 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 # ************************** Customizable Arguments ************************************
 
 # First two positional args override config/checkpoint; args after -- are forwarded to test.py
-CONFIG_PATH=${1:-$PROJECT_ROOT/configs/test_pli_ngram4.yml}
-CHECKPOINT_PATH=${2:-$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-pli-ngram-n4__skip_list-true/last.ckpt}
+CONFIG_PATH=${1:-$PROJECT_ROOT/configs/test_pli_ngram3.yml}
+CHECKPOINT_PATH=${2:-$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-pli-ngram-n3__skip_list-true/last.ckpt}
 PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
 LOGS_DIR=$PROJECT_ROOT/logs
 
@@ -15,7 +15,11 @@ LOGS_DIR=$PROJECT_ROOT/logs
 EXTRA_ARGS=()
 shift 2 2>/dev/null || true
 while [[ $# -gt 0 ]]; do
-    if [[ "$1" == "--" ]]; then shift; EXTRA_ARGS+=("$@"); break; fi
+    if [[ "$1" == "--" ]]; then
+        shift
+        EXTRA_ARGS+=("$@")
+        break
+    fi
     shift
 done
 
