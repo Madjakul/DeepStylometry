@@ -208,9 +208,7 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         self.test_ds.save_to_disk(test_path)
 
     def train_dataloader(self) -> DataLoader:
-        collate_fn = None
-        if self.cfg.train.gather:
-            collate_fn = TripletDataCollator(tokenizer=self.tokenizer)
+        collate_fn = TripletDataCollator(tokenizer=self.tokenizer)
         return DataLoader(
             self.train_ds,  # type: ignore
             batch_size=self.cfg.data.batch_size,
