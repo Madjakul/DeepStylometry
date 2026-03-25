@@ -5,10 +5,14 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 # ************************** Customizable Arguments ************************************
 
-# Positional args: $1=config_path $2=checkpoint_path
+# Positional args: $1=config_path $2=checkpoint_path [-- extra args passed to test.py]
 CONFIG_PATH=${1:-$PROJECT_ROOT/configs/test.yml}
 PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
 CHECKPOINT_PATH=${2:-$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-li__skip_list-true/step-step=23000.ckpt}
+# Collect any extra args after the first two positional args (skip optional '--' separator)
+shift 2 2>/dev/null || true
+[[ "${1:-}" == "--" ]] && shift
+EXTRA_ARGS=("$@")
 LOGS_DIR=$PROJECT_ROOT/logs
 
 # --------------------------------------------------------------------------------------
@@ -42,7 +46,8 @@ if [[ $SLURM_JOB_ID != "" ]]; then
         --checkpoint_path "$CHECKPOINT_PATH" \
         --logs_dir "$LOGS_DIR" \
         ${CACHE_DIR:+--cache_dir "$CACHE_DIR"} \
-        ${NUM_PROC:+--num_proc "$NUM_PROC"}
+        ${NUM_PROC:+--num_proc "$NUM_PROC"} \
+        "${EXTRA_ARGS[@]}"
 else
     cmd=()
     cmd+=(python3 "$PROJECT_ROOT/test.py"
@@ -60,5 +65,6 @@ else
         cmd+=(--num_proc "$NUM_PROC")
     fi
 
+    cmd+=("${EXTRA_ARGS[@]}")
     "${cmd[@]}"
 fi

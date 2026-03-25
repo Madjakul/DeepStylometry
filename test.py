@@ -48,11 +48,10 @@ if __name__ == "__main__":
         f"__skip_list-{cfg.model.skip_list}"
     ).replace("/", "-").lower()
     loggers = []
-    if cfg.train.use_wandb:
+    if cfg.test.use_wandb:
         wandb_logger = WandbLogger(
             project=cfg.project_name,
             name=name,
-            log_model=cfg.train.log_model,
         )
         loggers.append(wandb_logger)
 
