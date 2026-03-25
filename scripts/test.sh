@@ -5,14 +5,9 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 # ************************** Customizable Arguments ************************************
 
-# Positional args: $1=config_path $2=checkpoint_path [-- extra args passed to test.py]
-CONFIG_PATH=${1:-$PROJECT_ROOT/configs/test.yml}
+CONFIG_PATH=$PROJECT_ROOT/configs/test_pli_ngram5.yml # $PROJECT_ROOT/configs/test.yml
 PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
-CHECKPOINT_PATH=${2:-$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-li__skip_list-true/step-step=23000.ckpt}
-# Collect any extra args after the first two positional args (skip optional '--' separator)
-shift 2 2>/dev/null || true
-[[ "${1:-}" == "--" ]] && shift
-EXTRA_ARGS=("$@")
+CHECKPOINT_PATH=$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-pli-ngram-n5__skip_list-true/last.ckpt # $PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-li__skip_list-true/step-step=23000.ckpt
 LOGS_DIR=$PROJECT_ROOT/logs
 
 # --------------------------------------------------------------------------------------
