@@ -6,8 +6,8 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 # ************************** Customizable Arguments ************************************
 
 # First two positional args override config/checkpoint; args after -- are forwarded to test.py
-CONFIG_PATH=${1:-$PROJECT_ROOT/configs/test.yml}                                                                   # test_pli_ngram2.yml}
-CHECKPOINT_PATH=${2:-$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-li__skip_list-true/last.ckpt} #answerdotai-modernbert-base__halvest__pooling-pli-ngram-n2__skip_list-true/last.ckpt}
+CONFIG_PATH=${1:-$PROJECT_ROOT/configs/test_mean.yml}                                                # test_pli_ngram2.yml}
+CHECKPOINT_PATH=${2:-$PROJECT_ROOT/tmp/answerdotai-ModernBERT-base__halvest__pooling-mean/last.ckpt} #answerdotai-modernbert-base__halvest__pooling-pli-ngram-n2__skip_list-true/last.ckpt}
 PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
 LOGS_DIR=$PROJECT_ROOT/logs
 
