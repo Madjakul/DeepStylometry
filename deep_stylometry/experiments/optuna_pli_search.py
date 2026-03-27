@@ -39,7 +39,7 @@ except ModuleNotFoundError:
             super().__init__()
 
 
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -138,8 +138,10 @@ def run_search(
     base_cfg.model.pooling_method = "pli"
     base_cfg.model.patch_method = "learned"
 
+    optuna.logging.set_verbosity(optuna.logging.INFO)
+
     tmp_dir = tempfile.mkdtemp(prefix="pli_optuna_")
-    logging.info(f"Optuna tmp dir: {tmp_dir}")
+    logger.info(f"Optuna tmp dir: {tmp_dir}")
 
     sampler = optuna.samplers.TPESampler(seed=42)
     pruner = optuna.pruners.MedianPruner(
@@ -154,21 +156,33 @@ def run_search(
         load_if_exists=True,
     )
 
+    def _log_trial(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
+        if trial.state == optuna.trial.TrialState.COMPLETE:
+            logger.info(
+                f"Trial {trial.number} finished | val/accuracy={trial.value:.4f} | "
+                f"params={trial.params} | best so far={study.best_value:.4f}"
+            )
+        elif trial.state == optuna.trial.TrialState.PRUNED:
+            logger.info(f"Trial {trial.number} pruned.")
+        elif trial.state == optuna.trial.TrialState.FAIL:
+            logger.warning(f"Trial {trial.number} failed: {trial.params}")
+
     study.optimize(
         lambda trial: objective(
             trial, base_cfg, processed_ds_dir, num_proc, max_steps, tmp_dir
         ),
         n_trials=n_trials,
         show_progress_bar=True,
+        callbacks=[_log_trial],
     )
 
     best = study.best_params
-    logging.info(f"Best params: {best}")
-    logging.info(f"Best val accuracy: {study.best_value:.4f}")
+    logger.info(f"Best params: {best}")
+    logger.info(f"Best val accuracy: {study.best_value:.4f}")
 
     with open(output_path, "w") as f:
         yaml.dump({"best_params": best, "best_val_accuracy": study.best_value}, f)
-    logging.info(f"Saved best params to {output_path}")
+    logger.info(f"Saved best params to {output_path}")
 
 
 if __name__ == "__main__":

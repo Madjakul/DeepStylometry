@@ -7,7 +7,7 @@
 #SBATCH --mem=64G                                    # Memory (1 GPU, smaller than train)
 #SBATCH --gres=gpu:1                                 # 1 GPU per trial
 #SBATCH --cpus-per-task=10                           # CPU cores for dataloading
-#SBATCH --time=1-00:00:00                            # 1 day for 30 trials x 10k steps
+#SBATCH --time=2-00:00:00                            # 1 day for 30 trials x 10k steps
 #SBATCH --output=logs/%x-%j-%t.log
 
 module purge

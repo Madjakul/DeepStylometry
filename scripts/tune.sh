@@ -13,7 +13,7 @@ OUTPUT_PATH=$PROJECT_ROOT/configs/best_pli_params.yml
 # --------------------------------------------------------------------------------------
 
 N_TRIALS=30
-MAX_STEPS=10000
+MAX_STEPS=2000
 STUDY_NAME="pli_search"
 NUM_PROC=10
 

@@ -24,5 +24,5 @@ def logging_config() -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     console = logging.StreamHandler()
-    console.setLevel(logging.WARNING)
+    console.setLevel(logging.INFO)
     logging.getLogger("").addHandler(console)
