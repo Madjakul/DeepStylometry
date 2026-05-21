@@ -8,7 +8,7 @@ from deep_stylometry.utils.helpers import DictAccessMixin
 
 @dataclass
 class DataConfig(DictAccessMixin):
-    ds_name: Literal["se", "halvest"] = "halvest"
+    ds_name: Literal["se", "halvest", "pan19"] = "halvest"
     batch_size: int = 32
     tokenizer_name: str = "answerdotai/ModernBERT-base"
     max_length: int = 512

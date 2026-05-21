@@ -1,5 +1,6 @@
 # deep_stylometry/utils/train_utils.py
 
+import os
 import os.path as osp
 from typing import Optional
 
@@ -14,7 +15,7 @@ from deep_stylometry.callbacks import (EvalRuntimeMonitor,
 from deep_stylometry.utils.configs.base_config import BaseConfig
 from deep_stylometry.utils.data.halvest_datamodule import \
     HALvestContrastiveDatamodule
-from deep_stylometry.utils.data.se_datamodule import StyleEmbeddingDatamodule
+from deep_stylometry.utils.data.pan19_datamodule import PAN19Datamodule
 from deep_stylometry.utils.helpers import resolve_lightning_precision
 
 
@@ -24,14 +25,22 @@ def setup_datamodule(
     num_proc: int,
     cache_dir: Optional[str] = None,
 ) -> L.LightningDataModule:
-    dm_map = {"se": StyleEmbeddingDatamodule, "halvest": HALvestContrastiveDatamodule}
+    """Instantiate the appropriate datamodule for ``cfg.data.ds_name``."""
+    dm_map = {
+        "halvest": HALvestContrastiveDatamodule,
+        "pan19": PAN19Datamodule,
+    }
 
-    dm = dm_map[cfg.data.ds_name](
+    kwargs: dict = dict(
         cfg=cfg,
         processed_ds_dir=processed_ds_dir,
         num_proc=num_proc,
         cache_dir=cache_dir,
     )
+    if cfg.data.ds_name == "pan19":
+        kwargs["pan19_zip"] = os.environ.get("PAN19_ZIP")
+
+    dm = dm_map[cfg.data.ds_name](**kwargs)
     return dm
 
 
@@ -41,6 +50,29 @@ def setup_trainer(
     logs_dir: str,
     checkpoint_dir: Optional[str] = None,
 ) -> L.Trainer:
+    """Build and return a configured Lightning Trainer.
+
+    Attaches callbacks (LR monitor, loss variance monitor, eval runtime
+    monitor, logarithmic validation), optional WandB and CSV loggers, and
+    a ModelCheckpoint when ``checkpoint_dir`` is provided.
+
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Global configuration object.
+    model : torch.nn.Module
+        The model to optionally watch with WandB.
+    logs_dir : str
+        Root directory for CSV logs.
+    checkpoint_dir : str, optional
+        If given, checkpoints are saved under
+        ``checkpoint_dir/<experiment_name>/``.
+
+    Returns
+    -------
+    L.Trainer
+        A fully configured Lightning Trainer.
+    """
     # Set up callbacks
     callbacks = []
 
@@ -54,14 +86,19 @@ def setup_trainer(
         LogarithmicValidationCallback(start_step=10, growth=1.5, max_interval=1000)
     )
 
-    name = (
-        (
+    if cfg.model.pooling_method == "pli":
+        patch_tag = f"{cfg.model.patch_method}-n{cfg.model.patch_size}"
+        if cfg.model.patch_compression != "mean":
+            patch_tag += f"-{cfg.model.patch_compression}"
+        name = (
+            f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
+            f"__pooling-pli-{patch_tag}__skip_list-{cfg.model.skip_list}"
+        ).replace("/", "-").lower()
+    else:
+        name = (
             f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
             f"__pooling-{cfg.model.pooling_method}__skip_list-{cfg.model.skip_list}"
-        )
-        .replace("/", "-")
-        .lower()
-    )
+        ).replace("/", "-").lower()
 
     # Model checkpoint callback if checkpoint_dir is provided
     if checkpoint_dir is not None:

@@ -5,10 +5,24 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 # ************************** Customizable Arguments ************************************
 
-CONFIG_PATH=$PROJECT_ROOT/configs/test.yml
-PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
-CHECKPOINT_PATH=$PROJECT_ROOT/tmp/answerdotai-ModernBERT-base__halvest__pooling-li/step-step=23000.ckpt
+# First two positional args override config/checkpoint; args after -- are forwarded to test.py
+CONFIG_PATH=${1:-$PROJECT_ROOT/configs/test_pli_learned.yml}                                                                   # test_pli_ngram2.yml}
+CHECKPOINT_PATH=${2:-$PROJECT_ROOT/tmp/answerdotai-modernbert-base__halvest__pooling-pli-learned-n3__skip_list-true/last.ckpt} #answerdotai-modernbert-base__halvest__pooling-pli-ngram-n2__skip_list-true/last.ckpt}
+PROCESSED_DS_DIR=$SCRATCH/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
 LOGS_DIR=$PROJECT_ROOT/logs
+export PAN19_ZIP=${PAN19_ZIP:-$DATA_ROOT/pan19-cross-domain-authorship-attribution-training-dataset-2019-01-23.zip}
+
+# Collect extra args: everything after the '--' separator
+EXTRA_ARGS=()
+shift 2 2>/dev/null || true
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--" ]]; then
+        shift
+        EXTRA_ARGS+=("$@")
+        break
+    fi
+    shift
+done
 
 # --------------------------------------------------------------------------------------
 
@@ -41,7 +55,8 @@ if [[ $SLURM_JOB_ID != "" ]]; then
         --checkpoint_path "$CHECKPOINT_PATH" \
         --logs_dir "$LOGS_DIR" \
         ${CACHE_DIR:+--cache_dir "$CACHE_DIR"} \
-        ${NUM_PROC:+--num_proc "$NUM_PROC"}
+        ${NUM_PROC:+--num_proc "$NUM_PROC"} \
+        "${EXTRA_ARGS[@]}"
 else
     cmd=()
     cmd+=(python3 "$PROJECT_ROOT/test.py"
@@ -59,5 +74,6 @@ else
         cmd+=(--num_proc "$NUM_PROC")
     fi
 
+    cmd+=("${EXTRA_ARGS[@]}")
     "${cmd[@]}"
 fi

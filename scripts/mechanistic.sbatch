@@ -1,0 +1,29 @@
+#!/bin/bash
+
+#SBATCH --job-name=mechanistic-study                   # Job name
+#SBATCH --nodes=1                                      # Run all processes on a single node
+#SBATCH --ntasks=1                                     # Run a single task
+#SBATCH --mem=64G                                      # Job memory request
+#SBATCH --partition=almanach
+#SBATCH --gres=gpu:h100:1                              # Request 1 H100 GPU
+#SBATCH --cpus-per-task=8                              # Number of CPU cores per task
+#SBATCH --time=2-00:00:00                                # Time limit 12 hours
+#SBATCH --output=logs/%x-%j-%t.log                     # Standard output and error log
+
+mkdir -p logs
+
+module purge
+module load slurm
+source $HOME/.bashrc
+
+export WANDB_CACHE_DIR="$WORK_DIR/wandb_cache"
+export WANDB_DATA_DIR="$WORK_DIR/wandb_data"
+export WANDB_CONFIG_DIR="$WORK_DIR/wandb_config"
+
+conda activate deep-stylometry
+if [[ "$CONDA_DEFAULT_ENV" != "deep-stylometry" ]]; then
+    echo "Error: Failed to activate environment"
+    exit 1
+fi
+
+./scripts/mechanistic.sh "$@"

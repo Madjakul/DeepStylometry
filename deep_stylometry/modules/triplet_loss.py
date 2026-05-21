@@ -15,6 +15,18 @@ if TYPE_CHECKING:
 
 
 class TripletLoss(nn.Module):
+    """Margin-based triplet ranking loss.
+
+    Scores each query against the full key set, then applies a hinge loss
+    that penalises configurations where the positive distance exceeds the
+    negative distance by less than ``cfg.train.margin``.
+
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Global configuration. ``cfg.train.margin`` must be set.
+        ``cfg.model.pooling_method`` selects the scoring function.
+    """
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
@@ -35,6 +47,28 @@ class TripletLoss(nn.Module):
         targets: Int[torch.Tensor, "batch"],
         q_input_ids: Int[torch.Tensor, "batch seq"],
     ) -> Dict[str, torch.Tensor]:
+        """Compute triplet loss and per-example positive/negative scores.
+
+        Parameters
+        ----------
+        query_embs : Float[Tensor, "batch seq hidden"]
+            Per-token query embeddings.
+        key_embs : Float[Tensor, "two_times_batch seq hidden"]
+            Concatenated positive and negative key embeddings.
+        q_mask : Int[Tensor, "batch seq"]
+            Attention mask for queries.
+        k_mask : Int[Tensor, "two_times_batch seq"]
+            Attention mask for keys.
+        targets : Int[Tensor, "batch"]
+            Index into ``key_embs`` of each query's positive.
+        q_input_ids : Int[Tensor, "batch seq"]
+            Query token IDs forwarded to LateInteraction for skip-list masking.
+
+        Returns
+        -------
+        dict
+            Keys: ``loss``, ``all_scores``, ``targets``, ``poss``, ``negs``.
+        """
         batch_size = query_embs.size(0)
         neg_offset = key_embs.size(0) // 2
 

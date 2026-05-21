@@ -1,0 +1,34 @@
+# test_pli_ngram3.yml — Phase P3b: PLI ngram-3 evaluation
+
+project_name: "deep-stylometry"
+
+model:
+  pooling_method: "pli"
+  skip_list: true
+  lm_hidden_size: 768
+  patch_method: "ngram"
+  patch_size: 3
+  patch_compression: "mean"
+  patch_cross_attn_dim: 128
+  patch_cross_attn_heads: 2
+
+data:
+  ds_name: "halvest"
+  batch_size: 64
+  tokenizer_name: "answerdotai/ModernBERT-base"
+  max_length: 512
+  padding: "do_not_pad"
+  truncation: "longest_first"
+  add_special_tokens: true
+  map_batch_size: 1000
+  load_from_cache_file: true
+  subsets: ["base-2", "base-4", "base-6", "base-8", "base-10"]
+  shuffle: true
+  test_subset: "base-10"
+
+test:
+  device: "gpu"
+  num_devices: 1
+  log_every_n_steps: 1
+  precision: "16-mixed"
+  use_wandb: true

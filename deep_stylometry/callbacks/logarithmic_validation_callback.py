@@ -7,8 +7,28 @@ from typing import Optional
 import lightning as L
 import torch
 
+logger = logging.getLogger(__name__)
+
 
 class LogarithmicValidationCallback(L.Callback):
+    """Exponentially increases the validation interval after each validation run.
+
+    Starts validating every ``start_step`` batches, then multiplies the
+    interval by ``growth`` after each validation. Clamped to
+    ``[min_interval, max_interval]``. This amortises the cost of retrieval
+    evaluation over long training runs.
+
+    Parameters
+    ----------
+    start_step : int, optional
+        Initial validation interval in training batches (default: 50).
+    growth : float, optional
+        Multiplicative growth factor applied after each validation (default: 2.0).
+    min_interval : int, optional
+        Minimum interval floor (default: 1).
+    max_interval : int, optional
+        Interval ceiling; ``None`` means no cap (default: ``None``).
+    """
 
     def __init__(
         self,
@@ -31,7 +51,7 @@ class LogarithmicValidationCallback(L.Callback):
         trainer.val_check_interval = int(self.current_interval)
         trainer.val_check_batch = int(self.current_interval)
         if trainer.is_global_zero:
-            logging.info(
+            logger.info(
                 f"[log-val] initial val_check_interval = {self.current_interval}"
                 " batches"
             )
@@ -67,7 +87,7 @@ class LogarithmicValidationCallback(L.Callback):
             torch.distributed.barrier()
 
         if trainer.is_global_zero:
-            logging.info(
+            logger.info(
                 "[log-val] validation finished. Increasing interval -> every"
                 f" {self.current_interval} batches"
             )

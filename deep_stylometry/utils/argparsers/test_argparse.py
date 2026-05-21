@@ -4,7 +4,7 @@ import argparse
 
 
 class TestArgparse:
-    """Argument parser for hyper-parameter tuning."""
+    """Argument parser for evaluation / retrieval testing."""
 
     @classmethod
     def parse_known_args(cls):
@@ -53,6 +53,18 @@ class TestArgparse:
             type=str,
             default=None,
             help="Path to the cache directory for HuggingFace.",
+        )
+        parser.add_argument(
+            "--test_subset",
+            type=str,
+            default=None,
+            help="Override cfg.data.test_subset (e.g. base-2, base-4, unrestricted, se).",
+        )
+        parser.add_argument(
+            "--ds_name",
+            type=str,
+            default=None,
+            help="Override cfg.data.ds_name (halvest or se).",
         )
         args, _ = parser.parse_known_args()
         return args

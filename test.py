@@ -17,6 +17,8 @@ from deep_stylometry.utils.logger import logging_config
 os.environ["PYTHONUNBUFFERED"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+logger = logging.getLogger(__name__)
+
 set_seed()
 logging_config()
 
@@ -24,7 +26,13 @@ if __name__ == "__main__":
     args = TestArgparse.parse_known_args()
     cfg = BaseConfig(mode="test").from_yaml(args.config_path)
 
-    logging.info("Preparing data module...")
+    # CLI overrides (allow per-job customisation without editing YAML)
+    if args.test_subset is not None:
+        cfg.data.test_subset = args.test_subset
+    if args.ds_name is not None:
+        cfg.data.ds_name = args.ds_name
+
+    logger.info("Preparing data module...")
     dm = train_utils.setup_datamodule(
         cfg=cfg,
         processed_ds_dir=args.processed_ds_dir,
@@ -32,20 +40,20 @@ if __name__ == "__main__":
         cache_dir=args.cache_dir,
     )
 
+    if cfg.model.pooling_method == "pli":
+        patch_tag = f"pli-{cfg.model.patch_method}-n{cfg.model.patch_size}"
+    else:
+        patch_tag = cfg.model.pooling_method
     name = (
-        (
-            f"{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
-            f"__pooling-{cfg.model.pooling_method}__{cfg.data.test_subset}"
-        )
-        .replace("/", "-")
-        .lower()
-    )
+        f"test__{cfg.model.base_checkpoint}__{cfg.data.ds_name}"
+        f"__pooling-{patch_tag}__{cfg.data.test_subset}"
+        f"__skip_list-{cfg.model.skip_list}"
+    ).replace("/", "-").lower()
     loggers = []
-    if cfg.train.use_wandb:
+    if cfg.test.use_wandb:
         wandb_logger = WandbLogger(
             project=cfg.project_name,
             name=name,
-            log_model=cfg.train.log_model,
         )
         loggers.append(wandb_logger)
 
@@ -53,7 +61,7 @@ if __name__ == "__main__":
     csv_logger = CSVLogger(save_dir=args.logs_dir, name=name)
     loggers.append(csv_logger)
 
-    logging.info(f"Loading model from {args.checkpoint_path}...")
+    logger.info(f"Loading model from {args.checkpoint_path}...")
     # Load weights from your saved checkpoint
     model = DeepStylometry.load_from_checkpoint(args.checkpoint_path, cfg=cfg)
     precision, _ = resolve_lightning_precision(cfg.test.precision)
@@ -67,6 +75,6 @@ if __name__ == "__main__":
         precision=precision,
     )
 
-    logging.info("=== Starting Evaluation ===")
+    logger.info("=== Starting Evaluation ===")
     trainer.test(model=model, datamodule=dm)
-    logging.info("=== Evaluation Finished ===")
+    logger.info("=== Evaluation Finished ===")

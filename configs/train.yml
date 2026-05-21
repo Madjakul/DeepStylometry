@@ -4,7 +4,7 @@ project_name: "deep-stylometry"
 
 data:
   ds_name: "halvest" # or halvest
-  batch_size: 64
+  batch_size: 32
   tokenizer_name: "answerdotai/ModernBERT-base"
   max_length: 512
   padding: "do_not_pad"
@@ -38,7 +38,7 @@ train:
   val_check_interval: null
   check_val_every_n_epoch: null
   log_every_n_steps: 1
-  accumulate_grad_batches: 1
+  accumulate_grad_batches: 2
   gradient_clip_val: null # null
   precision: "16-mixed" # 32-true or 16-mixed
   # --- wandb logger ---

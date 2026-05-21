@@ -9,6 +9,8 @@ import numpy as np
 import torch
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
+logger = logging.getLogger(__name__)
+
 WIDTH = 88
 
 
@@ -52,6 +54,13 @@ def get_tokenizer(model_name: str, **kwargs) -> "PreTrainedTokenizerBase":
 
 
 def set_seed(seed: int = 7) -> None:
+    """Set random seeds for reproducibility across Python, NumPy, and PyTorch.
+
+    Parameters
+    ----------
+    seed : int, optional
+        Random seed (default: 7).
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -59,12 +68,32 @@ def set_seed(seed: int = 7) -> None:
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     os.environ["PYTHONHASHSEED"] = str(seed)
-    logging.info(f"Random seed set as {seed}")
+    logger.info(f"Random seed set as {seed}")
 
 
 def resolve_lightning_precision(
     requested_precision: str,
 ) -> tuple[str, torch.dtype]:
+    """Map a requested precision string to a Lightning-compatible pair.
+
+    Falls back from ``bf16-mixed`` to ``16-mixed`` when bfloat16 is not
+    supported by the hardware.
+
+    Parameters
+    ----------
+    requested_precision : str
+        One of ``"bf16-mixed"``, ``"16-mixed"``, ``"32"``, or ``"32-true"``.
+
+    Returns
+    -------
+    tuple[str, torch.dtype]
+        ``(lightning_precision_string, torch_dtype)`` pair.
+
+    Raises
+    ------
+    ValueError
+        If ``requested_precision`` is not a recognised value.
+    """
     if requested_precision == "bf16-mixed":
         bf16_ok = (
             torch.cuda.is_available()
@@ -72,20 +101,20 @@ def resolve_lightning_precision(
             and torch.cuda.get_device_capability(0)[0] >= 8
         )
         if bf16_ok:
-            logging.info("Using bfloat16 mixed precision.")
+            logger.info("Using bfloat16 mixed precision.")
             return "bf16-mixed", torch.bfloat16
         else:
-            logging.warning(
+            logger.warning(
                 "Bfloat16 mixed precision is not supported on this hardware. Falling back to float16 mixed precision."
             )
             return "16-mixed", torch.float16
 
     if requested_precision == "16-mixed":
-        logging.info("Using float16 mixed precision.")
+        logger.info("Using float16 mixed precision.")
         return "16-mixed", torch.float16
 
     if requested_precision in ("32", "32-true"):
-        logging.info("Using float32 precision.")
+        logger.info("Using float32 precision.")
         return "32-true", torch.float32
 
     raise ValueError(f"Unknown Lightning precision: {requested_precision}")

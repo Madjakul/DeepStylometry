@@ -16,6 +16,33 @@ def build_corpus(
     neg_embs_list: List[torch.Tensor],
     neg_masks_list: List[torch.Tensor],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Pad and concatenate per-batch embedding lists into a full corpus.
+
+    Pads all embeddings to the global maximum sequence length across all
+    batches and splits, then concatenates positives and negatives into a
+    single key tensor.
+
+    Parameters
+    ----------
+    q_embs_list : list of Tensor
+        Per-batch query embeddings ``(B, S_i, H)``.
+    q_masks_list : list of Tensor
+        Per-batch query attention masks ``(B, S_i)``.
+    pos_embs_list : list of Tensor
+        Per-batch positive document embeddings.
+    pos_masks_list : list of Tensor
+        Per-batch positive document masks.
+    neg_embs_list : list of Tensor
+        Per-batch negative document embeddings.
+    neg_masks_list : list of Tensor
+        Per-batch negative document masks.
+
+    Returns
+    -------
+    tuple of Tensor
+        ``(q_embs, q_masks, k_embs, k_masks)`` where ``k_embs`` concatenates
+        positives followed by negatives along the batch dimension.
+    """
     all_embs = q_embs_list + pos_embs_list + neg_embs_list
     global_max_seq = max(t.size(1) for t in all_embs)
 
@@ -51,6 +78,27 @@ def build_qrels(
     n_corpus: int,
     target_indices: Optional[List[List[int]]] = None,
 ) -> tuple[Qrels, Qrels]:
+    """Build hard and soft qrels for retrieval evaluation.
+
+    Hard qrels use only the diagonal positive (index ``i`` for query ``i``).
+    Soft qrels additionally include author-sharing positives from
+    ``target_indices`` when available; otherwise soft falls back to hard.
+
+    Parameters
+    ----------
+    n_queries : int
+        Number of queries.
+    n_corpus : int
+        Total corpus size (positives + negatives).
+    target_indices : list of list of int, optional
+        For each query, a list of additional relevant document indices
+        (from the same author set). ``None`` means use hard qrels only.
+
+    Returns
+    -------
+    tuple[Qrels, Qrels]
+        ``(hard_qrels, soft_qrels)``.
+    """
     hard = {f"q{i}": {f"d{i}": 1} for i in range(n_queries)}
 
     if target_indices is not None:
@@ -65,6 +113,20 @@ def build_qrels(
 
 
 def scores_to_run(scores: torch.Tensor, k: int) -> Run:
+    """Convert a dense similarity matrix into a top-k ranx Run object.
+
+    Parameters
+    ----------
+    scores : torch.Tensor
+        ``(n_queries, n_corpus)`` similarity matrix.
+    k : int
+        Number of documents to retrieve per query.
+
+    Returns
+    -------
+    Run
+        Ranx Run with top-k scored documents per query.
+    """
     topk_scores, topk_indices = scores.topk(min(k, scores.size(1)), dim=1)
     return Run(
         {
@@ -80,6 +142,24 @@ def scores_to_run(scores: torch.Tensor, k: int) -> Run:
 def evaluate_run(
     hard_qrels: Qrels, soft_qrels: Qrels, run: Run, k: int
 ) -> Dict[str, float]:
+    """Compute MRR, nDCG, Recall, and accuracy at depth k.
+
+    Parameters
+    ----------
+    hard_qrels : Qrels
+        Qrels with only the diagonal positive (used for MRR and accuracy).
+    soft_qrels : Qrels
+        Qrels with all author-sharing positives (used for nDCG and Recall).
+    run : Run
+        Ranked list of retrieved documents.
+    k : int
+        Cutoff depth.
+
+    Returns
+    -------
+    dict
+        Keys: ``mrr@k``, ``ndcg@k``, ``recall@k``, ``accuracy``.
+    """
     return {
         f"mrr@{k}": evaluate(hard_qrels, run, f"mrr@{k}"),
         f"ndcg@{k}": evaluate(soft_qrels, run, f"ndcg@{k}"),
@@ -89,6 +169,20 @@ def evaluate_run(
 
 
 def gather_targets(target_batches: List[torch.Tensor]) -> Optional[List[List[int]]]:
+    """Flatten per-batch target-index tensors into a per-query list.
+
+    Parameters
+    ----------
+    target_batches : list of Tensor
+        Each tensor has shape ``(B, max_targets)`` with -1 as a sentinel for
+        missing entries.
+
+    Returns
+    -------
+    list of list of int, or None
+        Per-query lists of valid (non-negative) target document indices.
+        Returns ``None`` if no valid targets exist (triggers hard-qrel fallback).
+    """
     if not target_batches:
         return None
 

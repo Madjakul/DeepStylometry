@@ -5,8 +5,9 @@ DATA_ROOT=$PROJECT_ROOT/data                     # Do not modify
 
 # ************************** Customizable Arguments ************************************
 
-CONFIG_PATH=$PROJECT_ROOT/configs/train.yml
-PROCESSED_DS_DIR=$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
+# First positional argument overrides the config path
+CONFIG_PATH=${1:-$PROJECT_ROOT/configs/train_pli_learned.yml}
+PROCESSED_DS_DIR=$SCRATCH/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/ # $WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/
 LOGS_DIR=$PROJECT_ROOT/logs
 
 # --------------------------------------------------------------------------------------

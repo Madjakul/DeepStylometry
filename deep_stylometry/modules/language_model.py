@@ -14,6 +14,18 @@ if TYPE_CHECKING:
 
 
 class LanguageModel(nn.Module):
+    """Thin wrapper around a HuggingFace AutoModel encoder.
+
+    Loads the model and config from ``cfg.model.base_checkpoint``, resolves
+    the precision dtype, and returns per-token hidden states from the final
+    layer.
+
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Global configuration. ``cfg.model.base_checkpoint`` and
+        ``cfg.model.attn_implementation`` are used at construction time.
+    """
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super(LanguageModel, self).__init__()
@@ -24,7 +36,11 @@ class LanguageModel(nn.Module):
             self.cfg.model.base_checkpoint, torch_dtype=torch_dtype
         )
 
-        self.model = AutoModel.from_pretrained(cfg.model.base_checkpoint, config=config)
+        self.model = AutoModel.from_pretrained(
+            cfg.model.base_checkpoint,
+            config=config,
+            attn_implementation=cfg.model.attn_implementation,
+        )
 
         self.hidden_size = self.model.config.hidden_size
         self.vocab_size = self.model.config.vocab_size
@@ -33,7 +49,21 @@ class LanguageModel(nn.Module):
         self,
         input_ids: Int[torch.Tensor, "batch seq"],
         attention_mask: Int[torch.Tensor, "batch seq"],
-    ) -> Tuple[Float[torch.Tensor, ""], Float[torch.Tensor, "batch seq hidden"]]:
+    ) -> Float[torch.Tensor, "batch seq hidden"]:
+        """Run the encoder and return last-layer hidden states.
+
+        Parameters
+        ----------
+        input_ids : Int[Tensor, "batch seq"]
+            Token IDs.
+        attention_mask : Int[Tensor, "batch seq"]
+            Binary attention mask.
+
+        Returns
+        -------
+        Float[Tensor, "batch seq hidden"]
+            Per-token hidden states from the final transformer layer.
+        """
 
         out = self.model(
             input_ids,

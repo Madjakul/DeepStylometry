@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import datasets
 import lightning as L
+import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -18,8 +19,29 @@ from deep_stylometry.utils.helpers import get_tokenizer
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs.base_config import BaseConfig
 
+logger = logging.getLogger(__name__)
+
 
 class HALvestContrastiveDatamodule(L.LightningDataModule):
+    """Lightning DataModule for the HALvest-Contrastive authorship dataset.
+
+    Loads and tokenizes triplets (query, positive, negative) from
+    `almanach/halvest-contrastive` on HuggingFace. Pre-tokenized datasets are
+    cached to disk under ``processed_ds_dir`` and reused on subsequent runs.
+    Validation always uses the ``base-4`` subset; the test subset is controlled
+    by ``cfg.data.test_subset``.
+
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Global configuration object.
+    processed_ds_dir : str
+        Root directory for cached, pre-tokenized splits.
+    num_proc : int
+        Number of parallel workers for the HuggingFace ``.map()`` calls.
+    cache_dir : str, optional
+        HuggingFace datasets cache directory.
+    """
 
     val_targets: List[List]
     test_targets: List[List]
@@ -97,13 +119,13 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
             train_path = osp.join(subset_path, "train")
 
             if osp.exists(train_path):
-                logging.info(
+                logger.info(
                     f"Loading processed data for train from disk: {train_path}"
                 )
                 train_dss.append(datasets.load_from_disk(train_path))
                 continue
 
-            logging.info(
+            logger.info(
                 "Processed data not found for train. Running full preprocessing"
                 " pipeline..."
             )
@@ -114,7 +136,7 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
                 cache_dir=self.cache_dir,
             )
             columns = ds.column_names  # type: ignore
-            logging.info("Tokenizing train triplets...")
+            logger.info("Tokenizing train triplets...")
             ds = ds.map(
                 self.tokenize,
                 batched=True,
@@ -126,7 +148,7 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
 
             train_dss.append(ds)
 
-            logging.info(f"Saving processed data to disk: {train_path}")
+            logger.info(f"Saving processed data to disk: {train_path}")
             ds.set_format("torch")
             os.makedirs(self.processed_ds_dir, exist_ok=True)
             ds.save_to_disk(train_path)
@@ -138,11 +160,11 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         subset_path = osp.join(self.processed_ds_dir, subset)
         val_path = osp.join(subset_path, "val")
         if osp.exists(val_path):
-            logging.info(f"Loading processed data for validation from disk: {val_path}")
+            logger.info(f"Loading processed data for validation from disk: {val_path}")
             self.val_ds = datasets.load_from_disk(val_path)
             return
 
-        logging.info(
+        logger.info(
             "Processed data not found for val. Running full preprocessing pipeline..."
         )
         ds = datasets.load_dataset(
@@ -165,7 +187,7 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
             load_from_cache_file=self.cfg.data.load_from_cache_file,
         )
 
-        logging.info(f"Saving processed data to disk: {val_path}")
+        logger.info(f"Saving processed data to disk: {val_path}")
         self.val_ds.set_format("torch")
         os.makedirs(self.processed_ds_dir, exist_ok=True)
         self.val_ds.save_to_disk(val_path)
@@ -175,11 +197,11 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         subset_path = osp.join(self.processed_ds_dir, subset)
         test_path = osp.join(subset_path, "test")
         if osp.exists(test_path):
-            logging.info(f"Loading processed data for test from disk: {test_path}")
+            logger.info(f"Loading processed data for test from disk: {test_path}")
             self.test_ds = datasets.load_from_disk(test_path)
             return
 
-        logging.info(
+        logger.info(
             "Processed data not found for test. Running full preprocessing pipeline..."
         )
         ds = datasets.load_dataset(
@@ -193,24 +215,27 @@ class HALvestContrastiveDatamodule(L.LightningDataModule):
         test_targets = self._get_targets(ds)
         ds = ds.add_column("target_indices", test_targets)
 
+        # HuggingFace datasets uses fork-based multiprocessing. Forking after
+        # CUDA has been initialised (e.g. model already on GPU) raises
+        # "Cannot re-initialize CUDA in forked subprocess", so fall back to a
+        # single process when CUDA is already live.
+        num_proc = None if torch.cuda.is_initialized() else self.num_proc
         self.test_ds = ds.map(
             self.tokenize,
             batched=True,
             with_indices=True,
-            num_proc=self.num_proc,
+            num_proc=num_proc,
             remove_columns=columns,
             load_from_cache_file=self.cfg.data.load_from_cache_file,
         )
 
-        logging.info(f"Saving processed data to disk: {test_path}")
+        logger.info(f"Saving processed data to disk: {test_path}")
         self.test_ds.set_format("torch")
         os.makedirs(self.processed_ds_dir, exist_ok=True)
         self.test_ds.save_to_disk(test_path)
 
     def train_dataloader(self) -> DataLoader:
-        collate_fn = None
-        if self.cfg.train.gather:
-            collate_fn = TripletDataCollator(tokenizer=self.tokenizer)
+        collate_fn = TripletDataCollator(tokenizer=self.tokenizer)
         return DataLoader(
             self.train_ds,  # type: ignore
             batch_size=self.cfg.data.batch_size,

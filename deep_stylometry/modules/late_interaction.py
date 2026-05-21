@@ -14,12 +14,26 @@ from deep_stylometry.utils.helpers import get_tokenizer
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
 
+logger = logging.getLogger(__name__)
+
 
 class LateInteraction(torch.nn.Module):
+    """Token-level ColBERT-style MaxSim late interaction.
+
+    Each query token attends to all key tokens via a maximum cosine-similarity
+    operation (MaxSim). Scores are summed over query tokens after optionally
+    masking out punctuation-only tokens.
+
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Global configuration. ``cfg.model.skip_list`` controls whether
+        punctuation tokens are excluded from the query-side sum.
+    """
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
-        logging.info("Using Late Interaction pooling method")
+        logger.info("Using Late Interaction pooling method")
         self.cfg = cfg
 
         if self.cfg.model.skip_list:
@@ -38,7 +52,7 @@ class LateInteraction(torch.nn.Module):
                 torch.tensor(list(punc_token_ids), dtype=torch.long),
                 persistent=False,
             )
-            logging.info(
+            logger.info(
                 f"Initialized Late Interaction with {len(punc_token_ids)} punctuation"
                 " tokens to skip."
             )
@@ -51,6 +65,26 @@ class LateInteraction(torch.nn.Module):
         k_mask: Int[torch.Tensor, "n_times_batch seq"],
         q_input_ids: Optional[Int[torch.Tensor, "batch seq"]] = None,
     ) -> Float[torch.Tensor, "batch n_times_batch"]:
+        """Compute MaxSim scores between all query-key pairs.
+
+        Parameters
+        ----------
+        query_embs : Float[Tensor, "batch seq hidden"]
+            L2-normalised query token embeddings (normalisation applied here).
+        key_embs : Float[Tensor, "n_times_batch seq hidden"]
+            L2-normalised key token embeddings.
+        q_mask : Int[Tensor, "batch seq"]
+            Attention mask for queries.
+        k_mask : Int[Tensor, "n_times_batch seq"]
+            Attention mask for keys.
+        q_input_ids : Int[Tensor, "batch seq"], optional
+            Token IDs used to identify punctuation tokens to skip.
+
+        Returns
+        -------
+        Float[Tensor, "batch n_times_batch"]
+            Aggregated MaxSim similarity scores.
+        """
         normalized_query_embs = F.normalize(query_embs, p=2, dim=-1)
         normalized_key_embs = F.normalize(key_embs, p=2, dim=-1)
 
