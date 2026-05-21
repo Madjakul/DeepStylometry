@@ -3,6 +3,7 @@
 project_name: "deep-stylometry"
 
 model:
+  base_checkpoint: "answerdotai/ModernBERT-base"
   pooling_method: "pli"
   skip_list: true
   lm_hidden_size: 768
@@ -24,7 +25,7 @@ data:
   load_from_cache_file: true
   subsets: ["base-2", "base-4", "base-6", "base-8", "base-10"]
   shuffle: true
-  test_subset: "base-2"
+  test_subset: "base-10"
 
 test:
   device: "gpu"

@@ -1,0 +1,45 @@
+# train_layerwise_centered.yml — M4: Layerwise attention + mean centering
+
+project_name: "deep-stylometry"
+
+data:
+  ds_name: "halvest"
+  batch_size: 64
+  tokenizer_name: "answerdotai/ModernBERT-base"
+  max_length: 512
+  padding: "do_not_pad"
+  truncation: "longest_first"
+  add_special_tokens: true
+  map_batch_size: 1000
+  load_from_cache_file: true
+  subsets: ["base-2", "base-4", "base-6", "base-8", "base-10"]
+  shuffle: true
+
+model:
+  base_checkpoint: "answerdotai/ModernBERT-base"
+  dropout: 0.1
+  expansion_ratio: 4
+  pooling_method: "layerwise"
+  skip_list: false
+  mean_center: true
+
+train:
+  loss: "info_nce"
+  tau: 0.5
+  margin: 0.32
+  lr: 3.0e-5
+  weight_decay: 0.1
+  device: "gpu"
+  num_devices: 4
+  strategy: "ddp_find_unused_parameters_true"
+  process_group_backend: "nccl"
+  max_epochs: 1
+  val_check_interval: null
+  check_val_every_n_epoch: null
+  log_every_n_steps: 1
+  accumulate_grad_batches: 1
+  gradient_clip_val: null
+  precision: "16-mixed"
+  use_wandb: true
+  log_model: false
+  watch: "all"

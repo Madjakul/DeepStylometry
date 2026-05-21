@@ -1,0 +1,33 @@
+# Zero-shot retrieval baseline: pretrained E5 on HALvest.
+# Control experiment for the EMNLP paper.
+# E5 prefixes are set via env vars in scripts/test_zero_shot.sbatch,
+# not via this YAML (to avoid changing the config schema).
+
+project_name: "deep-stylometry"
+
+model:
+  pooling_method: "mean"
+  skip_list: false
+  base_checkpoint: "intfloat/multilingual-e5-base"
+  lm_hidden_size: 768
+
+data:
+  ds_name: "halvest"
+  batch_size: 32
+  tokenizer_name: "intfloat/multilingual-e5-base"
+  max_length: 512
+  padding: "do_not_pad"
+  truncation: "longest_first"
+  add_special_tokens: true
+  map_batch_size: 1000
+  load_from_cache_file: true
+  subsets: ["base-4"]
+  shuffle: false
+  test_subset: "base-4"
+
+test:
+  device: "gpu"
+  num_devices: 1
+  log_every_n_steps: 1
+  precision: "16-mixed"
+  use_wandb: true

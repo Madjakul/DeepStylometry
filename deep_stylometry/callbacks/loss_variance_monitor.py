@@ -7,8 +7,23 @@ from typing import Any, Deque, Optional
 import lightning as L
 import torch
 
+logger = logging.getLogger(__name__)
+
 
 class LossVarianceMonitor(L.Callback):
+    """Tracks rolling variance of the training loss and query-length variance.
+
+    Maintains a fixed-size deque of recent loss values and logs their variance
+    every ``log_every_n_steps`` steps. Useful for detecting training instability
+    or overfitting to short sequences.
+
+    Parameters
+    ----------
+    window_size : int, optional
+        Number of recent batches to include in the rolling window (default: 100).
+    log_every_n_steps : int, optional
+        How often to log; defaults to ``window_size`` if not set.
+    """
 
     def __init__(self, window_size: int = 100, log_every_n_steps: Optional[int] = None):
         super().__init__()
@@ -33,7 +48,7 @@ class LossVarianceMonitor(L.Callback):
         if isinstance(outputs, dict):
             loss = outputs.get("loss")
             if loss is None:
-                logging.warning(
+                logger.warning(
                     "VarianceMonitor failed to find 'loss' in training_step outputs."
                 )
                 return

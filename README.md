@@ -1,156 +1,118 @@
 # DeepStylometry
 
-A codebase to investigate the best way to embed stylistic features from text.
+Contrastive Authorship Attribution with Patch-Level Late Interaction.
 
----
+[![arXiv](https://img.shields.io/badge/arXiv-2407.20595-b31b1b.svg)](https://arxiv.org/abs/2407.20595)
+[![arXiv](https://img.shields.io/badge/arXiv-2605.19908-b31b1b.svg)](https://arxiv.org/abs/2605.19908)
 
-## Requirements
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Data-yellow)](https://huggingface.co/datasets/almanach/HALvest)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-ContrastiveData-yellow)](https://huggingface.co/datasets/almanach/halvest-contrastive)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Checkpoints-yellow)](https://huggingface.co/collections/Madjakul/deep-stylometry)
 
-- 3.9 <= Python <= 3.12
-- A HuggingFace account in order to run the preprocessing script and get access to pre-trained models.
-- x86_64 if you want to install flash-attention.
+* See also: [HALvesting](https://github.com/Madjakul/HALvesting)
+* See also: [HALvesting-Contrastive](https://github.com/Madjakul/HALvesting-Contrastive)
 
-### Logging into your HuggingFace account
 
-```
 
-huggingface-cli login
+## Overview
 
-```
+This repository contains the code for two papers:
+
+1. [**HALvest-Contrastive: Retrieval-Like Authorship Attribution with Patch-Level Late Interaction**](https://arxiv.org/abs/2407.20595).
+   This paper introduces HALvest, a large multilingual scholarly corpus, and HALvest-Contrastive, an English contrastive authorship attribution benchmark. It proposes Patch-Level Late Interaction (PLI), a token-interaction architecture that groups subword tokens into patches before computing MaxSim.
+
+2. [**Where Does Authorship Signal Emerge in Encoder-Based Language Models?**](https://arxiv.org/abs/2605.19908).
+   A mechanistic interpretability study that traces where authorship-discriminative information forms across layers and training steps in contrastive encoder models.
 
 ## Installation
 
-### x86 CPUs
-
-If you have an x86_64 CPU, you can use the installation script to install torch and flash-attention cleanly. From the repository, run
-
+```bash
+pip install -r requirements.txt
 ```
 
-./install.sh
+The installation sript [`install.sh`](./install.sh) was created for x86 architecture and installs flash-attention alongside everything else.
 
-```
+## Data Preparation
 
-Once torch and flash-attention are installed, you can install the remaining packages using the constraint file created by the installation script.
+**HALvest-Contrastive** is loaded automatically from HuggingFace on first use. Pre-tokenized splits are cached to `$WORK_DIR/Datasets/deep-stylometry/answerdotai-modernbert-base/no-padding/` and reused on subsequent runs.
 
-```
+[**PAN19**](https://zenodo.org/records/3530313) requires downloading the evaluation zip from Zenodo (link above) and setting the `PAN19_ZIP` environment variable to point to the downloaded archive:
 
-pip install --upgrade -r requirements.txt -c constraints.txt
-
-```
-
-### Other CPUs
-
-You need to install torch manually before installing the remaining packages. You are not limited by flash-attention and can therefore use the torch version you want with the adequate CUDA version.
-
-```
-
-pip install torch --index-url https://download.pytorch.org/whl/cu<your cuda version>
-
-````
-
-#### Optional
-
-You can create a constraint file to make sure the remaining packages do not mess with torch dependencies.
-
-```sh
-pip freeze | grep -E "^(torch==|nvidia-)" >constraints.txt
-````
-
-Finally, install the remaining packages using constraints if necessary.
-
-```
-pip install --upgrade -r requirements.txt -c constraints.txt
+```bash
+export PAN19_ZIP=/path/to/pan19-authorship-attribution-test-dataset-2019-11-19.zip
 ```
 
 ## Usage
 
-It is recommended to use the bash scripts provided in the [`scripts`](./scripts) directory to run the code.
-Make sure to modify the parameters in the [`scripts`](./scripts) as well as in the [`configs`](./configs) files.
-The scripts are designed to be run from any directory.
+### Training
 
-If you still want to run the Python scripts directly:
-
-### Training/Fine-tuning
-
-Set the hyperparameters you want in [`train.yml`](./configs/train.yml).
-
-```
-usage: train.py [-h] --config_path CONFIG_PATH --processed_ds_dir
-                PROCESSED_DS_DIR --logs_dir LOGS_DIR
-                [--checkpoint_dir CHECKPOINT_DIR] [--num_proc NUM_PROC]
-                [--cache_dir CACHE_DIR]
-
-Arguments used to train/fine-tune a model.
-
-options:
-  -h, --help            show this help message and exit
-  --config_path CONFIG_PATH
-                        Path to the config file.
-  --processed_ds_dir PROCESSED_DS_DIR
-                        Directory where the processed datasets are stored.
-  --logs_dir LOGS_DIR   Directory where the logs are stored.
-  --checkpoint_dir CHECKPOINT_DIR
-                        Directory where the model checkpoints are stored.
-  --num_proc NUM_PROC   Number of processes to use. Default is the number
-                        of CPUs.
-  --cache_dir CACHE_DIR
-                        Path to the cache directory for HuggingFace.
+```bash
+bash scripts/train.sh configs/train_pli_wholeword.yml
 ```
 
-[`train.py`](./train.py) only runs classification validation. It computes the alignment and uniformity loss as a proxy to monitor how well training is progressing. A checkpoint is saved after each validation.
+### Testing (with checkpoint)
 
-### Testing
-
-Change the configuration in [`test.yml`](./configs/test.yml).
-
-```
-usage: test.py [-h] --config_path CONFIG_PATH --processed_ds_dir
-               PROCESSED_DS_DIR --checkpoint_path CHECKPOINT_PATH
-               --logs_dir LOGS_DIR [--num_proc NUM_PROC]
-               [--cache_dir CACHE_DIR]
-
-Arguments used to test a single subset on retrieval.
-
-options:
-  -h, --help            show this help message and exit
-  --config_path CONFIG_PATH
-                        Path to the config file.
-  --processed_ds_dir PROCESSED_DS_DIR
-                        Directory where the processed datasets are stored.
-  --checkpoint_path CHECKPOINT_PATH
-                        Path to the model checkpoint to load.
-  --logs_dir LOGS_DIR   Directory where the logs will be saved.
-  --num_proc NUM_PROC   Number of processes to use. Default is the number
-                        of CPUs minus one.
-  --cache_dir CACHE_DIR
-                        Path to the cache directory for HuggingFace.
+```bash
+bash scripts/test.sh configs/test_pli_wholeword.yml --test_subset base-4
 ```
 
-[`test.py`](./test.py) tests a checkpoint on retrieval only. Despite being trained with a single target, testing fetches all the relevant documents for a given query.
+### Zero-shot evaluation (E5 baseline)
 
-The test script returns the retrieval accuracy, or hit@1, and {nDCG, MRR, Recall}@{5, 10, 20, 100}.
+```bash
+bash scripts/test_zero_shot.sh configs/test_zero_shot_e5_halvest.yml
+```
 
-## Results
+## Configuration
 
-Example results after 23k steps on a 4-sentence test set.
+Each experiment variant is controlled by a pair of YAML files:
+`configs/train_<variant>.yml` for training and `configs/test_<variant>.yml` for evaluation.
 
-| Model               | Validation Accuracy | Recall@20     | Recall@100    | nDCG@20       | nDCG@100      |
-| ------------------- | ------------------- | ------------- | ------------- | ------------- | ------------- |
-| BM25                | NA                  | TBD           | TBD           | TBD           | TBD           |
-| ModernBERT (single) | 87.37               | 12.06 / 14.7  | 29.38 / 32.8  | 6.34 / 8.1    | 10.08 / 12.14 |
-| ModernBERT (multi)  | 95.22               | 28.53 / 48.12 | 44.65 / 67.16 | 19.67 / 36.21 | 23.26 / 40.53 |
+Available pooling methods and variants:
 
-The first metric (in %) benchmarks a model using a single dense vector. The second metric tracks the performance using multiple vectors.
-Models trained with a single vector benefit from using multiple vectors during inference.
+| Variant | Description |
+|---------|-------------|
+| `mean` | Mean-pooling baseline (cosine similarity) |
+| `li` | Full token-level ColBERT-style late interaction |
+| `pli` + `wholeword` | PLI with whole-word patches |
+| `pli` + `ngram-{2,3,4,5}` | PLI with n-gram patches of fixed size n |
+| `pli` + `learned` | PLI with Gumbel-Softmax learned patch boundaries |
+
+## Key Results
+
+- Authorship attribution obeys the same empirical laws as information retrieval: InfoNCE loss, late-interaction architectures, and batch-size scaling all transfer.
+- Full token-level interaction is not necessary. PLI with whole-word patches achieves competitive or superior cross-domain generalisation while being faster.
+- Authorship signal emerges abruptly at a specific "inflection layer" in the encoder, rather than accumulating gradually.
+
+## Analysis Scripts
+
+The `experiments/` directory contains analysis and visualisation scripts for corpus statistics, retrieval failure analysis, patch interaction analysis, and dataset visualisations. See [`experiments/README.md`](experiments/README.md) for a description of each script.
+
+The `experiments/mechanistic/` directory contains the mechanistic interpretability study pipeline (probing, residual patching, training dynamics, distractor analysis). See [`experiments/mechanistic/README.md`](experiments/mechanistic/README.md) for details.
 
 ## Citation
 
-To cite DeepStylometry:
+If you use this code or the HALvest-Contrastive dataset, please cite:
 
-```bib
-TBD
+```bibtex
+@misc{kulumba_halvest_2026,
+      title={HALvest-Contrastive: Retrieval-Like Authorship Attribution with Patch-Level Late Interaction},
+      author={Francis Kulumba and Wissam Antoun and Guillaume Vimont and Laurent Romary and Florian Cafiero},
+      year={2026},
+      eprint={2407.20595},
+      archivePrefix={arXiv},
+      primaryClass={cs.DL},
+      url={https://arxiv.org/abs/2407.20595},
+}
 ```
 
-## License
-
-This project is licensed under the [Apache License 2.0](LICENSE).
+```bibtex
+@misc{kulumba_does_2026,
+      title={Where Does Authorship Signal Emerge in Encoder-Based Language Models?},
+      author={Francis Kulumba and Guillaume Vimont and Laurent Romary and Florian Cafiero},
+      year={2026},
+      eprint={2605.19908},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2605.19908},
+}
+```

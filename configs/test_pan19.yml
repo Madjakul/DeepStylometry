@@ -1,0 +1,44 @@
+# test_pan19.yml — Zero-shot retrieval evaluation on PAN 2019 English (problems 00001-00005)
+#
+# Requires the ZIP archive:
+#   export PAN19_ZIP=data/pan19-cross-domain-authorship-attribution-training-dataset-2019-01-23.zip
+#
+# Dev / test split is deterministic (sorted by unknown filename, last 20% = test).
+# Set split: "dev" to evaluate on the dev portion instead.
+
+project_name: "deep-stylometry"
+
+model:
+  pooling_method: "pli"
+  skip_list: true
+  lm_hidden_size: 768
+  patch_method: "learned"
+  patch_size: 3
+  patch_compression: "mean"
+  patch_cross_attn_dim: 128
+  patch_cross_attn_heads: 2
+  patch_lambda: 0.1
+  gumbel_tau_init: 1.0
+  gumbel_tau_final: 0.1
+  gumbel_anneal_steps: 20000
+
+data:
+  ds_name: "pan19"
+  batch_size: 32
+  tokenizer_name: "answerdotai/ModernBERT-base"
+  max_length: 512
+  padding: "do_not_pad"
+  truncation: "longest_first"
+  add_special_tokens: true
+  map_batch_size: 1000
+  load_from_cache_file: true
+  subsets: []
+  shuffle: false
+  test_subset: "pan19-en-test"
+
+test:
+  device: "gpu"
+  num_devices: 1
+  log_every_n_steps: 1
+  precision: "16-mixed"
+  use_wandb: true

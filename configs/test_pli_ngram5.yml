@@ -24,7 +24,7 @@ data:
   load_from_cache_file: true
   subsets: ["base-2", "base-4", "base-6", "base-8", "base-10"]
   shuffle: true
-  test_subset: "base-2"
+  test_subset: "base-10"
 
 test:
   device: "gpu"

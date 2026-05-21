@@ -1,0 +1,49 @@
+# decorrelation.yml
+
+project_name: "deep-stylometry"
+
+# Must match the checkpoint being loaded.
+model:
+  base_checkpoint: "answerdotai/ModernBERT-base"
+  dropout: 0.1
+  expansion_ratio: 4
+  pooling_method: "mean"
+  skip_list: false
+  lm_hidden_size: 768
+  patch_method: "learned"
+  patch_size: 3
+  patch_compression: "mean"
+  patch_cross_attn_dim: 128
+  patch_cross_attn_heads: 2
+  # "sdpa" works on all CUDA GPUs; switch to "flash_attention_2" on Ampere+ only.
+  attn_implementation: "sdpa"
+
+data:
+  ds_name: "halvest"
+  batch_size: 64
+  tokenizer_name: "answerdotai/ModernBERT-base"
+  max_length: 512
+  padding: "do_not_pad"
+  truncation: "longest_first"
+  add_special_tokens: true
+  map_batch_size: 1000
+  load_from_cache_file: true
+  subsets: ["base-2", "base-4", "base-6", "base-8", "base-10"]
+  shuffle: false
+  test_subset: "base-4"
+
+test:
+  device: "gpu"
+  num_devices: 1
+  precision: "16-mixed"
+  use_wandb: false
+
+# Decorrelation-specific settings — read by semantic_decorrelation.py directly.
+# CLI arguments (--subset, --sample-size, etc.) override these values.
+decorrelation:
+  subset: "base-4"
+  sample_size: 2000
+  batch_size: 64
+  seed: 42
+  output_dir: "figures/decorrelation_pli_learned"
+  e5_model: "intfloat/multilingual-e5-base"

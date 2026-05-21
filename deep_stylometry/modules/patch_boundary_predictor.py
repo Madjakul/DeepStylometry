@@ -12,6 +12,8 @@ from jaxtyping import Bool, Float, Int
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
 
+logger = logging.getLogger(__name__)
+
 
 class PatchBoundaryPredictor(nn.Module):
     """Predicts patch boundary probabilities from contextualised token
@@ -33,7 +35,7 @@ class PatchBoundaryPredictor(nn.Module):
             nn.GELU(),
             nn.Linear(mid, 1),
         )
-        logging.info(
+        logger.info(
             f"PatchBoundaryPredictor: hidden={hidden_size}, mid={mid}, "
             f"tau_init={cfg.model.gumbel_tau_init}, "
             f"tau_final={cfg.model.gumbel_tau_final}"
@@ -92,6 +94,10 @@ class PatchBoundaryPredictor(nn.Module):
             ``(B,)`` number of patches per example.
         """
         B, S, _ = token_embs.shape
+
+        # Cast to the FFN weight dtype — under 16-mixed precision the activations
+        # arrive as fp16 but the Linear weights stay fp32.
+        token_embs = token_embs.to(self.ffn[0].weight.dtype)
 
         # Raw boundary logits / probabilities
         logits = self.ffn(token_embs).squeeze(-1)  # (B, S)

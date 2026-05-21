@@ -4,7 +4,7 @@ project_name: "deep-stylometry"
 
 data:
   ds_name: "halvest"
-  batch_size: 64
+  batch_size: 32
   tokenizer_name: "answerdotai/ModernBERT-base"
   max_length: 512
   padding: "do_not_pad"
@@ -28,9 +28,10 @@ model:
   patch_cross_attn_dim: 128
   patch_cross_attn_heads: 2
   patch_lambda: 0.1
+  patch_target_rate: 0.333
   gumbel_tau_init: 1.0
   gumbel_tau_final: 0.1
-  gumbel_anneal_steps: 10000
+  gumbel_anneal_steps: 20000
 
 train:
   loss: "info_nce"
@@ -46,7 +47,7 @@ train:
   val_check_interval: null
   check_val_every_n_epoch: null
   log_every_n_steps: 1
-  accumulate_grad_batches: 1
+  accumulate_grad_batches: 2
   gradient_clip_val: null
   precision: "16-mixed"
   use_wandb: true

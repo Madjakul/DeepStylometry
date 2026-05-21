@@ -17,6 +17,8 @@ from deep_stylometry.utils.logger import logging_config
 os.environ["PYTHONUNBUFFERED"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+logger = logging.getLogger(__name__)
+
 set_seed()
 logging_config()
 
@@ -30,7 +32,7 @@ if __name__ == "__main__":
     if args.ds_name is not None:
         cfg.data.ds_name = args.ds_name
 
-    logging.info("Preparing data module...")
+    logger.info("Preparing data module...")
     dm = train_utils.setup_datamodule(
         cfg=cfg,
         processed_ds_dir=args.processed_ds_dir,
@@ -59,7 +61,7 @@ if __name__ == "__main__":
     csv_logger = CSVLogger(save_dir=args.logs_dir, name=name)
     loggers.append(csv_logger)
 
-    logging.info(f"Loading model from {args.checkpoint_path}...")
+    logger.info(f"Loading model from {args.checkpoint_path}...")
     # Load weights from your saved checkpoint
     model = DeepStylometry.load_from_checkpoint(args.checkpoint_path, cfg=cfg)
     precision, _ = resolve_lightning_precision(cfg.test.precision)
@@ -73,6 +75,6 @@ if __name__ == "__main__":
         precision=precision,
     )
 
-    logging.info("=== Starting Evaluation ===")
+    logger.info("=== Starting Evaluation ===")
     trainer.test(model=model, datamodule=dm)
-    logging.info("=== Evaluation Finished ===")
+    logger.info("=== Evaluation Finished ===")

@@ -13,6 +13,8 @@ from deep_stylometry.utils.configs.test_config import TestConfig
 from deep_stylometry.utils.configs.train_config import TrainConfig
 from deep_stylometry.utils.helpers import DictAccessMixin
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class BaseConfig(DictAccessMixin):
@@ -52,13 +54,13 @@ class BaseConfig(DictAccessMixin):
                     if hasattr(section_config, key):
                         setattr(section_config, key, value)
                     else:
-                        logging.warning(
+                        logger.warning(
                             f"Unknown config key '{key}' in section '{section_name}'"
                         )
             elif hasattr(config, section_name):
                 setattr(config, section_name, section_data)
             else:
-                logging.warning(f"Unknown config section '{section_name}'")
+                logger.warning(f"Unknown config section '{section_name}'")
 
         return config
 

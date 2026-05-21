@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#SBATCH --job-name=test-deep-stylometry               # Job name
-#SBATCH --account=grandchallenge1
+#SBATCH --job-name=test-deep-stylometry-base-10-learned               # Job name
+#SBATCH --partition=almanach
 #SBATCH --nodes=1                                    # Run all processes on a single node
 #SBATCH --ntasks=1                                      # Run a single task
-#SBATCH --mem=256G                                     # Job memory request
+#SBATCH --mem=120G                                     # Job memory request
 #SBATCH --gres=gpu:1                             # Request 1 GPU
-#SBATCH --cpus-per-task=16                              # Number of CPU cores per task
+#SBATCH --cpus-per-task=4                              # Number of CPU cores per task
 #SBATCH --time=2-00:00:00                               # Time limit hrs:min:sec
 #SBATCH --output=logs/%x-%j-%t.log                         # Standard output and error log. %x denotes the job name, %j the jobid.
 
@@ -24,7 +24,5 @@ if [[ "$CONDA_DEFAULT_ENV" != "deep-stylometry" ]]; then
     echo "Error: Failed to activate environment"
     exit 1
 fi
-
-export DATASETS_MULTIPROCESS_CONTEXT=spawn
 
 ./scripts/test.sh "$@"

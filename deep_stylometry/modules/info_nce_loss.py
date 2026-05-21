@@ -15,6 +15,18 @@ if TYPE_CHECKING:
 
 
 class InfoNCELoss(nn.Module):
+    """In-batch InfoNCE (NT-Xent) contrastive loss.
+
+    Scores each query against all in-batch keys using the configured
+    interaction function (mean, late interaction, or patch interaction),
+    then applies cross-entropy loss against the correct positive index.
+
+    Parameters
+    ----------
+    cfg : BaseConfig
+        Global configuration. ``cfg.train.tau`` controls the temperature;
+        ``cfg.model.pooling_method`` selects the interaction function.
+    """
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
@@ -40,6 +52,33 @@ class InfoNCELoss(nn.Module):
         k_input_ids: Optional[Int[torch.Tensor, "two_times_batch seq"]] = None,
         step: Optional[int] = None,
     ) -> Dict[str, torch.Tensor]:
+        """Compute InfoNCE loss and per-example positive/negative scores.
+
+        Parameters
+        ----------
+        query_embs : Float[Tensor, "batch seq hidden"]
+            Per-token query embeddings.
+        key_embs : Float[Tensor, "two_times_batch seq hidden"]
+            Concatenated positive and negative key embeddings.
+        q_mask : Int[Tensor, "batch seq"]
+            Attention mask for queries.
+        k_mask : Int[Tensor, "two_times_batch seq"]
+            Attention mask for keys.
+        targets : Int[Tensor, "batch"]
+            Index into ``key_embs`` of each query's positive.
+        q_input_ids : Int[Tensor, "batch seq"], optional
+            Query token IDs (required by LateInteraction and PatchInteraction).
+        k_input_ids : Int[Tensor, "two_times_batch seq"], optional
+            Key token IDs (required by PatchInteraction).
+        step : int, optional
+            Current training step (for Gumbel temperature annealing).
+
+        Returns
+        -------
+        dict
+            Keys: ``loss``, ``all_scores``, ``poss``, ``negs``, and optionally
+            ``patch_reg_loss`` when learned PLI is active.
+        """
         batch_size = query_embs.size(0)
         neg_offset = key_embs.size(0) // 2
 

@@ -1,0 +1,56 @@
+# configs/mechanistic.yml
+# Central config for the mechanistic interpretability study.
+# Run with: python -m deep_stylometry.experiments.mechanistic.run_phase --config configs/mechanistic.yml
+
+mechanistic:
+  base_data_subset: base-4
+
+  probe_set:
+    n_per_tier: 50
+    target_length: 130
+    pair_tolerance: 5
+    global_tolerance: 10
+    rotation_pool_size: 10
+    min_documents_per_set: 4
+
+  lisa:
+    probe_train_size: 10000
+    probe_eval_size: 2000
+    feature_categories:
+      - function_words
+      - sentence_length
+      - punctuation_density
+      - capitalization
+      - type_token_ratio
+      - word_length
+      - hedging
+      - citations
+      - pos_bigrams
+      - discourse_markers
+      - dependency_depth
+
+  models:
+    # mean:
+    #   config: configs/test_mean.yml
+    #   checkpoint_pattern: tmp/answerdotai-modernbert-base__halvest__pooling-mean__skip_list-false
+    # layerwise:
+    #   config: configs/test_layerwise_centered.yml
+    #   checkpoint_pattern: tmp/answerdotai-modernbert-base__halvest__pooling-layerwise__skip_list-false
+    # li:
+    #   config: configs/test.yml
+    #   checkpoint_pattern: tmp/answerdotai-modernbert-base__halvest__pooling-li__skip_list-true
+    pli_ngram2:
+      config: configs/test_pli_ngram2.yml
+      checkpoint_pattern: tmp/answerdotai-modernbert-base__halvest__pooling-pli-ngram-n2__skip_list-true
+    # e5:
+    #   hf_model: intfloat/multilingual-e5-base
+
+  checkpoints:
+    selected_steps: [0, 500, 1500, 3000, 5000, 10000, 20000, "final"]
+
+  patching:
+    n_layers: 23
+
+  io:
+    output_root: outputs/mechanistic
+    seed: 42

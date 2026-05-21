@@ -4,7 +4,7 @@ import argparse
 
 
 class TestArgparse:
-    """Argument parser for hyper-parameter tuning."""
+    """Argument parser for evaluation / retrieval testing."""
 
     @classmethod
     def parse_known_args(cls):

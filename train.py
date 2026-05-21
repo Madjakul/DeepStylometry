@@ -13,6 +13,7 @@ from deep_stylometry.utils.logger import logging_config
 os.environ["PYTHONUNBUFFERED"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+logger = logging.getLogger(__name__)
 
 set_seed()
 logging_config()
@@ -22,7 +23,7 @@ if __name__ == "__main__":
     args = TrainArgparse.parse_known_args()
     cfg = BaseConfig(mode="train").from_yaml(args.config_path)
 
-    logging.info("Preparing data module...")
+    logger.info("Preparing data module...")
     dm = train_utils.setup_datamodule(
         cfg=cfg,
         processed_ds_dir=args.processed_ds_dir,
@@ -30,7 +31,7 @@ if __name__ == "__main__":
         cache_dir=args.cache_dir,
     )
 
-    logging.info("=== Fine-tuning ===")
+    logger.info("=== Fine-tuning ===")
     model = DeepStylometry(cfg)
 
     trainer = train_utils.setup_trainer(
@@ -41,4 +42,4 @@ if __name__ == "__main__":
     )
 
     trainer.fit(model=model, datamodule=dm)
-    logging.info("=== Fine-tuning finished ===")
+    logger.info("=== Fine-tuning finished ===")

@@ -5,6 +5,8 @@ import logging
 from typing import Tuple
 
 import torch
+
+logger = logging.getLogger(__name__)
 import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Float, Int
@@ -41,7 +43,7 @@ class CrossAttentionCompressor(nn.Module):
         self.W_V = nn.Linear(hidden_size, self.d_model, bias=False)
         self.W_O = nn.Linear(self.d_model, hidden_size, bias=False)
 
-        logging.info(
+        logger.info(
             f"CrossAttentionCompressor: hidden={hidden_size}, "
             f"d_k={d_k}, n_heads={n_heads}"
         )
@@ -109,6 +111,10 @@ class CrossAttentionCompressor(nn.Module):
         x = patch_tok_embs.view(B * P, max_tok_per_patch, H)
         attn_mask = patch_tok_mask.view(B * P, max_tok_per_patch)  # (B*P, T)
 
+        # Cast to weight dtype to handle mixed-precision contexts (e.g. fp16 input)
+        w_dtype = self.W_K.weight.dtype
+        x = x.to(w_dtype)
+
         # Compute K, V
         K = self.W_K(x)  # (B*P, T, d_model)
         V = self.W_V(x)  # (B*P, T, d_model)
@@ -131,10 +137,10 @@ class CrossAttentionCompressor(nn.Module):
         out = torch.bmm(attn_weights, V).squeeze(1)
         out = self.W_O(out)  # (B*P, H)
 
-        patch_embs = out.view(B, P, H)
+        patch_embs = out.view(B, P, H).to(dtype)
 
         # Zero out empty patches
         patch_mask = (patch_sizes > 0).long()  # (B, P)
-        patch_embs = patch_embs * patch_mask.unsqueeze(-1).float()
+        patch_embs = patch_embs * patch_mask.unsqueeze(-1).to(dtype)
 
         return patch_embs, patch_mask

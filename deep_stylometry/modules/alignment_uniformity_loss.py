@@ -9,6 +9,14 @@ from jaxtyping import Float, Int
 
 
 class AlignmentUniformityLoss(nn.Module):
+    """Alignment and uniformity metrics for embedding quality monitoring.
+
+    Computes the two diagnostic losses from Wang & Isola (2020):
+    *alignment* measures how close positive pairs are, and *uniformity*
+    measures how evenly embeddings are spread on the hypersphere.  Both are
+    computed in inference mode and logged during validation.
+    """
+
     def __init__(self) -> None:
         super().__init__()
 
@@ -21,6 +29,26 @@ class AlignmentUniformityLoss(nn.Module):
         k_mask: Int[torch.Tensor, "n_keys seq"],
         targets: Int[torch.Tensor, "batch"],
     ) -> Dict[str, torch.Tensor]:
+        """Compute alignment and uniformity losses.
+
+        Parameters
+        ----------
+        query_embs : Float[Tensor, "batch seq hidden"]
+            Per-token query embeddings.
+        key_embs : Float[Tensor, "n_keys seq hidden"]
+            Per-token key embeddings.
+        q_mask : Int[Tensor, "batch seq"]
+            Attention mask for queries.
+        k_mask : Int[Tensor, "n_keys seq"]
+            Attention mask for keys.
+        targets : Int[Tensor, "batch"]
+            Index into ``key_embs`` of each query's positive.
+
+        Returns
+        -------
+        dict
+            Keys: ``alignment_loss`` (scalar) and ``uniformity_loss`` (scalar).
+        """
 
         # Get mean-pooled representations for each sequence
         q_lengths = q_mask.sum(dim=-1, keepdim=True).clamp(min=1)

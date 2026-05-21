@@ -14,6 +14,8 @@ from deep_stylometry.utils.helpers import get_tokenizer
 if TYPE_CHECKING:
     from deep_stylometry.utils.configs import BaseConfig
 
+logger = logging.getLogger(__name__)
+
 
 class PatchInteraction(nn.Module):
     """Patch-level late interaction.
@@ -40,7 +42,7 @@ class PatchInteraction(nn.Module):
 
     def __init__(self, cfg: "BaseConfig") -> None:
         super().__init__()
-        logging.info(
+        logger.info(
             f"PatchInteraction: method={cfg.model.patch_method}, "
             f"compression={cfg.model.patch_compression}, "
             f"patch_size={cfg.model.patch_size}"
@@ -64,13 +66,21 @@ class PatchInteraction(nn.Module):
             is_special_lut = torch.zeros(vocab_size, dtype=torch.bool)
 
             special_ids_set: set = set()
-            for attr in ("cls_token_id", "sep_token_id", "pad_token_id",
-                         "bos_token_id", "eos_token_id", "mask_token_id"):
+            for attr in (
+                "cls_token_id",
+                "sep_token_id",
+                "pad_token_id",
+                "bos_token_id",
+                "eos_token_id",
+                "mask_token_id",
+            ):
                 val = getattr(tokenizer, attr, None)
                 if val is not None:
                     special_ids_set.add(val)
             if special_ids_set:
-                is_special_lut[torch.tensor(sorted(special_ids_set), dtype=torch.long)] = True
+                is_special_lut[
+                    torch.tensor(sorted(special_ids_set), dtype=torch.long)
+                ] = True
 
             n_word_start = 0
             for token_str, token_id in vocab.items():
@@ -78,9 +88,11 @@ class PatchInteraction(nn.Module):
                     is_word_start_lut[token_id] = True
                     n_word_start += 1
 
-            self.register_buffer("is_word_start_lut", is_word_start_lut, persistent=False)
+            self.register_buffer(
+                "is_word_start_lut", is_word_start_lut, persistent=False
+            )
             self.register_buffer("is_special_lut", is_special_lut, persistent=False)
-            logging.info(
+            logger.info(
                 f"PatchInteraction: boundary LUT built — "
                 f"{n_word_start} word-start tokens, "
                 f"{len(special_ids_set)} special tokens (vocab_size={vocab_size})."
@@ -94,6 +106,7 @@ class PatchInteraction(nn.Module):
             from deep_stylometry.modules.patch_boundary_predictor import (
                 PatchBoundaryPredictor,
             )
+
             h = cfg.model.lm_hidden_size
             self.predictor = PatchBoundaryPredictor(h, cfg)
 
@@ -101,6 +114,7 @@ class PatchInteraction(nn.Module):
                 from deep_stylometry.modules.cross_attention_compressor import (
                     CrossAttentionCompressor,
                 )
+
                 self.compressor = CrossAttentionCompressor(
                     h,
                     cfg.model.patch_cross_attn_dim,
@@ -138,15 +152,13 @@ class PatchInteraction(nn.Module):
         loops, fully GPU-compatible and safe for DDP.
         """
         # Direct LUT indexing: O(B*S) gather, much faster than torch.isin
-        is_special = self.is_special_lut[input_ids]      # (B, S)
+        is_special = self.is_special_lut[input_ids]  # (B, S)
         is_word_start = self.is_word_start_lut[input_ids]  # (B, S)
 
         # Token immediately after a special token starts a new patch even if it
         # lacks the Ġ prefix (e.g. first word after CLS).
         # Shift is_special one step to the right; pad the new position with False.
-        is_after_special = F.pad(
-            is_special[:, :-1], (1, 0), value=False
-        )  # (B, S)
+        is_after_special = F.pad(is_special[:, :-1], (1, 0), value=False)  # (B, S)
 
         # First valid (non-padding) position per example
         is_first_valid = (mask.cumsum(dim=1) == 1) & (mask > 0)  # (B, S)
@@ -205,11 +217,13 @@ class PatchInteraction(nn.Module):
         input_ids: Optional[Int[torch.Tensor, "batch seq"]],
         step: Optional[int],
         training: bool,
-    ) -> Tuple[Int[torch.Tensor, "batch seq"], Optional[Float[torch.Tensor, "batch seq"]]]:
+    ) -> Tuple[
+        Int[torch.Tensor, "batch seq"], Optional[Float[torch.Tensor, "batch seq"]]
+    ]:
         method = self.patch_method
         # Fall back to ngram when input_ids are required but unavailable
         if input_ids is None and method in ("whitespace", "wholeword"):
-            logging.warning(
+            logger.warning(
                 f"input_ids not provided for {method} patching; "
                 f"silently falling back to ngram-{self.patch_size}. "
                 f"Pass k_input_ids to avoid this."
@@ -264,16 +278,18 @@ class PatchInteraction(nn.Module):
         valid = (mask > 0) & (patch_ids >= 0)  # (B, S)
         ids_clamped = patch_ids.clamp(min=0)  # (B, S)
 
-        if self.compression == "cross_attention" and is_query and self.compressor is not None:
+        if (
+            self.compression == "cross_attention"
+            and is_query
+            and self.compressor is not None
+        ):
             return self.compressor(embs, patch_ids, mask, P)
 
         # One-hot scatter for mean / max pooling
         one_hot = F.one_hot(ids_clamped, num_classes=P).float()  # (B, S, P)
         one_hot = one_hot * valid.unsqueeze(-1).float()
 
-        if self.compression == "mean" or (
-            self.compression == "cross_attention"
-        ):
+        if self.compression == "mean" or (self.compression == "cross_attention"):
             # For cross_attention on keys (no compressor for keys), fall back to mean
             embs_valid = embs * valid.unsqueeze(-1).float()
             patch_embs = torch.einsum("bsh,bsp->bph", embs_valid, one_hot)  # (B, P, H)
@@ -290,10 +306,12 @@ class PatchInteraction(nn.Module):
             # Memory-efficient: use scatter_reduce_ if available, else loop
             try:
                 idx = ids_clamped.unsqueeze(-1).expand(-1, -1, H)  # (B, S, H)
-                patch_embs = torch.full((B, P, H), -1e9,
-                                        device=device, dtype=embs.dtype)
-                patch_embs.scatter_reduce_(1, idx, embs_masked,
-                                           reduce="amax", include_self=True)
+                patch_embs = torch.full(
+                    (B, P, H), -1e9, device=device, dtype=embs.dtype
+                )
+                patch_embs.scatter_reduce_(
+                    1, idx, embs_masked, reduce="amax", include_self=True
+                )
                 patch_embs = patch_embs.clamp(min=-1e8)  # Replace -1e9 sentinel
             except (RuntimeError, TypeError):
                 # Fallback: mean pooling
@@ -320,14 +338,16 @@ class PatchInteraction(nn.Module):
         k_patch_mask: Int[torch.Tensor, "bk pk"],
     ) -> Float[torch.Tensor, "bq bk"]:
         """Compute MaxSim scores between query and key patch sets."""
-        q_norm = F.normalize(q_patch_embs, p=2, dim=-1)
-        k_norm = F.normalize(k_patch_embs, p=2, dim=-1)
+        q_norm = F.normalize(q_patch_embs.float(), p=2, dim=-1)
+        k_norm = F.normalize(k_patch_embs.float(), p=2, dim=-1)
 
         # (Bq, Bk, Pq, Pk)
         sim = torch.einsum("ash,bth->abst", q_norm, k_norm)
 
         # Mask padding key patches
-        k_mask_inv = (1.0 - k_patch_mask.float()).unsqueeze(0).unsqueeze(2)  # (1, Bk, 1, Pk)
+        k_mask_inv = (
+            (1.0 - k_patch_mask.float()).unsqueeze(0).unsqueeze(2)
+        )  # (1, Bk, 1, Pk)
         sim = sim + k_mask_inv * (-10000.0)
 
         # MaxSim over key patches per query patch → (Bq, Bk, Pq)
@@ -342,16 +362,29 @@ class PatchInteraction(nn.Module):
     # ------------------------------------------------------------------
 
     def get_patch_reg_loss(self) -> Optional[torch.Tensor]:
-        """Return the patch-count regulariser L_patch = -log(sum(cut_probs)).
+        """Squared deviation of mean cut rate from the configured target.
 
-        Returns ``None`` when no cut probs are available (fixed patching).
+        Returns:
+            Scalar regulariser ``(mean(cut_probs) - p_target)^2`` averaged
+            over the batch, or ``None`` when no cut probabilities are
+            available (i.e. for non-learned patching methods).
         """
         if self._last_cut_probs is None or self._last_q_mask is None:
             return None
-        cut_probs = self._last_cut_probs
-        mask = self._last_q_mask
-        n_cuts = (cut_probs * mask.float()).sum(dim=-1)  # (B,)
-        return -torch.log(n_cuts + 1e-8).mean()
+
+        q = self._last_cut_probs                # (B, S), in [0, 1]
+        mask = self._last_q_mask.float()        # (B, S)
+        p_target = self.cfg.model.patch_target_rate
+
+        # Per-sequence mean cut probability over valid positions
+        valid_count = mask.sum(dim=-1).clamp(min=1.0)         # (B,)
+        mean_q_per_seq = (q * mask).sum(dim=-1) / valid_count # (B,)
+
+        # Squared deviation from target, averaged over batch
+        reg = ((mean_q_per_seq - p_target) ** 2).mean()
+        logger.debug("patch_reg_loss=%.4f  mean_cut_rate=%.4f  target=%.4f",
+                     reg.item(), mean_q_per_seq.mean().item(), p_target)
+        return reg
 
     # ------------------------------------------------------------------
     # Forward
@@ -394,8 +427,16 @@ class PatchInteraction(nn.Module):
         )
 
         # Determine number of patch slots
-        q_max_p = max(1, int(q_patch_ids.clamp(min=-1).max().item()) + 1) if q_patch_ids.max() >= 0 else 1
-        k_max_p = max(1, int(k_patch_ids.clamp(min=-1).max().item()) + 1) if k_patch_ids.max() >= 0 else 1
+        q_max_p = (
+            max(1, int(q_patch_ids.clamp(min=-1).max().item()) + 1)
+            if q_patch_ids.max() >= 0
+            else 1
+        )
+        k_max_p = (
+            max(1, int(k_patch_ids.clamp(min=-1).max().item()) + 1)
+            if k_patch_ids.max() >= 0
+            else 1
+        )
 
         # Compress patches
         q_patch_embs, q_patch_mask = self._compress_patches(
